@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.phantomview/
+config.local.json
+*.sqlite*
+.env
