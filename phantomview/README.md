@@ -61,6 +61,32 @@ La configuración y el índice derivado pertenecen a PhantomView y viven en
 usar una ubicación propia. No elijas una carpeta de persona como destino del
 estado de PhantomView.
 
+## Setups separados y perfiles en otras cuentas
+
+Cada observatorio lee únicamente sus fuentes seleccionadas. No deduce la organización
+por el dominio del VPS ni incorpora todas las cuentas del servidor. Los manifiestos de
+otra organización se rechazan para evitar mezclar sus documentos.
+
+En el asistente, **Rutas por persona** permite distribuir los perfiles entre cuentas,
+con un mapa JSON de claves `organizacion:persona` y rutas absolutas. Deja la carpeta
+común vacía al usar rutas explícitas. Por ejemplo:
+
+```json
+{"mi-organizacion:coordinacion": "/home/cuenta/.local/share/phantombot/personas/coordinacion"}
+```
+
+**Personas en otros equipos** declara una ubicación sin acceder al equipo remoto:
+
+```json
+{"mi-organizacion:proyectos": "PC local"}
+```
+
+La persona conserva su rol, jerarquía y relaciones de la especificación, y su estado
+se muestra como **Otro equipo · sin comprobar**. Esta opción no establece una conexión
+SSH ni realiza sondas remotas. Una carpeta no puede asignarse simultáneamente a dos
+personas o setups. Las rutas deben corresponder al perfil; no uses `/home` como carpeta
+común ni cambies los permisos de todas las cuentas para recopilar datos.
+
 ## Navegación
 
 - Organización: recuentos derivados, grafo por capas y comprobaciones.

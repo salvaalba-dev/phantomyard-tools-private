@@ -110,7 +110,7 @@ def cycle_nodes(edges):
 
 def default_config():
     return {"mode": "demo", "org_files": [str(HERE / "example-org.yaml")],
-            "personas_dir": "", "docs_manifests": [str(HERE / "example-docs.yaml")],
+            "personas_dir": "", "persona_paths": {}, "remote_personas": {}, "docs_manifests": [str(HERE / "example-docs.yaml")],
             "procedures_file": str(HERE / "example-procedures.json"),
             "doctor_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
 
@@ -145,6 +145,26 @@ class Observatory:
         for key in ("personas_dir", "procedures_file", "doctor_file", "software_tag"):
             if not isinstance(config.get(key, ""), str):
                 raise ValueError(f"Configuración no válida: {key}")
+        paths = config.get("persona_paths", {})
+        if not isinstance(paths, dict) or len(paths) > 1000:
+            raise ValueError("Mapa de personas no válido")
+        for key, value in paths.items():
+            parts = key.split(":") if isinstance(key, str) else []
+            if len(parts) != 2 or not all(IDENTIFIER.fullmatch(x) for x in parts):
+                raise ValueError("Usa organización:persona para cada ruta explícita")
+            if not isinstance(value, str) or not Path(value).is_absolute():
+                raise ValueError("Cada persona necesita una ruta absoluta")
+        if len({str(Path(p).resolve()) for p in paths.values()}) != len(paths):
+            raise ValueError("Una carpeta no puede asignarse a dos personas o setups")
+        remote = config.get("remote_personas", {})
+        if not isinstance(remote, dict) or len(remote) > 1000:
+            raise ValueError("Mapa de personas remotas no válido")
+        for key, value in remote.items():
+            parts = key.split(":") if isinstance(key, str) else []
+            if len(parts) != 2 or not all(IDENTIFIER.fullmatch(x) for x in parts) or not isinstance(value, str) or not value.strip():
+                raise ValueError("Cada persona remota necesita organización:persona y ubicación declarada")
+        if set(remote) & set(paths):
+            raise ValueError("Una persona no puede tener ruta local y ubicación remota simultáneas")
         for key in ("sync_interval", "software_interval"):
             value = config.get(key, 0)
             if type(value) is not int or not (value == 0 or 30 <= value <= 86400):
@@ -176,6 +196,9 @@ class Observatory:
         def finding(severity, entity, title, source):
             result["findings"].append({"severity": severity, "entity": entity, "title": title, "source": source})
         pbase = Path(config["personas_dir"]).resolve() if config.get("personas_dir") else None
+        explicit_paths = config.get("persona_paths", {})
+        remote_personas = config.get("remote_personas", {})
+        used_paths = set()
         for filename in config.get("org_files", []):
             org = validate_org(read_source(filename))
             oid = org["organization"]["id"]
@@ -224,7 +247,13 @@ class Observatory:
                 result["edges"].append({"from": f"{oid}:roles:{a}", "to": f"{oid}:roles:{b}", "type": "escalation", "label": text(entry.get("condition"))})
             for name, graph in (("jerarquía", hierarchy), ("escalado", escalation)):
                 for node in cycle_nodes(graph):
-                    finding("error", f"{oid}:roles:{node}", f"Ciclo en {name}", source)
+                    if name == "escalado":
+                        # Conditional escalations may be reciprocal and bounded by TTL;
+                        # the static graph cannot prove a runtime protocol violation.
+                        finding("warning", f"{oid}:roles:{node}",
+                                "Ruta circular posible de escalado: revisar condiciones y límite de saltos", source)
+                    else:
+                        finding("error", f"{oid}:roles:{node}", f"Ciclo en {name}", source)
             for actor in org["actors"]:
                 aid = actor["id"]
                 role = roles.get(actor.get("role"), {})
@@ -240,15 +269,32 @@ class Observatory:
                 clean["categories"] = [x for x in level.get("categories", []) if type(x) is int] if isinstance(level, dict) else []
                 if not role:
                     finding("error", key, "Rol inexistente", source)
-                if pbase:
-                    persona = pbase / aid
-                    if persona.is_symlink() or not persona.resolve().is_relative_to(pbase):
+                selected_path = explicit_paths.get(f"{oid}:{aid}")
+                remote_location = remote_personas.get(f"{oid}:{aid}")
+                if remote_location:
+                    clean["profile_location"] = text(remote_location)
+                    clean["profile_remote"] = True
+                    result["sources"].append({"kind": "persona remota declarada", "org": oid, "actor": aid,
+                                               "path": text(remote_location), "checked_at": None})
+                elif pbase or selected_path:
+                    persona = Path(selected_path) if selected_path else pbase / aid
+                    if any(p.is_symlink() for p in (persona, *persona.parents)):
+                        raise ValueError("Ruta de persona enlazada")
+                    if not selected_path and not persona.resolve().is_relative_to(pbase):
                         raise ValueError("Ruta de persona fuera de su raíz")
+                    resolved = str(persona.resolve())
+                    if resolved in used_paths:
+                        raise ValueError("Carpeta de persona compartida entre fuentes seleccionadas")
+                    used_paths.add(resolved)
+                    clean["profile_path"] = resolved
+                    result["sources"].append({"kind": "persona", "org": oid, "actor": aid, "path": resolved, "checked_at": now()})
                     clean["installed"] = persona.is_dir()
                     if not clean["installed"]:
                         finding("warning", key, "Persona declarada pero no instalada", source)
                     else:
                         for file in ("IDENTITY.md", "SOUL.md", "tools.md"):
+                            if file == "tools.md" and (persona / "tools").is_dir():
+                                continue
                             if not (persona / file).is_file():
                                 finding("warning", key, f"Perfil incompleto: falta {file}", str(persona))
                         provenance = persona / ".phantomorg.yaml"
@@ -271,9 +317,14 @@ class Observatory:
                                 if note.is_symlink() or not note.resolve().is_relative_to(persona.resolve()):
                                     continue
                                 clean["knowledge"].append({"title": note.stem, "path": str(note.relative_to(persona))})
+                elif explicit_paths:
+                    finding("warning", key, "Persona declarada sin ruta de perfil seleccionada", source)
                 result["actors"].append(clean)
             for human in rows(org.get("humans", [])):
                 result["humans"].append({"id": text(human.get("id")), "org": oid, "name": text(human.get("name")), "role": text(human.get("role"))})
+        declared_keys = {f"{a['org']}:{a['id']}" for a in result["actors"]}
+        if (set(explicit_paths) | set(remote_personas)) - declared_keys:
+            raise ValueError("Ruta explícita para una persona ajena a las organizaciones seleccionadas")
         if pbase and pbase.exists():
             declared = {a["id"] for a in result["actors"]}
             for p in pbase.iterdir():
@@ -284,12 +335,16 @@ class Observatory:
             if not isinstance(manifest, dict) or not isinstance(manifest.get("manifest"), dict):
                 raise ValueError("Manifiesto documental no válido")
             oid = text(manifest["manifest"].get("org"))
+            if oid not in {o["id"] for o in result["organizations"]}:
+                raise ValueError("El manifiesto pertenece a una organización no seleccionada")
             heads = manifest.get("currentVersions", {})
-            for node in rows(manifest.get("nodes", [])):
+            nodes = rows(manifest.get("nodes", []))
+            parent_urns = {text(n.get("mac")): text(n.get("urn")) for n in nodes if n.get("mac")}
+            for node in nodes:
                 if heads and node.get("urn") in heads and node.get("mac") != heads[node["urn"]]:
                     continue
                 result["documents"].append({"org": oid, "kind": text(node.get("kind")), "urn": text(node.get("urn")),
-                    "slug": text(node.get("slug")), "parent": text(node.get("parent")), "owners": strings(node.get("owners")),
+                    "slug": text(node.get("slug")), "parent": text(node.get("parent")) or parent_urns.get(text(node.get("parentMac")), ""), "owners": strings(node.get("owners")),
                     "category": node.get("category") if isinstance(node.get("category"), (int, str)) else None,
                     "location": text(node.get("location")), "source": str(Path(filename).resolve()), "integrity": "Sin comprobar"})
             result["sources"].append({"kind": "documents", "path": str(Path(filename).resolve()), "checked_at": now()})

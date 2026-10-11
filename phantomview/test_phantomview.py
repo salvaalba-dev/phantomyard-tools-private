@@ -135,6 +135,88 @@ class ObservatoryTests(unittest.TestCase):
         self.assertIsNotNone(data["error"])
 
 
+    def test_explicit_profiles_are_scoped_to_declared_organization(self):
+        profile = self.root / "separate-account" / "iris"
+        profile.mkdir(parents=True)
+        for name in ("IDENTITY.md", "SOUL.md"):
+            (profile / name).write_text("private profile content", encoding="utf-8")
+        (profile / "tools").mkdir()
+        cfg = pv.default_config()
+        cfg.update(mode="existing", persona_paths={"demo:iris": str(profile)})
+        data = self.obs.configure(cfg)
+        self.assertIsNone(data["error"])
+        iris = next(a for a in data["snapshot"]["actors"] if a["id"] == "iris")
+        self.assertTrue(iris["installed"])
+        self.assertEqual(iris["profile_path"], str(profile.resolve()))
+        self.assertNotIn("private profile content", json.dumps(data))
+        self.assertFalse(any("tools.md" in f["title"] for f in data["snapshot"]["findings"]))
+        self.assertTrue(any("sin ruta" in f["title"] for f in data["snapshot"]["findings"]))
+        cfg["persona_paths"] = {"other:iris": str(profile)}
+        self.assertIsNotNone(self.obs.configure(cfg)["error"])
+
+    def test_same_profile_cannot_be_mapped_to_two_setups(self):
+        cfg = pv.default_config()
+        cfg["persona_paths"] = {"demo:iris": str(self.root), "other:iris": str(self.root)}
+        with self.assertRaises(ValueError):
+            self.obs.validate_config(cfg)
+
+    def test_manifest_from_other_setup_is_rejected(self):
+        manifest = pv.read_source(pv.HERE / "example-docs.yaml")
+        manifest["manifest"]["org"] = "other"
+        source = self.root / "foreign.json"
+        pv.atomic_json(source, manifest)
+        cfg = pv.default_config()
+        cfg.update(mode="existing", docs_manifests=[str(source)])
+        data = self.obs.configure(cfg)
+        self.assertIsNotNone(data["error"])
+        self.assertIsNone(data["snapshot"])
+
+
+    def test_remote_persona_is_declared_without_local_probe(self):
+        cfg = pv.default_config()
+        cfg.update(mode="existing", remote_personas={"demo:iris": "PC local"}, persona_paths={"demo:atlas": str(self.root / "atlas")})
+        data = self.obs.configure(cfg)
+        self.assertIsNone(data["error"])
+        iris = next(a for a in data["snapshot"]["actors"] if a["id"] == "iris")
+        self.assertIsNone(iris["installed"])
+        self.assertEqual(iris["runtime"], "unknown")
+        self.assertTrue(iris["profile_remote"])
+        self.assertEqual(iris["profile_location"], "PC local")
+        self.assertFalse(any(f["entity"] == iris["key"] and "sin ruta" in f["title"] for f in data["snapshot"]["findings"]))
+        cfg["persona_paths"]["demo:iris"] = str(self.root / "iris")
+        with self.assertRaises(ValueError):
+            self.obs.validate_config(cfg)
+
+    def test_document_parent_mac_resolves_without_importing_raw_metadata(self):
+        manifest = pv.read_source(pv.HERE / "example-docs.yaml")
+        manifest["nodes"][0]["mac"] = "parent-hash"
+        manifest["nodes"][1].pop("parent")
+        manifest["nodes"][1]["parentMac"] = "parent-hash"
+        manifest["nodes"][1]["meta"] = {"unexpected_secret": "do-not-collect"}
+        file = self.root / "docs.json"
+        pv.atomic_json(file, manifest)
+        cfg = pv.default_config()
+        cfg.update(mode="existing", docs_manifests=[str(file)])
+        data = self.obs.configure(cfg)
+        self.assertIsNone(data["error"])
+        self.assertEqual(data["snapshot"]["documents"][1]["parent"], manifest["nodes"][0]["urn"])
+        self.assertNotIn("do-not-collect", json.dumps(data))
+
+
+    def test_reciprocal_conditional_escalation_is_review_not_runtime_failure(self):
+        org = pv.read_source(pv.HERE / "example-org.yaml")
+        a, b = org["roles"][0]["id"], org["roles"][1]["id"]
+        org["escalation_matrix"] = [{"from": a, "to": b, "condition": "delegation"}, {"from": b, "to": a, "condition": "unresolved"}]
+        file = self.root / "org.json"
+        pv.atomic_json(file, org)
+        cfg = pv.default_config()
+        cfg.update(mode="existing", org_files=[str(file)])
+        data = self.obs.configure(cfg)
+        findings = [f for f in data["snapshot"]["findings"] if "escalado" in f["title"]]
+        self.assertTrue(findings)
+        self.assertTrue(all(f["severity"] == "warning" for f in findings))
+
+
 class HttpTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
