@@ -209,3 +209,47 @@ Repositorio privado: `salvaalba-dev/phantomyard-tools-private`. Este módulo es
 independiente y consume los formatos del ecosistema; no contiene una copia de las
 otras herramientas. Los ejemplos son sintéticos. No subir configuración,
 identidades, caches, tokens ni documentos de una instalación real.
+
+## Acceso delegado mediante PhantomBlog
+
+La modalidad de servidor reutiliza `phantomblog.access` de la instalación existente:
+petición Nostr/NIP-98 firmada, clave pública del emisor en una lista explícita,
+protección contra repetición y enlace de cinco minutos, de un solo uso. PhantomView
+no implementa otro firmante ni lee identidades privadas. El firmante existente de
+PhantomBlog opera dentro de la cuenta de la persona responsable.
+
+El código llega en `/#c=...`, se borra de la dirección y se canjea por una cookie
+HttpOnly/SameSite=Strict/Secure. PhantomView limita además la sesión a 30 minutos,
+guarda solo su hash en memoria y permite cerrar y revocar la sesión. El proceso
+web sirve exclusivamente un índice exportado: no puede cambiar las fuentes,
+recoger nuevos archivos ni actualizar software mediante la sesión humana.
+
+La persona emisora debe ser asignada expresamente. Que un rol tenga funciones de
+coordinación lo convierte en candidato, pero no asigna por sí mismo la herramienta.
+El alta inicial comprueba que la persona y su rol coincidan con `org.yaml`; un cambio
+posterior de custodio requiere revisar la política de acceso y reiniciar el visor.
+
+`deploy_au.py` prepara el piloto AU con destinos propios y se niega a sobrescribir
+una instalación existente. Crea un recolector separado, un temporizador de cinco
+minutos y un visor sin privilegios de administrador. Usa Python, YAML y PhantomBlog
+ya instalados. Antes de activar el proxy privado HTTPS, revisar su origen exacto,
+la persona emisora y la disponibilidad de los puertos. Requiere aprobación humana
+para la instalación; el parámetro `--apply` es el paso que escribe y activa servicios.
+
+Para emitir una URL, la persona utiliza el firmante existente con el puerto del visor:
+
+```sh
+PYTHONPATH=/opt/phantomblog-tool python3 -m phantomblog access-link \
+  --persona PERSONA_RESPONSABLE --persona-dir RUTA_A_SU_ALMACEN_DE_PERSONAS \
+  --port 8789 --public-origin https://HOST_PRIVADO:8790
+```
+
+No ejecutar el firmante desde una cuenta humana para hacerse pasar por la persona.
+La petición humana debe llegar a la persona por su canal habitual, y la ejecución
+pertenece a su cuenta. La integración de esta petición en su catálogo de herramientas
+debe verificarse en el despliegue; el instalador del visor no modifica sus perfiles.
+
+Las 32 pruebas locales incluyen el adaptador de acceso, límites de sesión, cierre,
+canje único, aislamiento de origen y bloqueo de administración por navegador. Usan
+un doble del verificador de PhantomBlog; la firma real debe verificarse también en
+la prueba de integración con el runtime instalado.

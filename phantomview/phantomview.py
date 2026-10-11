@@ -449,13 +449,15 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):
         pass
 
-    def send(self, code, body, content_type="application/json; charset=utf-8"):
+    def send(self, code, body, content_type="application/json; charset=utf-8", cookie=None):
         if not isinstance(body, bytes):
             body = json.dumps(body, ensure_ascii=False).encode()
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'")
@@ -463,6 +465,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def allowed(self):
+        gate = getattr(self.server, "gate", None)
+        if gate:
+            self.request_origin = gate.boundary(self.headers, self.server.server_port)
+            return bool(self.request_origin)
         host = self.headers.get("Host", "")
         if host not in (f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"):
             return False
@@ -472,6 +478,8 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def authenticated(self):
+        if getattr(self.server, "gate", None):
+            return self.server.gate.session(self.headers)
         supplied = self.headers.get("Authorization", "").removeprefix("Bearer ")
         return bool(supplied) and hmac.compare_digest(supplied.encode(), self.server.token.encode())
 
@@ -479,10 +487,17 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed():
             return self.send(403, {"error": "Origen no permitido"})
         path = urlparse(self.path).path
+        if path == "/api/access-info":
+            gate = getattr(self.server, "gate", None)
+            return self.send(200, {"delegated": bool(gate), "actor": gate.policy.get("actor", "") if gate else "",
+                                   "role": gate.policy.get("role", "") if gate else ""})
         if path == "/api/state":
             if not self.authenticated():
                 return self.send(401, {"error": "Autenticación necesaria"})
-            return self.send(200, self.server.observatory.data())
+            try:
+                return self.send(200, self.server.observatory.data())
+            except (ValueError, OSError):
+                return self.send(503, {"error": "Índice temporalmente no disponible"})
         static = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png")}
         if path not in static:
@@ -491,6 +506,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(200, (HERE / file).read_bytes(), mime)
 
     def do_POST(self):
+        if getattr(self.server, "gate", None):
+            return self.gated_post()
         if not self.allowed() or not self.authenticated():
             return self.send(403, {"error": "Acceso no permitido"})
         try:
@@ -506,13 +523,54 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError, OSError):
             return self.send(400, {"error": "Configuración o petición no válida"})
 
+    def gated_post(self):
+        gate = self.server.gate
+        if not self.allowed():
+            return self.send(403, {"error": "Origen no permitido"})
+        parsed = urlparse(self.path)
+        if parsed.query or parsed.fragment:
+            return self.send(400, {"error": "No se aceptan credenciales en la URL"})
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if self.headers.get("Content-Type", "").split(";")[0] != "application/json" or not 0 < length <= 8192:
+                return self.send(400, {"error": "Petición no válida"})
+            raw = self.rfile.read(length)
+            body = json.loads(raw)
+            if not isinstance(body, dict):
+                return self.send(400, {"error": "Petición no válida"})
+            if parsed.path == "/api/access-link":
+                if raw != b"{}":
+                    return self.send(400, {"error": "La petición firmada debe estar vacía"})
+                link = gate.issue(self.headers.get("Authorization", ""), self.request_origin)
+                return self.send(200, {"link": link})
+            if parsed.path == "/api/redeem":
+                if set(body) != {"code"}:
+                    return self.send(400, {"error": "Petición no válida"})
+                session = gate.redeem(body["code"])
+                return self.send(200, {"ok": True}, cookie=gate.cookie(session))
+            if not self.authenticated():
+                return self.send(401, {"error": "Pide un enlace temporal a la persona responsable"})
+            if parsed.path == "/api/logout":
+                gate.logout(self.headers)
+                return self.send(200, {"ok": True}, cookie=gate.cookie())
+            if parsed.path == "/api/sync":
+                return self.send(200, self.server.observatory.data())
+            return self.send(403, {"error": "Acceso de consulta; administración local"})
+        except self.server.access_errors:
+            return self.send(401, {"error": "Enlace o petición inválidos, caducados o ya utilizados"})
+        except (OSError, TypeError):
+            return self.send(503, {"error": "Servicio temporalmente no disponible"})
 
-def serve(obs, port, open_browser):
+
+def serve(obs, port, open_browser, gate=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.token = os.environ.get("PHANTOMVIEW_TOKEN") or secrets.token_urlsafe(32)
     os.environ["PHANTOMVIEW_TOKEN"] = server.token
     server.restart_requested = False
     server.observatory = obs
+    server.gate = gate
+    if gate:
+        server.access_errors = (ValueError, gate.access.core.Invalid)
     obs.refresh()
     stop = threading.Event()
     def loop():
@@ -537,7 +595,7 @@ def serve(obs, port, open_browser):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/"
     print(f"PhantomView {VERSION}: {url} (acceso autenticado)", flush=True)
-    if open_browser:
+    if open_browser and not gate:
         webbrowser.open(url + "#token=" + server.token)
     try:
         server.serve_forever()
@@ -557,6 +615,11 @@ def main():
     start = sub.add_parser("serve")
     start.add_argument("--port", type=int, default=8765)
     start.add_argument("--open", action="store_true")
+    start.add_argument("--reader-index", help="Índice exportado; proceso web sin acceso a fuentes")
+    start.add_argument("--access-policy", help="JSON con identidades públicas de emisores autorizados")
+    start.add_argument("--access-module-dir", help="Ruta al paquete PhantomBlog instalado")
+    start.add_argument("--public-origin", help="Origen HTTPS exacto del proxy")
+    start.add_argument("--session-seconds", type=int, default=1800)
     setup = sub.add_parser("setup")
     setup.add_argument("--mode", choices=["demo", "new", "existing"], default="existing")
     setup.add_argument("--org", action="append", default=[])
@@ -564,7 +627,8 @@ def main():
     setup.add_argument("--docs", action="append", default=[])
     setup.add_argument("--procedures", default="")
     setup.add_argument("--interval", type=int, default=0)
-    sub.add_parser("sync")
+    sync = sub.add_parser("sync")
+    sync.add_argument("--export", help="Exporta el índice de consulta sin conceder acceso a fuentes")
     update = sub.add_parser("update")
     update.add_argument("--tag", required=True)
     update.add_argument("--check", action="store_true")
@@ -583,7 +647,21 @@ def main():
         git("checkout", "--detach", commit)
         print("Versión anterior restaurada; reinicia PhantomView")
         return
-    obs = Observatory(args.config)
+    gate = None
+    if args.command == "serve" and args.access_policy:
+        from access_gate import Gate, SnapshotReader
+        if not args.reader_index or not args.public_origin or not args.access_module_dir:
+            parser.error("Acceso delegado requiere índice exportado, origen y módulo PhantomBlog")
+        import sys
+        sys.path.insert(0, str(Path(args.access_module_dir).resolve()))
+        from phantomblog import access
+        policy = read_source(args.access_policy)
+        gate = Gate(access, policy, args.public_origin, args.port, args.session_seconds)
+        obs = SnapshotReader(args.reader_index, policy)
+    else:
+        if args.command == "serve" and (args.public_origin or args.reader_index):
+            parser.error("Un origen remoto requiere acceso delegado")
+        obs = Observatory(args.config)
     if args.command == "setup":
         cfg = default_config() if args.mode == "demo" else {"mode": args.mode, "org_files": args.org,
               "personas_dir": args.personas, "docs_manifests": args.docs, "procedures_file": args.procedures,
@@ -592,11 +670,13 @@ def main():
         print("Configuración guardada" if not state["error"] else state["error"])
     elif args.command == "sync":
         state = obs.refresh()
+        if args.export:
+            atomic_json(args.export, state)
         print("Información actualizada" if not state["error"] else state["error"])
         if state["error"]:
             raise SystemExit(1)
     else:
-        serve(obs, args.port, args.open)
+        serve(obs, args.port, args.open, gate)
 
 
 if __name__ == "__main__":
