@@ -1,0 +1,46 @@
+version: 1
+organization:
+  id: demo
+  name: Organización de ejemplo
+  sector: general
+  languages: [es]
+  default_language: es
+departments:
+  - {id: direccion, name: Dirección, parent: null, access_policy: level-3}
+  - {id: operaciones, name: Operaciones, parent: direccion, access_policy: level-2}
+  - {id: finanzas, name: Finanzas, parent: direccion, access_policy: level-2}
+  - {id: formacion, name: Formación, parent: direccion, access_policy: level-2}
+roles:
+  - {id: director, name: Dirección general, department: direccion, reports_to: null, reports_to_human: Presidencia, functions: [estrategia, prioridades], access_level: level-3, description: Resuelve prioridades y bloqueos entre departamentos.}
+  - {id: coordinador, name: Coordinación, department: direccion, reports_to: director, functions: [coordinación, seguimiento], access_level: level-2, description: Coordina equipos y deriva los bloqueos a dirección.}
+  - {id: proyectos, name: Responsable de proyectos, department: operaciones, reports_to: coordinador, functions: [proyectos, ejecución], access_level: level-2, description: Organiza la ejecución de proyectos y sus entregables.}
+  - {id: tesoreria, name: Responsable financiero, department: finanzas, reports_to: director, functions: [presupuesto, reporting], access_level: level-2, description: Mantiene presupuestos y documentación financiera.}
+  - {id: docente, name: Responsable de formación, department: formacion, reports_to: coordinador, functions: [formación, documentación], access_level: level-2, description: Prepara procedimientos y materiales formativos.}
+actors:
+  - {id: atlas, role: director, tools: [email, drive, calendar], tools_excluded: [], actor_exceptions: [], tone: directo}
+  - {id: iris, role: coordinador, tools: [email, drive, calendar], tools_excluded: [send], actor_exceptions: []}
+  - {id: nova, role: proyectos, tools: [drive, calendar], tools_excluded: [], actor_exceptions: []}
+  - {id: lumen, role: tesoreria, tools: [drive, sheets], tools_excluded: [], actor_exceptions: []}
+  - {id: sage, role: docente, tools: [drive, notebooklm], tools_excluded: [], actor_exceptions: []}
+humans:
+  - {id: presidencia, name: Presidencia, role: Presidencia}
+policies:
+  access_levels:
+    level-3: {label: Ejecutivo, categories: [1, 2, 3]}
+    level-2: {label: Operativo, categories: [1, 2]}
+  security_categories:
+    category-1: {label: Interno}
+    category-2: {label: Confidencial}
+    category-3: {label: Sensible}
+escalation_matrix:
+  - {from: proyectos, to: coordinador, condition: Bloqueo de ejecución}
+  - {from: docente, to: coordinador, condition: Material fuera de alcance}
+  - {from: coordinador, to: director, condition: Conflicto entre departamentos}
+  - {from: tesoreria, to: director, condition: Gasto que requiere autorización}
+communication:
+  message_types: [REQUEST, INFORM, ESCALATE, CONFIRM, REJECT]
+  max_hops: 3
+  norm_version: '1.5'
+  channels:
+    human: {platform: telegram}
+    agent: {platform: phantomchat}

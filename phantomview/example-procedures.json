@@ -1,0 +1,4 @@
+[
+  {"id":"proyecto","title":"Resolver un bloqueo de proyecto","description":"Ejemplo de procedimiento estructurado; no describe tu instalación.","steps":[{"actor":"nova","action":"Documentar el bloqueo","input":"Incidencia del proyecto","output":"Solicitud de coordinación"},{"actor":"iris","action":"Coordinar una solución","input":"Solicitud de coordinación","output":"Plan de resolución"},{"actor":"atlas","action":"Resolver el conflicto si persiste","input":"Escalado justificado","output":"Decisión y responsable"}]},
+  {"id":"gasto","title":"Revisar un gasto","description":"Ejemplo de revisión financiera.","steps":[{"actor":"lumen","action":"Comprobar presupuesto","input":"Propuesta de gasto","output":"Informe de viabilidad"},{"actor":"atlas","action":"Autorizar según la política","input":"Informe de viabilidad","output":"Decisión registrada"}]}
+]

@@ -1,0 +1,548 @@
+"""PhantomView: local, authenticated, read-only organization observatory."""
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
+import re
+import secrets
+import subprocess
+import tempfile
+import threading
+import time
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
+import webbrowser
+
+import yaml
+
+VERSION = "0.1.0"
+HERE = Path(__file__).resolve().parent
+MAX_SOURCE_BYTES = 4 * 1024 * 1024
+IDENTIFIER = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$")
+REMOTE = "https://github.com/salvaalba-dev/phantomyard-tools-private.git"
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def atomic_json(path, data):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".pv-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, path)
+    finally:
+        if os.path.exists(temp):
+            os.unlink(temp)
+
+
+def read_source(path):
+    path = Path(path)
+    if path.is_symlink() or path.stat().st_size > MAX_SOURCE_BYTES:
+        raise ValueError("Fuente enlazada o demasiado grande")
+    text = path.read_text(encoding="utf-8-sig")
+    return json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
+
+
+def text(value):
+    return value[:4000] if isinstance(value, str) else ""
+
+
+def strings(value):
+    return [text(x) for x in value[:100] if isinstance(x, str)] if isinstance(value, list) else []
+
+
+def rows(value):
+    if not isinstance(value, list) or len(value) > 10000 or any(not isinstance(x, dict) for x in value):
+        raise ValueError("Se esperaba una lista de registros")
+    return value
+
+
+def validate_org(org):
+    if not isinstance(org, dict) or not isinstance(org.get("organization"), dict):
+        raise ValueError("Organización no válida")
+    if org.get("version") != 1:
+        raise ValueError("Versión de organización no soportada")
+    oid = org["organization"].get("id", "")
+    if not isinstance(oid, str) or not IDENTIFIER.fullmatch(oid):
+        raise ValueError("Identificador de organización no válido")
+    for kind in ("departments", "roles", "actors"):
+        items = rows(org.get(kind))
+        ids = [x.get("id") for x in items]
+        if any(not isinstance(x, str) or not IDENTIFIER.fullmatch(x) for x in ids):
+            raise ValueError(f"Identificador no válido en {kind}")
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"Identificador duplicado en {kind}")
+    return org
+
+
+def cycle_nodes(edges):
+    active, done, cycles = set(), set(), set()
+    def visit(node, stack):
+        if node in active:
+            cycles.update(stack[stack.index(node):])
+            return
+        if node in done:
+            return
+        active.add(node)
+        for target in edges.get(node, []):
+            visit(target, stack + [node])
+        active.remove(node)
+        done.add(node)
+    # Iterative depth is bounded by the accepted spec, preventing recursion abuse.
+    if len(edges) > 200:
+        return {"grafo-demasiado-grande"}
+    for node in edges:
+        visit(node, [])
+    return cycles
+
+
+def default_config():
+    return {"mode": "demo", "org_files": [str(HERE / "example-org.yaml")],
+            "personas_dir": "", "docs_manifests": [str(HERE / "example-docs.yaml")],
+            "procedures_file": str(HERE / "example-procedures.json"),
+            "doctor_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
+
+
+class Observatory:
+    def __init__(self, config_path):
+        self.path = Path(config_path).resolve()
+        self.lock = threading.RLock()
+        self.config = read_source(self.path) if self.path.exists() else default_config()
+        self.validate_config(self.config)
+        self.snapshot = None
+        self.last_attempt = None
+        self.last_error = None
+        self.history = []
+        self.software_status = "Actualización de software manual"
+        self.state_path = self.path.parent / "snapshot.json"
+        if self.state_path.exists():
+            try:
+                state = read_source(self.state_path)
+                self.snapshot = state.get("snapshot")
+                self.history = state.get("history", [])[-50:]
+            except (ValueError, OSError):
+                pass
+
+    @staticmethod
+    def validate_config(config):
+        if not isinstance(config, dict) or config.get("mode") not in ("demo", "new", "existing"):
+            raise ValueError("Modo no válido")
+        for key in ("org_files", "docs_manifests"):
+            if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
+                raise ValueError(f"Configuración no válida: {key}")
+        for key in ("personas_dir", "procedures_file", "doctor_file", "software_tag"):
+            if not isinstance(config.get(key, ""), str):
+                raise ValueError(f"Configuración no válida: {key}")
+        for key in ("sync_interval", "software_interval"):
+            value = config.get(key, 0)
+            if type(value) is not int or not (value == 0 or 30 <= value <= 86400):
+                raise ValueError("El intervalo debe ser 0 o entre 30 y 86400 segundos")
+        if config.get("software_interval") and not re.fullmatch(r"v\d+\.\d+\.\d+", config.get("software_tag", "")):
+            raise ValueError("La actualización automática necesita una versión firmada explícita")
+
+    def configure(self, config):
+        self.validate_config(config)
+        if config["mode"] == "demo":
+            interval = config.get("sync_interval", 0)
+            config = default_config()
+            config["sync_interval"] = interval
+        # Setup owns only its own configuration and index, never persona state.
+        with self.lock:
+            atomic_json(self.path, config)
+            self.config = config
+            self.snapshot = None
+            self.history = []
+            self.last_error = None
+            if self.state_path.exists():
+                atomic_json(self.state_path, {"snapshot": None, "history": []})
+        return self.refresh()
+
+    def collect(self):
+        config = self.config
+        result = {"organizations": [], "departments": [], "roles": [], "actors": [],
+                  "humans": [], "edges": [], "documents": [], "procedures": [], "findings": [], "sources": []}
+        def finding(severity, entity, title, source):
+            result["findings"].append({"severity": severity, "entity": entity, "title": title, "source": source})
+        pbase = Path(config["personas_dir"]).resolve() if config.get("personas_dir") else None
+        for filename in config.get("org_files", []):
+            org = validate_org(read_source(filename))
+            oid = org["organization"]["id"]
+            if any(x["id"] == oid for x in result["organizations"]):
+                raise ValueError("Organización duplicada entre fuentes")
+            source = str(Path(filename).resolve())
+            result["sources"].append({"kind": "org", "path": source, "checked_at": now()})
+            result["organizations"].append({"id": oid, "name": text(org["organization"].get("name")) or oid,
+                                            "sector": text(org["organization"].get("sector")), "source": source,
+                                            "communication": {"message_types": strings(org.get("communication", {}).get("message_types")),
+                                                              "max_hops": org.get("communication", {}).get("max_hops", 3)}})
+            deps = {x["id"]: x for x in org["departments"]}
+            roles = {x["id"]: x for x in org["roles"]}
+            policies = org.get("policies") or {}
+            if not isinstance(policies, dict) or not isinstance(policies.get("access_levels", {}), dict):
+                raise ValueError("Políticas no válidas")
+            hierarchy, escalation = {}, {}
+            for kind, mapping, fields in (("departments", deps, ("id", "name", "parent", "access_policy")),
+                                           ("roles", roles, ("id", "name", "department", "reports_to", "reports_to_human", "description", "access_level"))):
+                for item in mapping.values():
+                    clean = {key: text(item.get(key)) for key in fields}
+                    clean.update(org=oid, key=f"{oid}:{kind}:{item['id']}", source=source)
+                    if kind == "roles":
+                        clean["functions"] = strings(item.get("functions"))
+                        clean["security_exceptions"] = strings(item.get("security_exceptions"))
+                        if item.get("department") not in deps:
+                            finding("error", clean["key"], "Departamento inexistente", source)
+                        parent = text(item.get("reports_to"))
+                        hierarchy[item["id"]] = [parent] if parent else []
+                        if parent:
+                            if parent not in roles:
+                                finding("error", clean["key"], "Superior inexistente", source)
+                            result["edges"].append({"from": clean["key"], "to": f"{oid}:roles:{parent}", "type": "reports", "label": "Reporta a"})
+                    elif item.get("parent"):
+                        if item["parent"] not in deps:
+                            finding("error", clean["key"], "Departamento superior inexistente", source)
+                        result["edges"].append({"from": clean["key"], "to": f"{oid}:departments:{text(item['parent'])}", "type": "department", "label": "Pertenece a"})
+                    result[kind].append(clean)
+            for entry in rows(org.get("escalation_matrix", [])):
+                a, b = text(entry.get("from")), text(entry.get("to"))
+                if b not in roles or (a != "*" and a not in roles):
+                    finding("error", oid, "Escalado con rol inexistente", source)
+                starts = [x for x in roles if x != b] if a == "*" else [a]
+                for start in starts:
+                    escalation.setdefault(start, []).append(b)
+                result["edges"].append({"from": f"{oid}:roles:{a}", "to": f"{oid}:roles:{b}", "type": "escalation", "label": text(entry.get("condition"))})
+            for name, graph in (("jerarquía", hierarchy), ("escalado", escalation)):
+                for node in cycle_nodes(graph):
+                    finding("error", f"{oid}:roles:{node}", f"Ciclo en {name}", source)
+            for actor in org["actors"]:
+                aid = actor["id"]
+                role = roles.get(actor.get("role"), {})
+                key = f"{oid}:actors:{aid}"
+                clean = {"id": aid, "key": key, "org": oid, "role": text(actor.get("role")),
+                         "department": text(role.get("department")), "description": text(role.get("description")),
+                         "tools": strings(actor.get("tools")), "excluded": strings(actor.get("tools_excluded")),
+                         "exceptions": strings(actor.get("actor_exceptions")), "source": source,
+                         "installed": None, "runtime": "unknown", "integrations": [], "knowledge": [],
+                         "channels": {x: text(actor.get(x)) for x in ("npub", "telegram_bot", "email")},
+                         "access_level": text(role.get("access_level")), "functions": strings(role.get("functions"))}
+                level = policies.get("access_levels", {}).get(role.get("access_level"), {})
+                clean["categories"] = [x for x in level.get("categories", []) if type(x) is int] if isinstance(level, dict) else []
+                if not role:
+                    finding("error", key, "Rol inexistente", source)
+                if pbase:
+                    persona = pbase / aid
+                    if persona.is_symlink() or not persona.resolve().is_relative_to(pbase):
+                        raise ValueError("Ruta de persona fuera de su raíz")
+                    clean["installed"] = persona.is_dir()
+                    if not clean["installed"]:
+                        finding("warning", key, "Persona declarada pero no instalada", source)
+                    else:
+                        for file in ("IDENTITY.md", "SOUL.md", "tools.md"):
+                            if not (persona / file).is_file():
+                                finding("warning", key, f"Perfil incompleto: falta {file}", str(persona))
+                        provenance = persona / ".phantomorg.yaml"
+                        if provenance.exists():
+                            prov = read_source(provenance)
+                            installed_role = prov.get("role_id", prov.get("role")) if isinstance(prov, dict) else None
+                            if installed_role and installed_role != clean["role"]:
+                                finding("warning", key, "El rol instalado difiere de la especificación", str(provenance))
+                        mcp = persona / "mcp.json"
+                        if mcp.exists():
+                            reg = read_source(mcp)
+                            servers = reg.get("mcpServers", {}) if isinstance(reg, dict) else {}
+                            if not isinstance(servers, dict):
+                                raise ValueError("Registro MCP no válido")
+                            clean["integrations"] = [{"id": text(i), "transport": text(v.get("transport")), "status": "Sin comprobar"}
+                                                     for i, v in servers.items() if isinstance(v, dict)]
+                        kb = persona / "kb"
+                        if kb.exists() and not kb.is_symlink():
+                            for note in list(kb.rglob("*.md"))[:500]:
+                                if note.is_symlink() or not note.resolve().is_relative_to(persona.resolve()):
+                                    continue
+                                clean["knowledge"].append({"title": note.stem, "path": str(note.relative_to(persona))})
+                result["actors"].append(clean)
+            for human in rows(org.get("humans", [])):
+                result["humans"].append({"id": text(human.get("id")), "org": oid, "name": text(human.get("name")), "role": text(human.get("role"))})
+        if pbase and pbase.exists():
+            declared = {a["id"] for a in result["actors"]}
+            for p in pbase.iterdir():
+                if p.is_dir() and not p.name.startswith(".") and p.name not in declared:
+                    finding("warning", p.name, "Persona instalada sin asignación en las fuentes seleccionadas", str(pbase))
+        for filename in config.get("docs_manifests", []):
+            manifest = read_source(filename)
+            if not isinstance(manifest, dict) or not isinstance(manifest.get("manifest"), dict):
+                raise ValueError("Manifiesto documental no válido")
+            oid = text(manifest["manifest"].get("org"))
+            heads = manifest.get("currentVersions", {})
+            for node in rows(manifest.get("nodes", [])):
+                if heads and node.get("urn") in heads and node.get("mac") != heads[node["urn"]]:
+                    continue
+                result["documents"].append({"org": oid, "kind": text(node.get("kind")), "urn": text(node.get("urn")),
+                    "slug": text(node.get("slug")), "parent": text(node.get("parent")), "owners": strings(node.get("owners")),
+                    "category": node.get("category") if isinstance(node.get("category"), (int, str)) else None,
+                    "location": text(node.get("location")), "source": str(Path(filename).resolve()), "integrity": "Sin comprobar"})
+            result["sources"].append({"kind": "documents", "path": str(Path(filename).resolve()), "checked_at": now()})
+        if config.get("procedures_file"):
+            procedures = rows(read_source(config["procedures_file"]))
+            for p in procedures:
+                result["procedures"].append({"id": text(p.get("id")), "title": text(p.get("title")), "description": text(p.get("description")),
+                    "steps": [{k: text(step.get(k)) for k in ("actor", "action", "input", "output")} for step in rows(p.get("steps", []))]})
+        if config.get("doctor_file"):
+            report = read_source(config["doctor_file"])
+            if not isinstance(report, dict):
+                raise ValueError("Informe doctor no válido")
+            for actor in result["actors"]:
+                checks = []
+                for channel in ("telegram", "phantomchat"):
+                    group = report.get(channel, {})
+                    if not isinstance(group, dict):
+                        continue
+                    for check in group.get("personas", []):
+                        if isinstance(check, dict) and check.get("persona") == actor["id"]:
+                            checks.append({"channel": channel, "healthy": check.get("healthy") is True})
+                actor["channel_checks"] = checks
+                actor["runtime"] = "reported" if checks else "unknown"
+            result["sources"].append({"kind": "doctor-export", "path": config["doctor_file"],
+                                      "checked_at": now(), "modified_at": datetime.fromtimestamp(Path(config["doctor_file"]).stat().st_mtime, timezone.utc).isoformat()})
+        return result
+
+    def refresh(self):
+        with self.lock:
+            self.last_attempt = now()
+            try:
+                candidate = self.collect()
+                # Volatile observation times do not count as organizational changes.
+                fingerprint = {k: v for k, v in candidate.items() if k != "sources"}
+                digest = hashlib.sha256(json.dumps(fingerprint, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+                old = self.snapshot
+                if not old or old.get("digest") != digest:
+                    changes = []
+                    for kind in ("actors", "roles", "departments", "documents", "procedures"):
+                        pk = "urn" if kind == "documents" else "key" if kind in ("actors", "roles", "departments") else "id"
+                        before = {str(x.get(pk)): x for x in (old or {}).get(kind, [])}
+                        after = {str(x.get(pk)): x for x in candidate[kind]}
+                        for key in after.keys() - before.keys():
+                            changes.append({"kind": kind, "entity": key, "action": "added"})
+                        for key in before.keys() - after.keys():
+                            changes.append({"kind": kind, "entity": key, "action": "removed"})
+                        for key in before.keys() & after.keys():
+                            if before[key] != after[key]:
+                                changes.append({"kind": kind, "entity": key, "action": "changed"})
+                    self.history.append({"at": now(), "initial": old is None, "changes": changes[:500], "total": len(changes)})
+                    self.history = self.history[-50:]
+                candidate.update(digest=digest, collected_at=now(), mode=self.config["mode"])
+                self.snapshot = candidate
+                self.last_error = None
+                atomic_json(self.state_path, {"snapshot": candidate, "history": self.history})
+            except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError, RecursionError):
+                # Never include parser excerpts: source files may contain private material.
+                self.last_error = "No se pudo leer o validar una fuente. Se conserva la última lectura válida; revisa las rutas y el formato."
+            return self.data()
+
+    def data(self):
+        with self.lock:
+            return {"version": VERSION, "snapshot": copy.deepcopy(self.snapshot), "history": copy.deepcopy(self.history),
+                    "last_attempt": self.last_attempt, "error": self.last_error, "config": copy.deepcopy(self.config),
+                    "software_status": self.software_status}
+
+
+def git(*args, cwd=None):
+    return subprocess.run(["git", *args], cwd=cwd or HERE.parent, capture_output=True, text=True, timeout=120, check=True).stdout.strip()
+
+
+def update_software(tag, check=False):
+    """Only operator-selected, cryptographically signed release tags may activate."""
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+        raise ValueError("Selecciona una versión como v0.1.0")
+    root = Path(git("rev-parse", "--show-toplevel")).resolve()
+    if git("remote", "get-url", "origin").rstrip("/") not in (REMOTE, REMOTE[:-4], "git@github.com:salvaalba-dev/phantomyard-tools-private.git"):
+        raise ValueError("El origen no coincide con el repositorio privado autorizado")
+    if git("status", "--porcelain"):
+        raise ValueError("Hay cambios locales; se conserva la instalación")
+    git("fetch", "origin", f"refs/tags/{tag}:refs/tags/{tag}")
+    git("verify-tag", tag)
+    candidate = git("rev-parse", f"{tag}^{{commit}}")
+    current = git("rev-parse", "HEAD")
+    if candidate == current:
+        return "Ya tienes esta versión"
+    if check:
+        return f"Versión firmada disponible: {tag}"
+    with tempfile.TemporaryDirectory(prefix="phantomview-release-") as temp:
+        # Isolated checkout; never overwrite a running installation during validation.
+        git("clone", "--no-hardlinks", str(root), temp)
+        git("checkout", "--detach", candidate, cwd=temp)
+        subprocess.run([os.sys.executable, "-m", "unittest", "discover", "-s", "phantomview", "-p", "test_*.py"],
+                       cwd=temp, check=True, timeout=120, capture_output=True)
+    previous = root / ".phantomview" / "previous-release.json"
+    atomic_json(previous, {"commit": current, "at": now()})
+    git("checkout", "--detach", candidate)
+    return f"Activada {tag}; reinicia PhantomView. La configuración y el índice se conservan."
+
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_):
+        pass
+
+    def send(self, code, body, content_type="application/json; charset=utf-8"):
+        if not isinstance(body, bytes):
+            body = json.dumps(body, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def allowed(self):
+        host = self.headers.get("Host", "")
+        if host not in (f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"):
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin not in (f"http://127.0.0.1:{self.server.server_port}", f"http://localhost:{self.server.server_port}"):
+            return False
+        return True
+
+    def authenticated(self):
+        supplied = self.headers.get("Authorization", "").removeprefix("Bearer ")
+        return bool(supplied) and hmac.compare_digest(supplied.encode(), self.server.token.encode())
+
+    def do_GET(self):
+        if not self.allowed():
+            return self.send(403, {"error": "Origen no permitido"})
+        path = urlparse(self.path).path
+        if path == "/api/state":
+            if not self.authenticated():
+                return self.send(401, {"error": "Autenticación necesaria"})
+            return self.send(200, self.server.observatory.data())
+        static = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                  "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png")}
+        if path not in static:
+            return self.send(404, {"error": "No encontrado"})
+        file, mime = static[path]
+        return self.send(200, (HERE / file).read_bytes(), mime)
+
+    def do_POST(self):
+        if not self.allowed() or not self.authenticated():
+            return self.send(403, {"error": "Acceso no permitido"})
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > 64000:
+                return self.send(413, {"error": "Petición demasiado grande"})
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if urlparse(self.path).path == "/api/sync":
+                return self.send(200, self.server.observatory.refresh())
+            if urlparse(self.path).path == "/api/config":
+                return self.send(200, self.server.observatory.configure(body))
+            return self.send(404, {"error": "No encontrado"})
+        except (ValueError, TypeError, OSError):
+            return self.send(400, {"error": "Configuración o petición no válida"})
+
+
+def serve(obs, port, open_browser):
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.token = os.environ.get("PHANTOMVIEW_TOKEN") or secrets.token_urlsafe(32)
+    os.environ["PHANTOMVIEW_TOKEN"] = server.token
+    server.restart_requested = False
+    server.observatory = obs
+    obs.refresh()
+    stop = threading.Event()
+    def loop():
+        last_sync, last_update = time.monotonic(), time.monotonic()
+        while not stop.wait(1):
+            interval = obs.config.get("sync_interval", 0)
+            if interval and time.monotonic() - last_sync >= interval:
+                obs.refresh()
+                last_sync = time.monotonic()
+            interval = obs.config.get("software_interval", 0)
+            if interval and time.monotonic() - last_update >= interval:
+                try:
+                    obs.software_status = update_software(obs.config["software_tag"])
+                    if obs.software_status.startswith("Activada"):
+                        server.restart_requested = True
+                        server.shutdown()
+                        return
+                except (ValueError, subprocess.SubprocessError, OSError):
+                    obs.software_status = "No se pudo actualizar; se conserva la versión instalada"
+                last_update = time.monotonic()
+    thread = threading.Thread(target=loop, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}/"
+    print(f"PhantomView {VERSION}: {url} (acceso autenticado)", flush=True)
+    if open_browser:
+        webbrowser.open(url + "#token=" + server.token)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop.set()
+        server.server_close()
+    if server.restart_requested:
+        os.execv(os.sys.executable, [os.sys.executable, *os.sys.argv])
+
+
+def main():
+    parser = argparse.ArgumentParser(description="PhantomView — organización, personas y documentos")
+    parser.add_argument("--config", default=str(HERE.parent / ".phantomview" / "config.json"))
+    sub = parser.add_subparsers(dest="command", required=True)
+    start = sub.add_parser("serve")
+    start.add_argument("--port", type=int, default=8765)
+    start.add_argument("--open", action="store_true")
+    setup = sub.add_parser("setup")
+    setup.add_argument("--mode", choices=["demo", "new", "existing"], default="existing")
+    setup.add_argument("--org", action="append", default=[])
+    setup.add_argument("--personas", default="")
+    setup.add_argument("--docs", action="append", default=[])
+    setup.add_argument("--procedures", default="")
+    setup.add_argument("--interval", type=int, default=0)
+    sub.add_parser("sync")
+    update = sub.add_parser("update")
+    update.add_argument("--tag", required=True)
+    update.add_argument("--check", action="store_true")
+    sub.add_parser("rollback")
+    args = parser.parse_args()
+    if args.command == "update":
+        print(update_software(args.tag, args.check))
+        return
+    if args.command == "rollback":
+        if git("status", "--porcelain"):
+            raise ValueError("Hay cambios locales; no se cambia de versión")
+        previous = read_source(Path(git("rev-parse", "--show-toplevel")) / ".phantomview" / "previous-release.json")
+        commit = previous.get("commit", "")
+        if not re.fullmatch(r"[a-f0-9]{40}", commit):
+            raise ValueError("Punto de restauración no válido")
+        git("checkout", "--detach", commit)
+        print("Versión anterior restaurada; reinicia PhantomView")
+        return
+    obs = Observatory(args.config)
+    if args.command == "setup":
+        cfg = default_config() if args.mode == "demo" else {"mode": args.mode, "org_files": args.org,
+              "personas_dir": args.personas, "docs_manifests": args.docs, "procedures_file": args.procedures,
+              "doctor_file": "", "sync_interval": args.interval, "software_tag": "", "software_interval": 0}
+        state = obs.configure(cfg)
+        print("Configuración guardada" if not state["error"] else state["error"])
+    elif args.command == "sync":
+        state = obs.refresh()
+        print("Información actualizada" if not state["error"] else state["error"])
+        if state["error"]:
+            raise SystemExit(1)
+    else:
+        serve(obs, args.port, args.open)
+
+
+if __name__ == "__main__":
+    main()

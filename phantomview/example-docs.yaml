@@ -1,0 +1,6 @@
+manifest: {version: 1, org: demo, namespace: docs, tenant: single}
+nodes:
+  - {kind: folder, urn: 'demo:procedimientos', slug: Procedimientos, owners: [coordinador], category: 1}
+  - {kind: doc, urn: 'demo:reuniones', slug: Procedimientos/Reuniones.md, parent: 'demo:procedimientos', owners: [coordinador], category: 1, location: 'local://ejemplo/Reuniones.md'}
+  - {kind: folder, urn: 'demo:finanzas', slug: Finanzas, owners: [tesoreria], category: 2}
+  - {kind: doc, urn: 'demo:presupuesto', slug: Finanzas/Presupuesto.pdf, parent: 'demo:finanzas', owners: [tesoreria], category: 2, location: 'gdrive://ejemplo'}
