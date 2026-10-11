@@ -66,4 +66,5 @@ const localSetup=openSetup;
 openSetup=function(){if(!state?.read_only&&!accessInfo.delegated)localSetup();};
 $('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{});}finally{accessScreen('Sesión cerrada.');$('#logout').hidden=true;}});
 async function boot(){drawNav();try{accessInfo=await api('/api/access-info');if(accessCode){const code=accessCode;accessCode='';await api('/api/redeem',{code});}state=await api('/api/state');fillFilters();render();if(state.read_only){$('#setup-side').hidden=true;$('#refresh').textContent='↻ Leer último índice';document.querySelectorAll('[data-setup]').forEach(b=>b.hidden=true);}}catch(e){accessScreen(e.message);}}
+window.addEventListener('hashchange',()=>{const incoming=new URLSearchParams(location.hash.slice(1));if(!incoming.has('c'))return;accessCode=incoming.get('c')||'';history.replaceState(null,'',location.pathname);sessionStorage.removeItem('phantomview-token');token='';boot();});
 boot();setInterval(async()=>{if(!state||$('#setup').open)return;try{state=await api('/api/state');render();}catch(e){accessScreen(e.message);}},15000);
