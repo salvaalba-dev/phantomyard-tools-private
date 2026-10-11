@@ -75,6 +75,58 @@ class ObservatoryTests(unittest.TestCase):
         atlas = next(a for a in data["snapshot"]["actors"] if a["id"] == "atlas")
         self.assertEqual(atlas["integrations"][0]["id"], "drive")
 
+    def test_kb_export_read_and_removed_note_cannot_be_opened(self):
+        from access_gate import SnapshotReader
+        profile = self.root / "personas" / "atlas"
+        (profile / "kb").mkdir(parents=True)
+        note = profile / "kb" / "Rol-AU.md"
+        note.write_text("# Rol\nSoporte <script>alert(1)</script>", encoding="utf8")
+        self.obs.config.update(mode="existing", personas_dir=str(profile.parent))
+        data = self.obs.refresh()
+        actor = next(a for a in data["snapshot"]["actors"] if a["id"] == "atlas")
+        ident = actor["knowledge"][0]["id"]
+        index = self.root / "reader" / "index.json"
+        self.obs.export(index, data)
+        reader = SnapshotReader(index, {})
+        self.assertIn("Soporte <script>", reader.read_note(ident)["content"])
+        with self.assertRaises(ValueError):
+            reader.read_note("../config.json")
+        note.unlink()
+        self.obs.export(index, self.obs.refresh())
+        with self.assertRaises(ValueError):
+            reader.read_note(ident)
+
+    def test_kb_secret_files_excluded_and_credentials_redacted(self):
+        profile = self.root / "personas" / "atlas"
+        (profile / "kb").mkdir(parents=True)
+        (profile / "kb" / "secrets.md").write_text("NEVER_EXPORT", encoding="utf8")
+        (profile / "kb" / "role.md").write_text("password: NEVER_EXPORT\n# Funciones\nFormación", encoding="utf8")
+        self.obs.config.update(mode="existing", personas_dir=str(profile.parent))
+        data = self.obs.refresh()
+        actor = next(a for a in data["snapshot"]["actors"] if a["id"] == "atlas")
+        available = next(n for n in actor["knowledge"] if n.get("id"))
+        self.assertNotIn("NEVER_EXPORT", json.dumps(self.obs.read_note(available["id"])))
+        self.assertEqual(sum(bool(n.get("id")) for n in actor["knowledge"]), 1)
+
+    def test_note_size_is_bounded_and_export_tampering_rejected(self):
+        from access_gate import SnapshotReader
+        profile = self.root / "personas" / "atlas"
+        (profile / "kb").mkdir(parents=True)
+        (profile / "kb" / "large.md").write_text("x" * 2_000_100, encoding="utf8")
+        self.obs.config.update(mode="existing", personas_dir=str(profile.parent))
+        data = self.obs.refresh()
+        actor = next(a for a in data["snapshot"]["actors"] if a["id"] == "atlas")
+        ident = actor["knowledge"][0]["id"]
+        self.assertTrue(self.obs.read_note(ident)["truncated"])
+        self.assertEqual(len(self.obs.read_note(ident)["content"]), 2_000_000)
+        index = self.root / "reader" / "index.json"
+        self.obs.export(index, data)
+        payload = self.obs.read_note(ident)
+        payload["actor"] = "another:actors:person"
+        pv.atomic_json(index.parent / "kb" / (ident + ".json"), payload)
+        with self.assertRaises(ValueError):
+            SnapshotReader(index, {}).read_note(ident)
+
     def test_cycles_and_unknown_references_are_findings(self):
         org = pv.read_source(pv.HERE / "example-org.yaml")
         org["roles"][0]["reports_to"] = "coordinador"

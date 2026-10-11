@@ -122,6 +122,7 @@ class Observatory:
         self.config = read_source(self.path) if self.path.exists() else default_config()
         self.validate_config(self.config)
         self.snapshot = None
+        self.note_payloads = {}
         self.last_attempt = None
         self.last_error = None
         self.history = []
@@ -264,6 +265,7 @@ class Observatory:
                          "exceptions": strings(actor.get("actor_exceptions")), "source": source,
                          "installed": None, "runtime": "unknown", "integrations": [], "knowledge": [],
                          "channels": {x: text(actor.get(x)) for x in ("npub", "telegram_bot", "email")},
+                         "tool_accounts": {k: text(v) for k, v in actor.get("tool_accounts", {}).items() if k in strings(actor.get("tools")) and isinstance(v, str)} if isinstance(actor.get("tool_accounts"), dict) else {},
                          "access_level": text(role.get("access_level")), "functions": strings(role.get("functions"))}
                 level = policies.get("access_levels", {}).get(role.get("access_level"), {})
                 clean["categories"] = [x for x in level.get("categories", []) if type(x) is int] if isinstance(level, dict) else []
@@ -313,10 +315,29 @@ class Observatory:
                                                      for i, v in servers.items() if isinstance(v, dict)]
                         kb = persona / "kb"
                         if kb.exists() and not kb.is_symlink():
-                            for note in list(kb.rglob("*.md"))[:500]:
-                                if note.is_symlink() or not note.resolve().is_relative_to(persona.resolve()):
+                            for note in sorted(kb.rglob("*.md"))[:500]:
+                                if any(p.is_symlink() for p in (note, *note.parents)) or not note.resolve().is_relative_to(kb.resolve()):
                                     continue
-                                clean["knowledge"].append({"title": note.stem, "path": str(note.relative_to(persona))})
+                                relative = note.relative_to(persona).as_posix()
+                                entry = {"title": note.stem, "path": relative}
+                                if re.search(r"(?:^|[/_.-])(secrets?|credentials?|vault|identity)(?:$|[/_.-])", relative, re.I):
+                                    entry["unavailable"] = "Archivo de credenciales: lectura excluida"
+                                else:
+                                    try:
+                                        with note.open("rb") as handle:
+                                            raw = handle.read(2_000_001)
+                                        content = raw[:2_000_000].decode("utf-8-sig", errors="replace")
+                                        content = re.sub(r"nsec1[023456789acdefghjklmnpqrstuvwxyz]{58}", "[CLAVE PRIVADA OCULTA]", content)
+                                        content = re.sub(r"(?im)^(\s*(?:api[_ -]?key|access[_ -]?token|bot[_ -]?token|password|secret|private[_ -]?key)\s*[:=]).*$", r"\1 [OCULTO]", content)
+                                        ident = hashlib.sha256((key + relative + content).encode()).hexdigest()
+                                        payload = {"id": ident, "actor": key, "title": note.stem, "path": relative,
+                                                   "content": content, "truncated": len(raw) > 2_000_000,
+                                                   "modified_at": datetime.fromtimestamp(note.stat().st_mtime, timezone.utc).isoformat()}
+                                        self.note_payloads[ident] = payload
+                                        entry.update(id=ident, bytes=note.stat().st_size, modified_at=payload["modified_at"], truncated=payload["truncated"])
+                                    except OSError:
+                                        entry["unavailable"] = "Nota temporalmente no disponible"
+                                clean["knowledge"].append(entry)
                 elif explicit_paths:
                     finding("warning", key, "Persona declarada sin ruta de perfil seleccionada", source)
                 result["actors"].append(clean)
@@ -411,6 +432,30 @@ class Observatory:
                     "last_attempt": self.last_attempt, "error": self.last_error, "config": copy.deepcopy(self.config),
                     "software_status": self.software_status}
 
+    def read_note(self, ident):
+        if not re.fullmatch(r"[a-f0-9]{64}", ident):
+            raise ValueError("Nota no válida")
+        with self.lock:
+            if not any(n.get("id") == ident for a in (self.snapshot or {}).get("actors", []) for n in a.get("knowledge", [])):
+                raise ValueError("Nota fuera del índice seleccionado")
+            return copy.deepcopy(self.note_payloads[ident])
+
+    def export(self, path, state):
+        path = Path(path)
+        if state["error"]:
+            return
+        folder = path.parent / "kb"
+        folder.mkdir(parents=True, exist_ok=True)
+        os.chmod(folder, 0o2750 if os.name != "nt" else 0o700)
+        for actor in state["snapshot"]["actors"]:
+            for note in actor.get("knowledge", []):
+                if note.get("id") in self.note_payloads:
+                    target = folder / (note["id"] + ".json")
+                    if not target.exists():
+                        atomic_json(target, self.note_payloads[note["id"]])
+                        os.chmod(target, 0o640)
+        atomic_json(path, state)
+
 
 def git(*args, cwd=None):
     return subprocess.run(["git", *args], cwd=cwd or HERE.parent, capture_output=True, text=True, timeout=120, check=True).stdout.strip()
@@ -491,6 +536,13 @@ class Handler(BaseHTTPRequestHandler):
             gate = getattr(self.server, "gate", None)
             return self.send(200, {"delegated": bool(gate), "actor": gate.policy.get("actor", "") if gate else "",
                                    "role": gate.policy.get("role", "") if gate else ""})
+        if path.startswith("/api/knowledge/"):
+            if not self.authenticated():
+                return self.send(401, {"error": "Autenticación necesaria"})
+            try:
+                return self.send(200, self.server.observatory.read_note(path.removeprefix("/api/knowledge/")))
+            except (ValueError, KeyError, OSError):
+                return self.send(404, {"error": "Nota no disponible en el índice seleccionado"})
         if path == "/api/state":
             if not self.authenticated():
                 return self.send(401, {"error": "Autenticación necesaria"})
@@ -671,7 +723,7 @@ def main():
     elif args.command == "sync":
         state = obs.refresh()
         if args.export:
-            atomic_json(args.export, state)
+            obs.export(args.export, state)
         print("Información actualizada" if not state["error"] else state["error"])
         if state["error"]:
             raise SystemExit(1)
@@ -681,3 +733,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -98,3 +98,22 @@ class SnapshotReader:
 
     def refresh(self):
         return self.data()
+
+    def read_note(self, ident):
+        import json
+        import re
+        if not re.fullmatch(r"[a-f0-9]{64}", ident):
+            raise ValueError("Nota no válida")
+        state = self.data()
+        owner = next((a["key"] for a in state["snapshot"].get("actors", [])
+                      if any(n.get("id") == ident for n in a.get("knowledge", []))), None)
+        if not owner:
+            raise ValueError("Nota fuera del índice seleccionado")
+        folder = self.path.parent / "kb"
+        file = folder / (ident + ".json")
+        if folder.is_symlink() or file.is_symlink() or file.stat().st_size > 12_000_000:
+            raise ValueError("Nota no válida")
+        result = json.loads(file.read_text(encoding="utf-8"))
+        if result.get("id") != ident or result.get("actor") != owner:
+            raise ValueError("Nota de otra persona")
+        return result

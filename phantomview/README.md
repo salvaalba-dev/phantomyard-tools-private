@@ -253,3 +253,20 @@ Las 32 pruebas locales incluyen el adaptador de acceso, límites de sesión, cie
 canje único, aislamiento de origen y bloqueo de administración por navegador. Usan
 un doble del verificador de PhantomBlog; la firma real debe verificarse también en
 la prueba de integración con el runtime instalado.
+
+
+### Lectura de KB e interfaces
+
+Cada ficha muestra los identificadores públicos declarados en el organigrama:
+`email`, `telegram_bot` y `npub`. La herramienta email muestra su cuenta declarada;
+las demás herramientas pueden usar `tool_accounts: {herramienta: usuario}` en cada
+actor. No se deducen cuentas de Drive a partir del correo ni se leen credenciales.
+
+Las notas Markdown del KB se buscan por título/carpeta y se abren en un lector de
+texto, sin ejecutar HTML, enlaces o instrucciones de las notas. El recolector
+exporta copias separadas en `kb/` junto al índice; el visor solo permite leer las
+notas incluidas en el índice actual, con la misma sesión autenticada. Los archivos
+de credenciales se excluyen y se ocultan patrones habituales de claves privadas y
+secretos. Esta ocultación no garantiza detectar cualquier secreto escrito en prosa.
+Cada nota se limita a 2 MB, indicando cualquier truncado y la fecha de la fuente.
+El contenido se carga al abrir la nota, sin inflar la respuesta del índice.
