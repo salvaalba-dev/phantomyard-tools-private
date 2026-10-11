@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "components": [
+    {
+      "id": "phantomview",
+      "org": "demo",
+      "name": "PhantomView",
+      "kind": "phantomyard",
+      "description": {
+        "en": "Read-only AU organization observatory.",
+        "es": "Observatorio de la organización de AU en modo consulta."
+      },
+      "probe": {},
+      "shared": false,
+      "owner": ""
+    },
+    {
+      "id": "phantomblog",
+      "org": "demo",
+      "name": "PhantomBlog",
+      "kind": "phantomyard",
+      "description": {
+        "en": "Blog dashboard and temporary access signer/verifier.",
+        "es": "Panel del blog y firmante/verificador de acceso temporal."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "phantomdocs",
+      "org": "demo",
+      "name": "PhantomDocs",
+      "kind": "phantomyard",
+      "description": {
+        "en": "Document registry used by the AU dashboard.",
+        "es": "Registro documental consultado por el panel de AU."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "phantomorg",
+      "org": "demo",
+      "name": "PhantomOrg",
+      "kind": "phantomyard",
+      "description": {
+        "en": "Organization projection package; runtime not checked.",
+        "es": "Paquete de proyección de la organización; ejecución sin comprobar."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "phantommeet",
+      "org": "demo",
+      "name": "PhantomMeet",
+      "kind": "phantomyard",
+      "description": {
+        "en": "Meeting pipeline package; AU execution not checked.",
+        "es": "Paquete para reuniones; ejecución en AU sin comprobar."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "python",
+      "org": "demo",
+      "name": "Python",
+      "kind": "runtime",
+      "description": {
+        "en": "Interpreter running the collector. Other virtual environments are not inspected.",
+        "es": "Intérprete del recolector. No se inspeccionan otros entornos virtuales."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "pyyaml",
+      "org": "demo",
+      "name": "PyYAML",
+      "kind": "library",
+      "description": {
+        "en": "Metadata from the collector interpreter; not a functional integration test.",
+        "es": "Metadatos del intérprete del recolector; no es una prueba funcional de integración."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "coincurve",
+      "org": "demo",
+      "name": "coincurve",
+      "kind": "library",
+      "description": {
+        "en": "Metadata from the collector interpreter; not a functional integration test.",
+        "es": "Metadatos del intérprete del recolector; no es una prueba funcional de integración."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "jinja2",
+      "org": "demo",
+      "name": "Jinja2",
+      "kind": "library",
+      "description": {
+        "en": "Metadata from the collector interpreter; not a functional integration test.",
+        "es": "Metadatos del intérprete del recolector; no es una prueba funcional de integración."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "click",
+      "org": "demo",
+      "name": "click",
+      "kind": "library",
+      "description": {
+        "en": "Metadata from the collector interpreter; not a functional integration test.",
+        "es": "Metadatos del intérprete del recolector; no es una prueba funcional de integración."
+      },
+      "probe": {},
+      "shared": true,
+      "owner": ""
+    },
+    {
+      "id": "google-drive",
+      "org": "demo",
+      "name": "Google Drive",
+      "kind": "external",
+      "description": {
+        "en": "Declared external document service; live permissions not checked.",
+        "es": "Servicio documental externo declarado; permisos actuales sin comprobar."
+      },
+      "probe": {},
+      "shared": false,
+      "owner": ""
+    },
+    {
+      "id": "notebooklm",
+      "org": "demo",
+      "name": "NotebookLM",
+      "kind": "external",
+      "description": {
+        "en": "Declared external knowledge service; connection not checked.",
+        "es": "Servicio de conocimiento externo declarado; conexión sin comprobar."
+      },
+      "probe": {},
+      "shared": false,
+      "owner": ""
+    },
+    {
+      "id": "email-provider",
+      "org": "demo",
+      "name": "Email",
+      "kind": "external",
+      "description": {
+        "en": "Declared email capability; delivery not checked.",
+        "es": "Capacidad de correo declarada; entrega sin comprobar."
+      },
+      "probe": {},
+      "shared": false,
+      "owner": ""
+    },
+    {
+      "id": "google-calendar",
+      "org": "demo",
+      "name": "Google Calendar",
+      "kind": "external",
+      "description": {
+        "en": "Declared calendar capability; account permissions not checked.",
+        "es": "Capacidad de calendario declarada; permisos de cuenta sin comprobar."
+      },
+      "probe": {},
+      "shared": false,
+      "owner": ""
+    },
+    {
+      "id": "telegram",
+      "org": "demo",
+      "name": "Telegram",
+      "kind": "external",
+      "description": {
+        "en": "Declared human interface; connectivity not checked.",
+        "es": "Interfaz humana declarada; conexión sin comprobar."
+      },
+      "probe": {},
+      "shared": false,
+      "owner": ""
+    }
+  ],
+  "relations": [
+    {
+      "from": "phantomview",
+      "to": "phantomblog",
+      "type": "requires"
+    },
+    {
+      "from": "phantomview",
+      "to": "pyyaml",
+      "type": "requires"
+    },
+    {
+      "from": "phantomblog",
+      "to": "coincurve",
+      "type": "requires"
+    },
+    {
+      "from": "phantommeet",
+      "to": "python",
+      "type": "requires"
+    },
+    {
+      "from": "phantommeet",
+      "to": "pyyaml",
+      "type": "requires"
+    },
+    {
+      "from": "phantommeet",
+      "to": "jinja2",
+      "type": "requires"
+    },
+    {
+      "from": "phantommeet",
+      "to": "click",
+      "type": "requires"
+    }
+  ],
+  "tool_bindings": [
+    {
+      "org": "demo",
+      "tool": "email",
+      "component": "email-provider"
+    },
+    {
+      "org": "demo",
+      "tool": "drive",
+      "component": "google-drive"
+    },
+    {
+      "org": "demo",
+      "tool": "notebooklm",
+      "component": "notebooklm"
+    }
+  ]
+}

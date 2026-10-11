@@ -1,272 +1,142 @@
 # PhantomView
 
-Un observatorio local y privado para recuperar el contexto de una instalación
-Phantomyard: organización → departamento → rol → persona → herramientas,
-procedimientos y documentos. Versión inicial **0.1.0**.
+A read-only visual observatory for Phantomyard organizations. It combines declared
+organization structure with bounded filesystem and service observations, preserving
+source evidence and distinguishing declarations from operational checks.
 
-## Instalar y abrir
+## Install and run
 
-Requisitos: Python 3.11 o posterior. Para actualizar el software: Git y una copia
-limpia del repositorio privado. Se instala únicamente PyYAML; la interfaz no
-necesita Node, compilación ni servicios externos.
-
-Windows, desde `phantomview/`:
-
-```powershell
-.\install.ps1
-.\run.cmd serve --open
-```
-
-Linux / macOS:
+Python 3.11 or later and PyYAML are required. Use `install.sh` / `run.sh` on Linux
+or `install.ps1` / `run.cmd` on Windows. The bundled example is synthetic; it never
+claims to represent an installed organization.
 
 ```sh
-sh install.sh
-sh run.sh serve --open
+python phantomview.py serve --open
+python phantomview.py setup --mode existing --org /absolute/org.yaml \
+  --personas /absolute/personas --docs /absolute/manifest.yaml \
+  --installation /absolute/installation.json --interval 300
+python phantomview.py sync
 ```
 
-El lanzador abre una sesión autenticada con un token temporal generado en memoria.
-Escucha únicamente en `127.0.0.1:8765`. No publica el dashboard en Internet.
-El token se transfiere al navegador en el fragmento de la URL, se elimina de la
-barra de direcciones y permanece en sessionStorage. No se escribe en archivos,
-logs ni configuraciones. `PHANTOMVIEW_TOKEN` permite proporcionar una sesión por
-entorno desde un gestor de secretos; no lo incluyas en scripts versionados.
+The local launcher binds to loopback and uses a session token. Do not expose that
+local mode directly to a public interface. The Sources & setup form configures only
+the observatory. It does not change persona identities or organization documents.
 
-La primera apertura muestra **datos de ejemplo sintéticos**, señalados en todas
-las vistas. No se usan identidades, documentos ni estadísticas de tu instalación.
+For separate persona accounts, use `persona_paths` keyed by `organization:persona`.
+Use `remote_personas` to declare actors on other machines. A remote declaration does
+not inspect that machine. Profiles cannot be reused across selected organizations;
+foreign document manifests and conflicting profile mappings are rejected.
 
-## Conectar una instalación nueva o existente
+## Organization and knowledge views
 
-En **Configurar instalación**, selecciona Nueva instalación o Instalación
-existente y proporciona rutas absolutas a:
+Views include organization graphs, departments, persona profiles, declared tool
+capabilities, registered PhantomDocs documents, exported procedures and changes.
+Graph hover and keyboard focus highlight directly connected nodes, arrows and flows.
+Conditional escalation cycles are review findings, not confirmed runtime failures.
 
-- Uno o varios `org.yaml` de PhantomOrg.
-- La carpeta de personas de PhantomBot, si ya existe.
-- Uno o varios `manifest.yaml` de PhantomDocs, si están disponibles.
-- Un JSON de procedimientos estructurados opcional.
-- Un informe JSON exportado de `phantombot doctor --json --no-repair`, opcional.
+Profiles show public identifiers declared in the organization: `email`,
+`telegram_bot` and `npub`. Email tools show the declared mailbox. Additional tool
+accounts can be declared as `tool_accounts: {tool: username}` on an actor. Accounts
+are never inferred from unrelated identifiers or extracted from credentials.
 
-Una instalación nueva puede empezar sin personas ni documentos. PhantomView no
-crea PhantomBot, no aprovisiona roles y no despliega personas: conecta las fuentes
-a medida que se crean con las herramientas que las gestionan.
+Markdown knowledge notes can be searched by title/path and opened in an authenticated
+text reader. HTML and instructions in notes are not executed. Credential-named files
+are excluded, and common private-key and secret patterns are redacted. This does not
+guarantee detecting secrets embedded in arbitrary prose. Notes are bounded to 2 MB;
+truncation and source modification time are shown explicitly. Removed notes cannot
+be opened through an older identifier once they leave the selected index.
 
-Alternativa por consola, usando el lanzador de tu plataforma:
+## Installation and dependencies
+
+The installation section has its own English/Spanish language selector. English is
+the source language; Spanish is an explicit translation in `installation.js`.
+Legacy organization views and organization-owned documents retain their existing
+language. This is not a claim that every legacy screen has been translated.
+
+Three views are available:
+
+- **Software:** Phantomyard packages, services, runtimes, libraries, data and external
+  services, with presence/version/service evidence.
+- **People & tools:** declared persona capabilities and explicit links to software
+  and external services.
+- **Impact:** reverse traversal of declared `requires`, `reads`, `runs_on` and `uses`
+  relations. Optional dependencies and publication outputs are excluded. This is a
+  structural dependency view, not a measured outage prediction.
+
+Use the organization filter, evidence filter and search field to narrow the map and
+inventory. Selecting a component shows its description, location, version evidence,
+maintainer if declared, outgoing/incoming relationships and affected components.
+Shared host components carry a shared label inside the selected organization's
+scope; other setups and their routes are not inspected.
+
+An explicit version-1 JSON manifest contains `components`, `relations`, optional
+`tool_bindings`, and optional `persona_bindings`. See `example-installation.json`.
+Each component has an English identifier, organization ID, name, kind, bilingual
+description, optional owner/shared/version declaration, and a bounded probe.
+
+Supported probes are:
+
+- `none`: a declaration only; external connectivity is not inferred.
+- `path`: absolute-path presence only; contents and credentials are not read.
+- `python`: the collector's current interpreter version.
+- `distribution`: installed package metadata in that interpreter. Other virtual
+  environments are not inspected, and presence is not a functional integration test.
+- `systemd`: `LoadState`, `ActiveState` and `SubState` for an explicitly named unit.
+  No service configuration, environment, arguments, logs or secrets are read.
+
+Probes cannot execute arbitrary commands. The manifest accepts at most 150 software
+components and 1,000 explicit relations; references and setup boundaries are
+validated. All graph relationships remain **declared** even when their endpoints
+are independently detected or checked.
+
+The collector refreshes this inventory with the organization sources. Missing
+packages/services are observations; malformed or inaccessible sources preserve the
+last valid snapshot. Installation observations participate in change history.
+
+## Delegated private access
+
+The AU pilot reuses the installed PhantomBlog NIP-98 access verifier, signing
+identity, replay protection and five-minute single-use grants. The existing issuer
+is Paco. The added `acceso-phantomview.sh` tool and runbook preserve the original
+PhantomBlog access tool. Requests and links belong in the existing private channel.
+Installing the tool/runbook is separate from testing the persona chatbot response.
+
+Human read sessions last 30 minutes. Cookies are HttpOnly, SameSite=Strict and Secure
+under HTTPS. URL fragments are erased on redemption; logout revokes the session.
+The same session protects state and KB endpoints. No browser configuration or
+software administration is available in delegated reader mode.
+
+The pilot uses a root collector restricted to explicitly selected AU sources and a
+non-root web reader restricted to exported data. Collection is scheduled every five
+minutes; private Tailscale HTTPS forwards to the loopback reader. Existing setups,
+organization files and PhantomBlog services are preserved.
 
 ```sh
-sh run.sh setup --mode existing --org /ruta/org.yaml --personas /ruta/personas --docs /ruta/manifest.yaml --interval 300
-sh run.sh serve --open
+python phantomview.py --config /private/collector/config.json sync \
+  --export /private/reader/index.json
+python phantomview.py serve --port 8789 --reader-index /private/reader/index.json \
+  --access-policy /private/reader/access.json \
+  --access-module-dir /path/to/installed/phantomblog \
+  --public-origin https://private-host.example:8790 --session-seconds 1800
 ```
 
-La configuración y el índice derivado pertenecen a PhantomView y viven en
-`../.phantomview/`; están excluidos de Git. `--config /ruta/config.json` permite
-usar una ubicación propia. No elijas una carpeta de persona como destino del
-estado de PhantomView.
+The collector exports KB copies beside the index in `kb/`. The reader cannot collect
+sources or modify their configuration. Its installation inventory is a fixed export,
+not a privileged remote administration API.
 
-## Setups separados y perfiles en otras cuentas
+## Updates, validation and limits
 
-Cada observatorio lee únicamente sus fuentes seleccionadas. No deduce la organización
-por el dominio del VPS ni incorpora todas las cuentas del servidor. Los manifiestos de
-otra organización se rechazan para evitar mezclar sus documentos.
-
-En el asistente, **Rutas por persona** permite distribuir los perfiles entre cuentas,
-con un mapa JSON de claves `organizacion:persona` y rutas absolutas. Deja la carpeta
-común vacía al usar rutas explícitas. Por ejemplo:
-
-```json
-{"mi-organizacion:coordinacion": "/home/cuenta/.local/share/phantombot/personas/coordinacion"}
-```
-
-**Personas en otros equipos** declara una ubicación sin acceder al equipo remoto:
-
-```json
-{"mi-organizacion:proyectos": "PC local"}
-```
-
-La persona conserva su rol, jerarquía y relaciones de la especificación, y su estado
-se muestra como **Otro equipo · sin comprobar**. Esta opción no establece una conexión
-SSH ni realiza sondas remotas. Una carpeta no puede asignarse simultáneamente a dos
-personas o setups. Las rutas deben corresponder al perfil; no uses `/home` como carpeta
-común ni cambies los permisos de todas las cuentas para recopilar datos.
-
-## Navegación
-
-- Organización: recuentos derivados, grafo por capas y comprobaciones.
-- Departamentos: equipos, política declarada y responsabilidades.
-- Personas: ficha con rol, superior, funciones, herramientas y documentos a cargo.
-- Herramientas: matriz de capacidades declaradas e integraciones MCP detectadas.
-- Documentos: archivo registrado, propietarios, clasificación y ubicación.
-- Procedimientos: pasos, responsables, entradas y resultados.
-- Cambios: altas, bajas y modificaciones entre lecturas del observatorio.
-- Fuentes y setup: procedencia, fechas, cobertura y configuración.
-
-Los filtros de organización y departamento se conservan entre vistas. Los
-perfiles distinguen especificación, instalación y evidencia; una herramienta
-declarada no se presenta como disponible y una configuración MCP no acredita
-permisos efectivos. Los diagnósticos importados son informes, no sondas en vivo.
-
-## Sincronización manual y automática
-
-**Actualizar ahora** vuelve a leer las fuentes configuradas. Puede configurarse
-un intervalo de 30 segundos a 24 horas, o modo manual. La sincronización automática
-se ejecuta mientras el servidor está en marcha, aunque el navegador esté cerrado.
-Para ejecutarlo tras un reinicio, registra el lanzador `serve` con el gestor de
-servicios de tu sistema; esta versión no instala servicios del sistema.
-
-Se registran diferencias estructurales y se conservan las últimas 50 lecturas
-con cambios. Una lectura idéntica no genera otro evento. Los fallos de lectura
-conservan la última lectura válida y muestran un aviso; nunca se convierten en un
-estado verde. Al cambiar la configuración se limpia el índice anterior para no
-mezclar organizaciones.
-
-## Actualización del software y vuelta atrás
+Data refresh can be manual or scheduled. Software updates are manual in the pilot.
+The optional Git updater requires an operator-selected signed release tag, the
+expected private repository, a clean checkout and successful tests before activation.
+No signed release is currently published. A previous commit is saved for rollback.
 
 ```sh
-sh run.sh update --tag v0.1.0 --check
-sh run.sh update --tag v0.1.0
-sh run.sh rollback
+python -m unittest discover -s . -p 'test_*.py'
+node --check app.js
+node --check installation.js
 ```
 
-La implementación admite únicamente tags `vX.Y.Z` **firmados**, desde el origen
-privado autorizado. `git verify-tag` debe verificar la firma con las claves de
-release aprobadas por el operador. Rechaza copias con cambios locales, valida la
-versión en una copia temporal y ejecuta sus pruebas antes de activarla. Conserva
-el commit anterior como punto de retorno, y no modifica la configuración ni el
-índice. La actualización manual requiere reiniciar el servidor.
-
-En el setup puede seleccionarse una versión firmada explícita y un intervalo:
-el servidor comprobará y aplicará únicamente esa versión, y se reiniciará tras
-activarla conservando la sesión. No sigue ramas móviles ni instala versiones no
-firmadas. **Todavía no hay una release firmada publicada**, por lo que la primera
-distribución y el flujo de firmas deben completarse antes de activar esta opción.
-La actualización por Git es inicial: no constituye un despliegue atómico entre
-varias máquinas y debe ensayarse en un entorno de pruebas antes de producción.
-
-## Alcance y pendientes
-
-Implementado y probado localmente:
-
-- Lectura de YAML/JSON de PhantomOrg; referencias, duplicados y ciclos.
-- Detección de carpetas de personas y archivos de perfil ausentes.
-- Lectura selectiva de metadatos de `mcp.json` y nombres de notas KB.
-- Comparación de `role_id` en `.phantomorg.yaml` con el rol declarado.
-- Lectura de manifiestos documentales con filtrado por `currentVersions`.
-- Procedimientos mediante un archivo estructurado y diagnóstico mediante exportación.
-- Sesión autenticada, rechazo de origen externo y de Host no autorizado.
-- Sincronización manual, periódica, persistencia del índice e historial.
-- Actualizador restringido a tags firmados y punto de retorno.
-
-Pendiente de integración y de datos de la instalación:
-
-- Google Drive: árbol completo, enlaces, permisos reales y cambios incrementales.
-- PhantomBridge/PhantomMeet: estado y actividad en vivo de salas y grabaciones.
-- Tareas y actividad de PhantomBot: historial, tiempos y cobertura de auditoría.
-- Comprobación de integridad con PhantomDocs y ACL efectivas por usuario.
-- Extracción revisable de procedimientos desde texto y enlaces entre notas KB.
-- Agregación de múltiples equipos, instalación como servicio y autenticación para
-  acceso remoto. No exponer este servidor directamente a Internet.
-- Sincronización de bloques de perfil completos con el resultado del compilador.
-- Firmas, releases y prueba end-to-end de actualización y rollback.
-
-## Privacidad y propiedad de los datos
-
-No lee `identity.json`, `vault.sqlite`, conversaciones ni contenidos de las notas
-KB. No cambia configuración, confianza, memoria ni tareas de ninguna persona.
-Los archivos de perfil se comprueban por existencia; el registro MCP se reduce a
-nombre y transporte. La información privada permanece en el host.
-
-El dashboard muestra metadatos documentales de las fuentes seleccionadas a su
-operador autenticado. No es un portal de autoservicio para múltiples usuarios ni
-aplica las ACL de cada persona al operador. Su cache debe protegerse con los
-permisos del sistema operativo. No se sirve ningún archivo local arbitrario:
-solo los cuatro recursos estáticos y dos endpoints autenticados.
-
-El historial es un índice de observación regenerable; no sustituye la memoria de
-PhantomBot ni su auditoría. La configuración es la fuente para recolectar; los
-modelos organizativos originales mantienen la autoridad.
-
-## Marca
-
-Logo oficial tomado de `https://phantombot.bot/assets/img/logo.png`. Interfaz basada
-en el negro, blanco, grises y verde `#3fb950` de PhantomBot, con detalle azul en el
-símbolo. Familias Inter / JetBrains Mono con fallback a fuentes del sistema; no
-hay solicitudes a Google Fonts ni dependencias de CDN. El logo se usa localmente
-como identificación del ecosistema; no implica una publicación oficial.
-
-## Pruebas
-
-```sh
-python -m pip install -r phantomview/requirements.txt
-python -m unittest discover -s phantomview -p 'test_*.py'
-```
-
-Las pruebas verifican acceso autenticado, rechazo de origen/Host externo, rutas,
-referencias, ciclos, secreto no recolectado, estado de persona intacto, historia
-sin duplicados, recuperación de una lectura fallida y selección documental de
-versiones actuales. CI preparada para Python 3.11/3.12 en Linux y Windows.
-
-## Desarrollo
-
-Repositorio privado: `salvaalba-dev/phantomyard-tools-private`. Este módulo es
-independiente y consume los formatos del ecosistema; no contiene una copia de las
-otras herramientas. Los ejemplos son sintéticos. No subir configuración,
-identidades, caches, tokens ni documentos de una instalación real.
-
-## Acceso delegado mediante PhantomBlog
-
-La modalidad de servidor reutiliza `phantomblog.access` de la instalación existente:
-petición Nostr/NIP-98 firmada, clave pública del emisor en una lista explícita,
-protección contra repetición y enlace de cinco minutos, de un solo uso. PhantomView
-no implementa otro firmante ni lee identidades privadas. El firmante existente de
-PhantomBlog opera dentro de la cuenta de la persona responsable.
-
-El código llega en `/#c=...`, se borra de la dirección y se canjea por una cookie
-HttpOnly/SameSite=Strict/Secure. PhantomView limita además la sesión a 30 minutos,
-guarda solo su hash en memoria y permite cerrar y revocar la sesión. El proceso
-web sirve exclusivamente un índice exportado: no puede cambiar las fuentes,
-recoger nuevos archivos ni actualizar software mediante la sesión humana.
-
-La persona emisora debe ser asignada expresamente. Que un rol tenga funciones de
-coordinación lo convierte en candidato, pero no asigna por sí mismo la herramienta.
-El alta inicial comprueba que la persona y su rol coincidan con `org.yaml`; un cambio
-posterior de custodio requiere revisar la política de acceso y reiniciar el visor.
-
-`deploy_au.py` prepara el piloto AU con destinos propios y se niega a sobrescribir
-una instalación existente. Crea un recolector separado, un temporizador de cinco
-minutos y un visor sin privilegios de administrador. Usa Python, YAML y PhantomBlog
-ya instalados. Antes de activar el proxy privado HTTPS, revisar su origen exacto,
-la persona emisora y la disponibilidad de los puertos. Requiere aprobación humana
-para la instalación; el parámetro `--apply` es el paso que escribe y activa servicios.
-
-Para emitir una URL, la persona utiliza el firmante existente con el puerto del visor:
-
-```sh
-PYTHONPATH=/opt/phantomblog-tool python3 -m phantomblog access-link \
-  --persona PERSONA_RESPONSABLE --persona-dir RUTA_A_SU_ALMACEN_DE_PERSONAS \
-  --port 8789 --public-origin https://HOST_PRIVADO:8790
-```
-
-No ejecutar el firmante desde una cuenta humana para hacerse pasar por la persona.
-La petición humana debe llegar a la persona por su canal habitual, y la ejecución
-pertenece a su cuenta. La integración de esta petición en su catálogo de herramientas
-debe verificarse en el despliegue; el instalador del visor no modifica sus perfiles.
-
-Las 32 pruebas locales incluyen el adaptador de acceso, límites de sesión, cierre,
-canje único, aislamiento de origen y bloqueo de administración por navegador. Usan
-un doble del verificador de PhantomBlog; la firma real debe verificarse también en
-la prueba de integración con el runtime instalado.
-
-
-### Lectura de KB e interfaces
-
-Cada ficha muestra los identificadores públicos declarados en el organigrama:
-`email`, `telegram_bot` y `npub`. La herramienta email muestra su cuenta declarada;
-las demás herramientas pueden usar `tool_accounts: {herramienta: usuario}` en cada
-actor. No se deducen cuentas de Drive a partir del correo ni se leen credenciales.
-
-Las notas Markdown del KB se buscan por título/carpeta y se abren en un lector de
-texto, sin ejecutar HTML, enlaces o instrucciones de las notas. El recolector
-exporta copias separadas en `kb/` junto al índice; el visor solo permite leer las
-notas incluidas en el índice actual, con la misma sesión autenticada. Los archivos
-de credenciales se excluyen y se ocultan patrones habituales de claves privadas y
-secretos. Esta ocultación no garantiza detectar cualquier secreto escrito en prosa.
-Cada nota se limita a 2 MB, indicando cualquier truncado y la fecha de la fuente.
-El contenido se carga al abrir la nota, sin inflar la respuesta del índice.
+Live Drive permissions, remote persona runtime, complete host inventory and external
+service telemetry are not verified by this version. Source presence, package metadata,
+service activity and declared relationships must be read as distinct evidence.

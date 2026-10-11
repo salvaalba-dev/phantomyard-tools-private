@@ -112,7 +112,7 @@ def default_config():
     return {"mode": "demo", "org_files": [str(HERE / "example-org.yaml")],
             "personas_dir": "", "persona_paths": {}, "remote_personas": {}, "docs_manifests": [str(HERE / "example-docs.yaml")],
             "procedures_file": str(HERE / "example-procedures.json"),
-            "doctor_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
+            "doctor_file": "", "installation_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
 
 
 class Observatory:
@@ -143,7 +143,7 @@ class Observatory:
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
                 raise ValueError(f"Configuración no válida: {key}")
-        for key in ("personas_dir", "procedures_file", "doctor_file", "software_tag"):
+        for key in ("personas_dir", "procedures_file", "doctor_file", "installation_file", "software_tag"):
             if not isinstance(config.get(key, ""), str):
                 raise ValueError(f"Configuración no válida: {key}")
         paths = config.get("persona_paths", {})
@@ -391,6 +391,15 @@ class Observatory:
                 actor["runtime"] = "reported" if checks else "unknown"
             result["sources"].append({"kind": "doctor-export", "path": config["doctor_file"],
                                       "checked_at": now(), "modified_at": datetime.fromtimestamp(Path(config["doctor_file"]).stat().st_mtime, timezone.utc).isoformat()})
+        installation_file = config.get("installation_file") or (str(HERE / "example-installation.json") if config["mode"] == "demo" else "")
+        if installation_file:
+            from installation import collect as collect_installation
+            source = str(Path(installation_file).resolve())
+            result["installation"] = collect_installation(read_source(source), result["actors"],
+                {org["id"] for org in result["organizations"]}, source)
+            result["sources"].append({"kind": "installation", "path": source, "checked_at": now()})
+        else:
+            result["installation"] = {"components": [], "relations": [], "source": ""}
         return result
 
     def refresh(self):
@@ -404,10 +413,10 @@ class Observatory:
                 old = self.snapshot
                 if not old or old.get("digest") != digest:
                     changes = []
-                    for kind in ("actors", "roles", "departments", "documents", "procedures"):
+                    for kind in ("actors", "roles", "departments", "documents", "procedures", "components"):
                         pk = "urn" if kind == "documents" else "key" if kind in ("actors", "roles", "departments") else "id"
-                        before = {str(x.get(pk)): x for x in (old or {}).get(kind, [])}
-                        after = {str(x.get(pk)): x for x in candidate[kind]}
+                        before = {str(x.get(pk)): x for x in ((old or {}).get("installation", {}).get("components", []) if kind == "components" else (old or {}).get(kind, []))}
+                        after = {str(x.get(pk)): x for x in (candidate.get("installation", {}).get("components", []) if kind == "components" else candidate[kind])}
                         for key in after.keys() - before.keys():
                             changes.append({"kind": kind, "entity": key, "action": "added"})
                         for key in before.keys() - after.keys():
@@ -551,7 +560,7 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, OSError):
                 return self.send(503, {"error": "Índice temporalmente no disponible"})
         static = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                  "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png")}
+                  "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8")}
         if path not in static:
             return self.send(404, {"error": "No encontrado"})
         file, mime = static[path]
@@ -679,6 +688,7 @@ def main():
     setup.add_argument("--docs", action="append", default=[])
     setup.add_argument("--procedures", default="")
     setup.add_argument("--interval", type=int, default=0)
+    setup.add_argument("--installation", default="", help="Explicit installation inventory manifest")
     sync = sub.add_parser("sync")
     sync.add_argument("--export", help="Exporta el índice de consulta sin conceder acceso a fuentes")
     update = sub.add_parser("update")
@@ -717,7 +727,7 @@ def main():
     if args.command == "setup":
         cfg = default_config() if args.mode == "demo" else {"mode": args.mode, "org_files": args.org,
               "personas_dir": args.personas, "docs_manifests": args.docs, "procedures_file": args.procedures,
-              "doctor_file": "", "sync_interval": args.interval, "software_tag": "", "software_interval": 0}
+              "doctor_file": "", "installation_file": args.installation, "sync_interval": args.interval, "software_tag": "", "software_interval": 0}
         state = obs.configure(cfg)
         print("Configuración guardada" if not state["error"] else state["error"])
     elif args.command == "sync":
