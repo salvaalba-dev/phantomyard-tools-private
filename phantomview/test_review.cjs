@@ -20,3 +20,10 @@ model=reviewRoutes(dense,'au:roles:ceo');
 assert.equal(model.routes[0].length,2);
 assert.ok(model.routes.length<=3&&model.routes.every(route=>route.length<=6));
 console.log('Review route checks passed: closed route, source conditions, wildcard provenance, setup isolation and bounded search.');
+
+// Classic browser scripts share one lexical scope; reject cross-file name collisions.
+const fs=require('node:fs');
+const vm=require('node:vm');
+const path=require('node:path');
+new vm.Script(['installation.js','review.js','app.js'].map(file=>fs.readFileSync(path.join(__dirname,file),'utf8')).join('\n'));
+console.log('Combined browser script scope check passed.');

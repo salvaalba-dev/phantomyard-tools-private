@@ -164,3 +164,15 @@ An open review is explicitly marked by an Active review banner above the map, a
 highlighted finding row, an expanded Active review control, and an In review label
 on the selected role node. These indicate the currently open inspection, not a
 resolved finding or a recorded approval. Closing clears all active indicators.
+
+
+### Compact installation labels
+
+The optional collector configuration `installation_labels` maps selected
+`organization:persona` keys to short human labels (maximum 48 characters), for
+example `{"example:lead": "Example · VPS", "example:remote": "Example · PC Lead"}`.
+The existing installation badge is replaced rather than supplemented. Detection
+or declared remote-location evidence remains in its tooltip and persona details.
+A label identifies the setup and machine; it does not prove installation or remote
+connectivity. IP addresses are not added to overview cards. Foreign persona labels
+are rejected. The organization specification and persona profiles are not changed.

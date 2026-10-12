@@ -127,6 +127,19 @@ class ObservatoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SnapshotReader(index, {}).read_note(ident)
 
+    def test_compact_labels_preserve_installation_evidence_and_remote_scope(self):
+        self.obs.config.update(mode="existing", installation_labels={"demo:atlas": "Example · VPS", "demo:iris": "Example · PC Iris"},
+                               persona_paths={"demo:atlas": str(self.root / "missing")}, remote_personas={"demo:iris": "Remote PC"})
+        data = self.obs.refresh()
+        self.assertIsNone(data["error"])
+        actors = {a["id"]: a for a in data["snapshot"]["actors"]}
+        self.assertEqual(actors["atlas"]["installation_label"], "Example · VPS")
+        self.assertFalse(actors["atlas"]["installed"])
+        self.assertTrue(actors["iris"]["profile_remote"])
+        self.assertIsNone(actors["iris"]["installed"])
+        self.obs.config["installation_labels"]["foreign:rakocy"] = "Foreign · VPS"
+        self.assertIsNotNone(self.obs.refresh()["error"])
+
     def test_cycles_and_unknown_references_are_findings(self):
         org = pv.read_source(pv.HERE / "example-org.yaml")
         org["roles"][0]["reports_to"] = "coordinador"

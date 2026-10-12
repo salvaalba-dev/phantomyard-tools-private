@@ -110,7 +110,7 @@ def cycle_nodes(edges):
 
 def default_config():
     return {"mode": "demo", "org_files": [str(HERE / "example-org.yaml")],
-            "personas_dir": "", "persona_paths": {}, "remote_personas": {}, "docs_manifests": [str(HERE / "example-docs.yaml")],
+            "personas_dir": "", "persona_paths": {}, "remote_personas": {}, "installation_labels": {}, "docs_manifests": [str(HERE / "example-docs.yaml")],
             "procedures_file": str(HERE / "example-procedures.json"),
             "doctor_file": "", "installation_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
 
@@ -164,6 +164,13 @@ class Observatory:
             parts = key.split(":") if isinstance(key, str) else []
             if len(parts) != 2 or not all(IDENTIFIER.fullmatch(x) for x in parts) or not isinstance(value, str) or not value.strip():
                 raise ValueError("Cada persona remota necesita organización:persona y ubicación declarada")
+        labels = config.get("installation_labels", {})
+        if not isinstance(labels, dict) or len(labels) > 1000:
+            raise ValueError("Invalid installation label mapping")
+        for key, value in labels.items():
+            parts = key.split(":") if isinstance(key, str) else []
+            if len(parts) != 2 or not all(IDENTIFIER.fullmatch(x) for x in parts) or not isinstance(value, str) or not value.strip() or len(value) > 48:
+                raise ValueError("Installation labels require organization:persona and at most 48 characters")
         if set(remote) & set(paths):
             raise ValueError("Una persona no puede tener ruta local y ubicación remota simultáneas")
         for key in ("sync_interval", "software_interval"):
@@ -272,6 +279,7 @@ class Observatory:
                 if not role:
                     finding("error", key, "Rol inexistente", source)
                 selected_path = explicit_paths.get(f"{oid}:{aid}")
+                clean["installation_label"] = text(config.get("installation_labels", {}).get(f"{oid}:{aid}"))
                 remote_location = remote_personas.get(f"{oid}:{aid}")
                 if remote_location:
                     clean["profile_location"] = text(remote_location)
@@ -344,7 +352,7 @@ class Observatory:
             for human in rows(org.get("humans", [])):
                 result["humans"].append({"id": text(human.get("id")), "org": oid, "name": text(human.get("name")), "role": text(human.get("role"))})
         declared_keys = {f"{a['org']}:{a['id']}" for a in result["actors"]}
-        if (set(explicit_paths) | set(remote_personas)) - declared_keys:
+        if (set(explicit_paths) | set(remote_personas) | set(config.get("installation_labels", {}))) - declared_keys:
             raise ValueError("Ruta explícita para una persona ajena a las organizaciones seleccionadas")
         if pbase and pbase.exists():
             declared = {a["id"] for a in result["actors"]}
