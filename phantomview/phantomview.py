@@ -112,7 +112,7 @@ def default_config():
     return {"mode": "demo", "org_files": [str(HERE / "example-org.yaml")],
             "personas_dir": "", "persona_paths": {}, "remote_personas": {}, "installation_labels": {}, "docs_manifests": [str(HERE / "example-docs.yaml")],
             "procedures_file": str(HERE / "example-procedures.json"),
-            "doctor_file": "", "diagnostics_file": "", "installation_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
+            "doctor_file": "", "diagnostics_file": "", "default_persona_file": "", "installation_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
 
 
 class Observatory:
@@ -143,7 +143,7 @@ class Observatory:
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
                 raise ValueError(f"Configuración no válida: {key}")
-        for key in ("personas_dir", "procedures_file", "doctor_file", "diagnostics_file", "installation_file", "software_tag"):
+        for key in ("personas_dir", "procedures_file", "doctor_file", "diagnostics_file", "default_persona_file", "installation_file", "software_tag"):
             if not isinstance(config.get(key, ""), str):
                 raise ValueError(f"Configuración no válida: {key}")
         paths = config.get("persona_paths", {})
@@ -410,6 +410,11 @@ class Observatory:
                     actor["runtime"] = "observed"
             result["sources"].append({"kind": "local-diagnostics", "path": diagnostic_path,
                                       "checked_at": now(), "modified_at": datetime.fromtimestamp(Path(diagnostic_path).stat().st_mtime, timezone.utc).isoformat()})
+        if config.get("default_persona_file"):
+            from assistant import attach
+            source = config["default_persona_file"]
+            result["assistant"] = attach(read_source(source), result["actors"])
+            result["sources"].append({"kind": "default-persona", "path": source, "checked_at": now()})
         installation_file = config.get("installation_file") or (str(HERE / "example-installation.json") if config["mode"] == "demo" else "")
         if installation_file:
             from installation import collect as collect_installation
@@ -543,7 +548,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", cookie)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; frame-src https://chat.phantomyard.ai; frame-ancestors 'none'; base-uri 'none'")
         self.end_headers()
         self.wfile.write(body)
 
@@ -572,8 +577,18 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/access-info":
             gate = getattr(self.server, "gate", None)
-            return self.send(200, {"delegated": bool(gate), "actor": gate.policy.get("actor", "") if gate else "",
-                                   "role": gate.policy.get("role", "") if gate else ""})
+            info = {"delegated": bool(gate), "actor": gate.policy.get("actor", "") if gate else "",
+                    "role": gate.policy.get("role", "") if gate else ""}
+            # The default issuer's public business contact lets humans request a link.
+            # No organization, profile, source configuration or credentials are exposed.
+            if gate:
+                try:
+                    assistant = self.server.observatory.data().get("snapshot", {}).get("assistant", {})
+                    if assistant.get("persona") == info["actor"]:
+                        info["assistant"] = {key: assistant.get(key, "") for key in ("persona", "org", "npub", "checked_at")}
+                except (OSError, ValueError, AttributeError):
+                    pass
+            return self.send(200, info)
         if path.startswith("/api/knowledge/"):
             if not self.authenticated():
                 return self.send(401, {"error": "Autenticación necesaria"})
@@ -589,7 +604,7 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, OSError):
                 return self.send(503, {"error": "Índice temporalmente no disponible"})
         static = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                  "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8"), "/review.js": ("review.js", "text/javascript; charset=utf-8"), "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8")}
+                  "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8"), "/review.js": ("review.js", "text/javascript; charset=utf-8"), "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"), "/assistant.js": ("assistant.js", "text/javascript; charset=utf-8")}
         if path not in static:
             return self.send(404, {"error": "No encontrado"})
         file, mime = static[path]
@@ -772,4 +787,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

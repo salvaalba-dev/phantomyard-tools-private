@@ -223,3 +223,31 @@ or declared remote-location evidence remains in its tooltip and persona details.
 A label identifies the setup and machine; it does not prove installation or remote
 connectivity. IP addresses are not added to overview cards. Foreign persona labels
 are rejected. The organization specification and persona profiles are not changed.
+
+
+### Default persona and PhantomChat
+
+The compact sidebar embeds the official https://chat.phantomyard.ai client in an
+isolated frame. Human sign-in belongs to PhantomChat; PhantomView does not read,
+import or share chat keys, messages or its own access cookie. The client has its
+own language controls. The expand button enlarges the existing frame without
+reloading it. The external link provides a full-tab alternative.
+
+Resolve the default in the selected setup's runtime, never an unrelated root
+account: `python3 assistant.py --user pb-EXAMPLE --org EXAMPLE --executable
+/absolute/path/to/phantombot --output /private/default-persona.json`. Run this
+before each collector refresh and set `default_persona_file` to that export.
+The resolver invokes `doctor --no-repair --json` without a persona override and
+exports only the observed persona, provenance and time. Organization membership
+and local location are checked before including its declared public npub.
+Evidence expires after fifteen minutes. Multiple account installations must
+explicitly choose their coordinating runtime; an organization chart does not
+identify this runtime automatically.
+
+The issuer must match the resolved default. Existing signed issuer permissions
+are never automatically reassigned: a change displays a configuration warning
+and requires an administrator to review the access policy and signing helper.
+Use the public contact copy button to add/select the default persona in
+PhantomChat. The upstream client currently has no supported npub URL route or
+cross-origin embedding API to open that conversation automatically. No chat
+messages are sent by PhantomView, and dashboard source data stays read-only.

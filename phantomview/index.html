@@ -4,6 +4,13 @@
 <body>
 <aside class="sidebar"><a class="brand" href="/" aria-label="PhantomView"><img src="/logo.png" alt="Logo PhantomBot"><span>Phantom<span class="green">View</span><small data-i18n="PHANTOMYARD / OBSERVATORY">PHANTOMYARD / OBSERVATORIO</small></span></a>
 <div class="nav-label" data-i18n="EXPLORE">EXPLORAR</div><nav id="nav" data-i18n-aria="Sections" aria-label="Secciones"></nav>
+<section id="assistant-panel" class="assistant-panel" aria-label="PhantomChat">
+<div class="assistant-heading"><b>PhantomChat</b><a href="https://chat.phantomyard.ai/" target="_blank" rel="noreferrer" data-i18n-aria="Open PhantomChat in a new tab" aria-label="Open PhantomChat in a new tab">↗</a></div>
+<div id="assistant-context" class="assistant-context"></div>
+<div class="assistant-actions"><button id="assistant-contact" class="text-button" disabled></button><button id="assistant-expand" class="text-button" data-i18n="Expand chat">Ampliar chat</button></div>
+<iframe id="assistant-frame" title="PhantomChat" src="https://chat.phantomyard.ai/" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
+<p class="assistant-help" data-i18n="Sign in with your human identity. Add the copied contact in PhantomChat.">Inicia sesión con tu identidad humana. Añade el contacto copiado en PhantomChat.</p>
+</section>
 <div class="sidebar-bottom"><span class="dot"></span> <span data-i18n="Local and private information">Información local y privada</span><small id="version">v0.1.0</small><button id="setup-side" class="text-button" data-i18n="Configure setup ↗">Configurar instalación ↗</button><a href="https://phantombot.bot/" target="_blank" rel="noreferrer">PhantomBot ↗</a></div></aside>
 <div class="shell"><header><div class="breadcrumbs">Phantomyard <span>/</span> <b id="breadcrumb" data-i18n="Organization">Organización</b></div><div class="header-actions"><span id="mode" class="badge amber">EJEMPLO</span><label class="global-language"><select id="global-language" data-i18n-aria="Language" aria-label="Idioma"><option value="en">English</option><option value="es">Español</option></select></label><button id="logout" class="button" hidden data-i18n="Log out">Cerrar sesión</button><button id="refresh" class="button" data-i18n="↻ Refresh now">↻ Actualizar ahora</button></div></header>
 <main><div id="error" role="alert" hidden></div><section class="page-head"><div><div class="eyebrow" data-i18n="YOUR ORGANIZATION AT A GLANCE">TU ORGANIZACIÓN, A LA VISTA</div><h1 id="title" data-i18n-html="Everything connected.<br>Everything in context.">Todo conectado.<br>Todo en contexto.</h1><p id="subtitle" data-i18n="People, responsibilities and resources: explore how they fit.">Personas, responsabilidades y recursos: explora cómo encajan.</p></div><div class="freshness"><span class="dot"></span><b id="sync-status" data-i18n="Reading sources">Leyendo fuentes</b><small id="sync-time"></small></div></section>
@@ -17,5 +24,5 @@
 <script src="/i18n.js" defer></script>
 <script src="/installation.js" defer></script>
 <script src="/review.js" defer></script>
+<script src="/assistant.js" defer></script>
 <script src="/app.js" defer></script></body></html>
-

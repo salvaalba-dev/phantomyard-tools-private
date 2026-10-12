@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(__dirname+'/assistant.js','utf8');
+const sandbox={Date};vm.createContext(sandbox);vm.runInContext(source.slice(0,source.indexOf('function renderAssistant')),sandbox);
+const clock=Date.now();sandbox.snapshot={assistant:{persona:'lead',org:'example',checked_at:new Date(clock).toISOString()}};sandbox.clock=clock;
+assert.equal(vm.runInContext("assistantSelection(snapshot,'example',clock).status",sandbox),'ready');
+assert.equal(vm.runInContext("assistantSelection(snapshot,'foreign',clock).status",sandbox),'unknown');
+assert.equal(vm.runInContext("assistantSelection(snapshot,'example',clock+900001).status",sandbox),'expired');
+assert.equal(vm.runInContext("assistantSelection(snapshot,'example',clock-60001).status",sandbox),'expired');
+assert.equal(vm.runInContext("assistantSelection(null,'example',clock).status",sandbox),'unknown');
+assert.ok(!source.includes('postMessage'));
+console.log('Assistant checks passed: organization isolation, stale evidence and no cross-origin messaging.');
