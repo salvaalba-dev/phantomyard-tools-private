@@ -179,6 +179,11 @@ The report file is written atomically with mode 0600.
 Persona details show individual results and dates. Reports expire after 15 minutes;
 service-only results are partial if the native diagnostic fails. Unconfigured optional
 channels are distinguished from failures. Local evidence never verifies a remote persona.
+Every persona card, overview operation cell and profile carries a visible status flag:
+**Alive**, **Not running**, **Unverified**, or **Check expired**. Alive refers only to a
+recently observed active local service. An active service with diagnostic warnings or
+incomplete evidence shows **Alive · review** or **Alive · partial** in amber. Profiles
+refresh their diagnostic flags with the snapshot, including expiry, while they remain open.
 Successful checks confirm the observed service/listeners/timers, not a real message reply,
 model inference or effective email/Drive/tool permissions. Changes in observation dates
 and timer ages do not create organizational history entries; status changes do.
