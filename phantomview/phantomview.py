@@ -112,7 +112,7 @@ def default_config():
     return {"mode": "demo", "org_files": [str(HERE / "example-org.yaml")],
             "personas_dir": "", "persona_paths": {}, "remote_personas": {}, "installation_labels": {}, "docs_manifests": [str(HERE / "example-docs.yaml")],
             "procedures_file": str(HERE / "example-procedures.json"),
-            "doctor_file": "", "installation_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
+            "doctor_file": "", "diagnostics_file": "", "installation_file": "", "sync_interval": 0, "software_tag": "", "software_interval": 0}
 
 
 class Observatory:
@@ -143,7 +143,7 @@ class Observatory:
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
                 raise ValueError(f"Configuración no válida: {key}")
-        for key in ("personas_dir", "procedures_file", "doctor_file", "installation_file", "software_tag"):
+        for key in ("personas_dir", "procedures_file", "doctor_file", "diagnostics_file", "installation_file", "software_tag"):
             if not isinstance(config.get(key, ""), str):
                 raise ValueError(f"Configuración no válida: {key}")
         paths = config.get("persona_paths", {})
@@ -399,6 +399,17 @@ class Observatory:
                 actor["runtime"] = "reported" if checks else "unknown"
             result["sources"].append({"kind": "doctor-export", "path": config["doctor_file"],
                                       "checked_at": now(), "modified_at": datetime.fromtimestamp(Path(config["doctor_file"]).stat().st_mtime, timezone.utc).isoformat()})
+        if config.get("diagnostics_file"):
+            from diagnostics import safe_rows
+            diagnostic_path = config["diagnostics_file"]
+            diagnostics = safe_rows(read_source(diagnostic_path))
+            for actor in result["actors"]:
+                # A local report cannot verify a persona on another machine.
+                if not actor.get("profile_remote") and actor["org"] + ":" + actor["id"] in diagnostics:
+                    actor["diagnostics"] = diagnostics[actor["org"] + ":" + actor["id"]]
+                    actor["runtime"] = "observed"
+            result["sources"].append({"kind": "local-diagnostics", "path": diagnostic_path,
+                                      "checked_at": now(), "modified_at": datetime.fromtimestamp(Path(diagnostic_path).stat().st_mtime, timezone.utc).isoformat()})
         installation_file = config.get("installation_file") or (str(HERE / "example-installation.json") if config["mode"] == "demo" else "")
         if installation_file:
             from installation import collect as collect_installation
@@ -416,7 +427,16 @@ class Observatory:
             try:
                 candidate = self.collect()
                 # Volatile observation times do not count as organizational changes.
+                def stable_actor(actor):
+                    actor = dict(actor)
+                    if "diagnostics" in actor:
+                        diagnostic = dict(actor["diagnostics"])
+                        diagnostic.pop("checked_at", None)
+                        diagnostic["checks"] = [{k: v for k, v in check.items() if k != "age_minutes"} for check in diagnostic["checks"]]
+                        actor["diagnostics"] = diagnostic
+                    return actor
                 fingerprint = {k: v for k, v in candidate.items() if k != "sources"}
+                fingerprint["actors"] = [stable_actor(actor) for actor in candidate["actors"]]
                 digest = hashlib.sha256(json.dumps(fingerprint, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
                 old = self.snapshot
                 if not old or old.get("digest") != digest:
@@ -430,7 +450,8 @@ class Observatory:
                         for key in before.keys() - after.keys():
                             changes.append({"kind": kind, "entity": key, "action": "removed"})
                         for key in before.keys() & after.keys():
-                            if before[key] != after[key]:
+                            changed = stable_actor(before[key]) != stable_actor(after[key]) if kind == "actors" else before[key] != after[key]
+                            if changed:
                                 changes.append({"kind": kind, "entity": key, "action": "changed"})
                     self.history.append({"at": now(), "initial": old is None, "changes": changes[:500], "total": len(changes)})
                     self.history = self.history[-50:]

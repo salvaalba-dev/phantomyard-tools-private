@@ -295,14 +295,35 @@ const uiSpanish = {
   "Escalation role does not exist": "Escalado con rol inexistente",
   "Graph exceeds display bounds": "grafo-demasiado-grande",
   "Declared installation": "Instalación declarada",
-  "Python distribution metadata": "Metadatos de distribución Python"
+  "Python distribution metadata": "Metadatos de distribución Python",
+  "Local diagnostic export": "Diagnóstico local exportado",
+  "Local diagnostics": "Diagnóstico local",
+  "Local checks OK": "Comprobaciones locales OK",
+  "Needs attention": "Requiere atención",
+  "Partial checks": "Comprobaciones parciales",
+  "Check expired": "Comprobación caducada",
+  "Checked": "Comprobado",
+  "Expires after 15 minutes": "Caduca a los 15 minutos",
+  "Persona service": "Servicio de la persona",
+  "Telegram listener": "Escucha de Telegram",
+  "PhantomChat listener": "Escucha de PhantomChat",
+  "Heartbeat": "Actividad periódica",
+  "Scheduled tick": "Tarea periódica tick",
+  "OK": "OK",
+  "Not configured": "Sin configurar",
+  "Last execution": "Última ejecución",
+  "minutes ago": "minutos atrás",
+  "Expected within": "Intervalo esperado",
+  "minutes": "minutos",
+  "PhantomBot report unavailable; service evidence is shown separately.": "Informe de PhantomBot no disponible; el estado del servicio se muestra por separado.",
+  "Source: systemd and PhantomBot doctor with repairs disabled. These checks do not test message replies or effective tool and document access.": "Fuente: systemd y diagnóstico de PhantomBot con reparaciones desactivadas. Estas comprobaciones no prueban respuestas a mensajes ni el acceso efectivo a herramientas y documentos."
 };
 let uiLanguage=localStorage.getItem('phantomview-language')||localStorage.getItem('phantomview-installation-language')||'es';
 if(!['en','es'].includes(uiLanguage))uiLanguage='es';
 const uiEnglishBySpanish=Object.fromEntries(Object.entries(uiSpanish).map(([en,es])=>[es,en]));
 function uiText(key){return uiLanguage==='es'?(uiSpanish[key]||key):key;}
 function uiMessage(value){const text=String(value||'');const key=uiEnglishBySpanish[text]||text;if(uiSpanish[key])return uiText(key);if(uiLanguage==='en'&&text.startsWith('Perfil incompleto: falta '))return 'Incomplete profile: missing '+text.slice('Perfil incompleto: falta '.length);if(text.startsWith('Python distribution metadata: '))return uiText('Python distribution metadata')+': '+text.slice('Python distribution metadata: '.length);return text;}
-function uiSourceKind(kind){const keys={org:'Organization model',persona:'Persona profile',documents:'Document registry',installation:'Installation manifest','doctor-export':'Diagnostic report export','persona remota declarada':'Declared remote persona'};return uiText(keys[kind]||kind);}
+function uiSourceKind(kind){const keys={org:'Organization model',persona:'Persona profile',documents:'Document registry',installation:'Installation manifest','doctor-export':'Diagnostic report export','local-diagnostics':'Local diagnostic export','persona remota declarada':'Declared remote persona'};return uiText(keys[kind]||kind);}
 let accessLastMessage='';
 function applyUiChrome(){
  document.documentElement.lang=uiLanguage;

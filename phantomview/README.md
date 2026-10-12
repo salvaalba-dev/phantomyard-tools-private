@@ -147,6 +147,44 @@ Live Drive permissions, remote persona runtime, complete host inventory and exte
 service telemetry are not verified by this version. Source presence, package metadata,
 service activity and declared relationships must be read as distinct evidence.
 
+## Local PhantomBot diagnostics
+
+`diagnostics.py` collects the exact services and native diagnostic reports for an
+explicit list of local personas. It calls the installed PhantomBot executable as each
+persona's Unix user with `doctor --persona NAME --no-repair --json`. Repairs are always
+disabled. This requires a PhantomBot version that supports those options; an unavailable,
+invalid or timed-out report remains partial evidence, never a successful check.
+
+The targets file is operator-maintained and private. For example:
+
+```json
+{"targets": [{"org": "example", "persona": "atlas", "user": "pb-atlas", "unit": "phantombot-pb-atlas.service"}]}
+```
+
+```sh
+python diagnostics.py --targets /private/local-targets.json --executable /absolute/installed/phantombot --output /private/local-diagnostics.json
+```
+
+Set `diagnostics_file` in the collector configuration to that output path. A collector
+service can run the command as `ExecStartPre` before exporting its snapshot; the AU pilot
+uses its existing five-minute collector timer. The web reader receives only the sanitized
+snapshot and cannot run diagnostics or repairs. No extra network access is needed.
+
+The export includes only service health, Telegram/PhantomChat health flags, heartbeat/tick
+freshness and observation dates. It excludes raw reports, credential fields, identities,
+contacts, paths and arbitrary diagnostic details. Native reports remain in memory during
+collection. Each native call has an eight-second timeout; each service query has four.
+The report file is written atomically with mode 0600.
+
+Persona details show individual results and dates. Reports expire after 15 minutes;
+service-only results are partial if the native diagnostic fails. Unconfigured optional
+channels are distinguished from failures. Local evidence never verifies a remote persona.
+Successful checks confirm the observed service/listeners/timers, not a real message reply,
+model inference or effective email/Drive/tool permissions. Changes in observation dates
+and timer ages do not create organizational history entries; status changes do.
+
+Run `node test_diagnostics.cjs` along with the Python suite and existing UI tests.
+
 
 ## In-context finding review
 
