@@ -560,7 +560,7 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, OSError):
                 return self.send(503, {"error": "Índice temporalmente no disponible"})
         static = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                  "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8")}
+                  "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8"), "/review.js": ("review.js", "text/javascript; charset=utf-8")}
         if path not in static:
             return self.send(404, {"error": "No encontrado"})
         file, mime = static[path]

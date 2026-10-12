@@ -135,8 +135,32 @@ No signed release is currently published. A previous commit is saved for rollbac
 python -m unittest discover -s . -p 'test_*.py'
 node --check app.js
 node --check installation.js
+node --check review.js
+node test_review.cjs
 ```
 
 Live Drive permissions, remote persona runtime, complete host inventory and external
 service telemetry are not verified by this version. Source presence, package metadata,
 service activity and declared relationships must be read as distinct evidence.
+
+
+## In-context finding review
+
+The Review control expands an inspection panel below the relationship map. It shows
+up to three bounded return routes, source conditions on each edge, inherited wildcard
+rules, the declared hop limit, review criteria and a link to the affected persona.
+The main map switches to the relevant relationship layer. Closing or toggling the
+panel restores the normal overview. The selected finding remains open across data
+refreshes; findings no longer in the filtered snapshot are identified explicitly.
+
+The route model expands `*` rules to selected roles while excluding the destination
+itself, matching the collector's cycle analysis. Search is bounded to six edges and
+2,000 visits. The visualization is an illustration, not a complete protocol validator
+or evidence that an actual conversation loop occurred. It does not edit the source,
+record a review approval, or resolve a finding. English source labels have an explicit
+Spanish interface translation.
+
+An open review is explicitly marked by an Active review banner above the map, a
+highlighted finding row, an expanded Active review control, and an In review label
+on the selected role node. These indicate the currently open inspection, not a
+resolved finding or a recorded approval. Closing clears all active indicators.
