@@ -48,10 +48,13 @@ be opened through an older identifier once they leave the selected index.
 
 ## Installation and dependencies
 
-The installation section has its own English/Spanish language selector. English is
-the source language; Spanish is an explicit translation in `installation.js`.
-Legacy organization views and organization-owned documents retain their existing
-language. This is not a claim that every legacy screen has been translated.
+The single language selector in the top header controls the entire interface:
+navigation, filters, dates, statuses, access screens, persona and KB reader controls,
+findings/review panels, setup forms and the installation inventory. English is the
+source language; Spanish is an explicit UI translation. The preference is remembered
+locally and migrates the earlier installation-only preference. Organization-owned
+names, descriptions, protocol conditions and document/KB content retain their source
+language. Switching language preserves current filters and the open finding review.
 
 Three views are available:
 
@@ -137,6 +140,7 @@ node --check app.js
 node --check installation.js
 node --check review.js
 node test_review.cjs
+node test_i18n.cjs
 ```
 
 Live Drive permissions, remote persona runtime, complete host inventory and external
