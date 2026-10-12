@@ -575,6 +575,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed():
             return self.send(403, {"error": "Origen no permitido"})
         path = urlparse(self.path).path
+        if path.startswith("/api/assistant/"):
+            return self.assistant_request("GET")
         if path == "/api/access-info":
             gate = getattr(self.server, "gate", None)
             info = {"delegated": bool(gate), "actor": gate.policy.get("actor", "") if gate else "",
@@ -603,7 +605,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, self.server.observatory.data())
             except (ValueError, OSError):
                 return self.send(503, {"error": "Índice temporalmente no disponible"})
-        static = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+        static = {"/consultation-ui.js": ("consultation-ui.js", "text/javascript; charset=utf-8"), "/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8"), "/review.js": ("review.js", "text/javascript; charset=utf-8"), "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"), "/assistant.js": ("assistant.js", "text/javascript; charset=utf-8")}
         if path not in static:
             return self.send(404, {"error": "No encontrado"})
@@ -655,6 +657,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"ok": True}, cookie=gate.cookie(session))
             if not self.authenticated():
                 return self.send(401, {"error": "Pide un enlace temporal a la persona responsable"})
+            if parsed.path.startswith("/api/assistant/"):
+                return self.assistant_request("POST", body)
             if parsed.path == "/api/logout":
                 gate.logout(self.headers)
                 return self.send(200, {"ok": True}, cookie=gate.cookie())
@@ -666,6 +670,36 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, TypeError):
             return self.send(503, {"error": "Servicio temporalmente no disponible"})
 
+    def assistant_request(self, method, body=None):
+        # The existing cookie and exact-origin boundary authorize consultations.
+        gate = getattr(self.server, "gate", None)
+        client = getattr(self.server, "assistant_client", None)
+        parsed = urlparse(self.path)
+        if not gate or not self.authenticated():
+            return self.send(401, {"error": "Assistant session required"})
+        if parsed.query or parsed.fragment or not self.allowed():
+            return self.send(403, {"error": "Assistant origin rejected"})
+        if not client:
+            return self.send(503, {"error": "Assistant is not configured"})
+        try:
+            owner, expires = gate.session_scope(self.headers)
+            path = parsed.path.removeprefix("/api/assistant")
+            if method == "GET" and (path == "/status" or re.fullmatch(r"/jobs/[a-f0-9-]{36}", path)):
+                return self.send(*client.call("GET", path, owner))
+            if method == "POST" and path == "/jobs":
+                from consultation import build_context
+                snapshot = self.server.observatory.data()["snapshot"]
+                payload = build_context(snapshot, body, gate.policy["actor"])
+                payload["expires_at"] = expires
+                return self.send(*client.call("POST", path, owner, payload))
+            if method == "POST" and re.fullmatch(r"/jobs/[a-f0-9-]{36}/cancel", path) and body == {}:
+                return self.send(*client.call("DELETE", path.removesuffix("/cancel"), owner))
+            return self.send(404, {"error": "Unknown assistant operation"})
+        except (ValueError, KeyError, TypeError):
+            return self.send(400, {"error": "Invalid or stale assistant context; refresh PhantomView"})
+        except (OSError, TimeoutError):
+            return self.send(503, {"error": "Assistant unavailable"})
+
 
 def serve(obs, port, open_browser, gate=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
@@ -674,6 +708,13 @@ def serve(obs, port, open_browser, gate=None):
     server.restart_requested = False
     server.observatory = obs
     server.gate = gate
+    server.assistant_client = None
+    if gate and os.environ.get("PHANTOMVIEW_ASSISTANT_CONFIG"):
+        from consultation import BridgeClient
+        try:
+            server.assistant_client = BridgeClient(read_source(Path(os.environ["PHANTOMVIEW_ASSISTANT_CONFIG"])))
+        except (OSError, ValueError, KeyError, TypeError):
+            print("PhantomView assistant configuration unavailable; analysis disabled", flush=True)
     if gate:
         server.access_errors = (ValueError, gate.access.core.Invalid)
     obs.refresh()

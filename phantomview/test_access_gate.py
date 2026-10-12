@@ -55,8 +55,14 @@ class AccessTests(unittest.TestCase):
         self.assertNotIn(value, self.gate.sessions)
         headers = {"Cookie": "phantomview=" + value}
         self.assertTrue(self.gate.session(headers))
+        owner, expiry = self.gate.session_scope(headers)
+        self.assertEqual(owner, self.gate.digest(value))
+        self.assertNotEqual(owner, value)
+        self.assertGreater(expiry, 0)
         self.clock[0] += 1800
         self.assertFalse(self.gate.session(headers))
+        with self.assertRaises(ValueError):
+            self.gate.session_scope(headers)
 
     def test_single_use_logout_and_cookie_flags(self):
         value = self.gate.redeem("c" * 43)

@@ -25,5 +25,5 @@ console.log('Review route checks passed: closed route, source conditions, wildca
 const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
-new vm.Script(['i18n.js','installation.js','review.js','assistant.js','app.js'].map(file=>fs.readFileSync(path.join(__dirname,file),'utf8')).join('\n'));
+new vm.Script(['i18n.js','installation.js','review.js','assistant.js','consultation-ui.js','app.js'].map(file=>fs.readFileSync(path.join(__dirname,file),'utf8')).join('\n'));
 console.log('Combined browser script scope check passed.');

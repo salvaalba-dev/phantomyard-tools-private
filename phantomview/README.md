@@ -251,3 +251,56 @@ Use the public contact copy button to add/select the default persona in
 PhantomChat. The upstream client currently has no supported npub URL route or
 cross-origin embedding API to open that conversation automatically. No chat
 messages are sent by PhantomView, and dashboard source data stays read-only.
+# Analysis assistant pilot
+
+PhantomView can host an analysis-only sidebar and a finding-specific **Prompt
+helper**. The UI adapts the AU website widget's message/polling pattern, but uses
+the dashboard's existing temporary session instead of a public visitor token or
+a second PhantomChat sign-in. Responses are rendered as text, not HTML. Prompts
+can be copied or downloaded as plain text.
+
+The server reconstructs finding context from the exported snapshot, verifies the
+observed default persona, and sends only bounded evidence and up to four short
+follow-up messages. A change of view/finding starts fresh context. Logout clears
+the visible transcript. The worker rejects foreign setups, expired requests,
+cross-session result reads, and conflicting retries. Limits are ten consultations
+per session per hour, forty globally per hour, one active job, four queued jobs,
+and a 120-second execution timeout. Backend jobs do not extend dashboard access.
+
+Application instructions stay in the fixed system suffix. The screened user
+message is a JSON envelope of the actual question, evidence and bounded previous
+turns; it does not mix those with application directives. Question and source
+content remain untrusted. A real `screenedHold` completion emits a dedicated
+stderr marker; the worker discards other stderr content and reports `held`
+instead of a provider failure. It never lowers JEV's threshold or retries a held
+message automatically. The runtime manifest must include `screened-hold-marker`.
+The evidence includes a short glossary of dashboard labels, so the assistant can
+distinguish installation presence, unverified operation, fresh service evidence
+and an active review without guessing what the UI means.
+
+`bridge_assistant.cjs` can be mounted as middleware or run as an independent
+loopback adapter. This pilot uses the latter; it does not alter PhantomBlog or
+claim a new upstream PhantomBridge API. Its service credential stays server-side
+and authorizes only `/phantomview-assistant` operations, never arbitrary commands.
+
+The pilot uses a separate root-owned, hash-verified compiled PhantomBot 1.1.425
+runtime with `native_assistant_patch.py`. The patch removes unsafe harness
+fallbacks, disables tools/MCP and extension/skill/template discovery, disables
+history, and retains untrusted-input screening. The main daemon binary and its
+normal channels remain unchanged. This is an explicitly pinned private pilot,
+not a claim that an upstream integration already exists. The documented engine
+API requires its own exclusive isolated root and must not be pointed at a live
+daemon's data directory.
+
+`deploy_consultation.py` is an AU-specific deployment example, not a universal
+installer. It validates the existing issuer/default match and the pinned binary,
+backs up changed source and policy, and creates only dedicated loopback services.
+Review and authorize the persona access before activation. No persona credential
+is included in the repository. Run `python -m unittest test_consultation
+test_assistant test_access_gate` and `node test_review.cjs` before deployment,
+then verify real replies and actual native restriction flags on the target host.
+The worker keeps home directories read-only except the selected PhantomBot data,
+state and that persona's native SDK agent-state directory. The SDK needs to write
+its technical state under `~/.local/share/pi-native/personas/<persona>/agent`;
+this filesystem permission does not enable model tools or alter JEV screening.
+

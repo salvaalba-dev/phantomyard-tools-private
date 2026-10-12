@@ -60,6 +60,20 @@ class Gate:
         except (CookieError, KeyError, ValueError, TypeError):
             return False
 
+    def session_scope(self, headers):
+        """Opaque owner and remaining lifetime; never expose the cookie itself."""
+        try:
+            value = SimpleCookie(headers.get("Cookie", ""))["phantomview"].value
+            owner = self.digest(value)
+            with self.lock:
+                self._prune()
+                remaining = self.sessions.get(owner, 0) - self.clock()
+                if remaining > 0:
+                    return owner, time.time() + remaining
+        except (CookieError, KeyError, ValueError, TypeError):
+            pass
+        raise ValueError("Assistant session expired")
+
     def redeem(self, code):
         return self.links.redeem(code, self.create_session)
 
