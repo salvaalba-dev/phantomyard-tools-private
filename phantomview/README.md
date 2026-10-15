@@ -367,8 +367,9 @@ history. A compromised reader or root can alter it. A separately protected sink
 and worker-side terminal events are needed before claiming stronger guarantees.
 
 `assistant_scope.py` is a tested, inactive policy primitive for a future
-verified-channel integration. It intersects explicit human and persona category
-and project grants, requires explicit non-secret classification, denies category
+verified-channel integration. Humans inherit category and project grants from
+their explicitly linked persona; no second human ACL is maintained. It requires
+explicit non-secret classification, denies category
 0, and never infers access from numeric category order or job titles. It does
 not authenticate a sender, load persona memory, grant new knowledge access or
 change JEV. The current signer supplies no verified human recipient; an existing
@@ -378,4 +379,38 @@ trusted sender context, explicit operator-approved grants exist, and retrieval
 filters resources before model inference. Browser-supplied identity, email From
 alone and model-selected shell arguments are not authentication. No new human
 login is required if the verified channel context is securely carried forward.
+
+`Scope.from_org()` derives the private policy directly from an organization
+source, resolving `actors[].role` through `roles[].access_level` and
+`policies.access_levels`. Numeric categories become exact declared labels such
+as `category-2`. An actor with a missing role or access level receives no grants.
+Unknown category labels and duplicate principal IDs reject the policy. The
+policy revision changes when effective grants or counterpart bindings change;
+the future session adapter must reject stale policy revisions on each request.
+
+The proposed **private extensions** below are not yet upstream PhantomOrg
+features. They must be reviewed against its schema before deployment. No live
+organization file is changed by this implementation:
+
+```yaml
+humans:
+  - id: board_member
+    counterpart_persona: coordinator
+policies:
+  phantomview:
+    project_grants:
+      coordinator: [example-project]
+```
+
+Human entries without `counterpart_persona` remain valid organization members
+but cannot obtain an identified assistant session. A counterpart must refer to
+an existing actor and must be unique among humans. `reports_to_human` is a
+hierarchy relation and is never interpreted as a counterpart binding. Link
+eligibility requires the authenticated human's exact counterpart as issuer;
+neither a caller-selected persona nor a matching job title is sufficient.
+Project grants are exact labels, inherited from the counterpart, and do not
+implicitly grant any category. A project resource requires both its category
+and its project. The reader does not receive raw channel identifiers from this
+policy resolver. Existing legacy link issuance remains unchanged until the
+verified-channel adapter is implemented and explicitly activated.
 

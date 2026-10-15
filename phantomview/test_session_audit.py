@@ -70,7 +70,7 @@ class AuditTests(unittest.TestCase):
 class ScopeTests(unittest.TestCase):
     def setUp(self):
         grants = {"categories": ["category-1", "category-2", "category-3"], "projects": []}
-        self.policy = {"organization": "example", "humans": {"owner": grants}, "personas": {"lead": grants}}
+        self.policy = {"organization": "example", "humans": {"owner": {"counterpart_persona": "lead"}}, "personas": {"lead": grants}}
         self.scope = Scope(self.policy)
 
     def resource(self, **changes):
@@ -85,19 +85,56 @@ class ScopeTests(unittest.TestCase):
                        {"category": "category-4-almaponia"}, {"organization": "elsewhere"},
                        {"category": None}, {"project": "almaponia"}):
             self.assertFalse(self.scope.permits("owner", "lead", {**resource, **change}))
-        self.policy["humans"]["owner"]["categories"].append("category-4-almaponia")
+        self.policy["personas"]["lead"]["categories"].append("category-4-almaponia")
         self.assertFalse(self.scope.permits("owner", "lead", {**resource, "category": "category-4-almaponia"}))
 
     def test_project_requires_exact_grant_on_both_principals(self):
-        for row in (self.policy["humans"]["owner"], self.policy["personas"]["lead"]):
-            row["categories"].append("category-4-almaponia")
-            row["projects"].append("almaponia")
+        row = self.policy["personas"]["lead"]
+        row["categories"].append("category-4-almaponia")
+        row["projects"].append("almaponia")
         scope = Scope(self.policy)
         resource = {**self.resource(), "category": "category-4-almaponia"}
         self.assertFalse(scope.permits("owner", "lead", resource))
         self.assertTrue(scope.permits("owner", "lead", {**resource, "project": "almaponia"}))
         self.assertFalse(scope.permits("owner", "lead", {**resource, "project": "other"}))
         self.assertNotEqual(scope.revision, self.scope.revision)
+
+    def test_human_cannot_choose_another_persona_or_edit_inherited_grants(self):
+        self.policy["personas"]["other"] = {"categories": ["category-3"], "projects": []}
+        scope = Scope(self.policy)
+        self.assertFalse(scope.can_issue("owner", "other"))
+        self.assertFalse(scope.can_issue("unbound", "lead"))
+        grants = scope.human_grants("owner")
+        grants["categories"].clear()
+        self.assertTrue(scope.permits("owner", "lead", self.resource()))
+        self.policy["humans"]["owner"]["categories"] = ["category-3"]
+        with self.assertRaises(ValueError):
+            Scope(self.policy)
+
+    def test_org_is_single_source_and_unbound_humans_have_no_eligibility(self):
+        org = {"organization": {"id": "example"},
+               "roles": [{"id": "ceo", "access_level": "level-3"}, {"id": "staff", "access_level": "level-2"}],
+               "actors": [{"id": "paco", "role": "ceo"}, {"id": "pepa", "role": "staff"}, {"id": "roberto", "role": "staff"}],
+               "humans": [{"id": "salvador", "counterpart_persona": "paco"},
+                          {"id": "brigitte", "counterpart_persona": "pepa"},
+                          {"id": "fran", "counterpart_persona": "roberto"}, {"id": "beatriz"}],
+               "policies": {"access_levels": {"level-3": {"categories": [1, 2, 3]}, "level-2": {"categories": [1, 2]}},
+                            "security_categories": {"category-1": {}, "category-2": {}, "category-3": {}}}}
+        scope = Scope.from_org(org)
+        self.assertEqual(scope.human_grants("salvador")["categories"], ["category-1", "category-2", "category-3"])
+        self.assertEqual(scope.human_grants("fran"), scope.human_grants("brigitte"))
+        self.assertIsNone(scope.human_grants("beatriz"))
+        self.assertFalse(scope.can_issue("beatriz", "paco"))
+        org["policies"]["access_levels"]["level-2"]["categories"] = [1]
+        revised = Scope.from_org(org)
+        self.assertEqual(revised.human_grants("fran")["categories"], ["category-1"])
+        self.assertNotEqual(scope.revision, revised.revision)
+        org["humans"][3]["counterpart_persona"] = "paco"
+        with self.assertRaises(ValueError):
+            Scope.from_org(org)
+        org["humans"][3]["counterpart_persona"] = "missing"
+        with self.assertRaises(ValueError):
+            Scope.from_org(org)
 
 
 if __name__ == "__main__":
