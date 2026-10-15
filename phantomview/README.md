@@ -405,6 +405,12 @@ diagnostic trail, not a tamper-proof security archive or a full conversation
 history. A compromised reader or root can alter it. A separately protected sink
 and worker-side terminal events are needed before claiming stronger guarantees.
 
+See [Verified human access: integration status](VERIFIED_CHANNEL_INTEGRATION.md)
+for the inspected native channel boundaries, the inactive recipient/session
+adapter, a read-only matrix preview, real-signature tests and the remaining
+PhantomOrg schema/transport/retrieval work. No extended human access is enabled
+by these modules or by the existing dashboard link.
+
 `assistant_scope.py` is a tested, inactive policy primitive for a future
 verified-channel integration. Ordinary humans inherit category and project grants
 from their explicitly linked persona; category 0 is an independent human grant
