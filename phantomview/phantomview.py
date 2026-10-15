@@ -235,6 +235,7 @@ class Observatory:
             source = str(Path(filename).resolve())
             result["sources"].append({"kind": "org", "path": source, "checked_at": now()})
             result["organizations"].append({"id": oid, "name": text(org["organization"].get("name")) or oid,
+                                            "display_name": text(org["organization"].get("display_name")),
                                             "sector": text(org["organization"].get("sector")), "source": source,
                                             "communication": {"message_types": strings(org.get("communication", {}).get("message_types")),
                                                               "max_hops": org.get("communication", {}).get("max_hops", 3)}})
