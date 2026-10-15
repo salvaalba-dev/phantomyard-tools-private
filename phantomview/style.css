@@ -29,3 +29,6 @@
 
 /* Compact installed/available version trigger. */
 .bot-version{cursor:pointer;font:inherit;font-size:10px;white-space:nowrap}.bot-version:hover{border-color:var(--green);color:var(--green)}.bot-command{user-select:all;white-space:pre-wrap}#bot-version-dialog{max-width:700px}
+
+/* Organization identity comes from the configured organization model. */
+.breadcrumbs strong{font-weight:500;color:var(--muted)}
