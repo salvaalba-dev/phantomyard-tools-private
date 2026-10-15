@@ -338,3 +338,44 @@ state and that persona's native SDK agent-state directory. The SDK needs to writ
 its technical state under `~/.local/share/pi-native/personas/<persona>/agent`;
 this filesystem permission does not enable model tools or alter JEV screening.
 
+### Session audit and future scoped knowledge
+
+The optional `PHANTOMVIEW_AUDIT_PATH` enables a local SQLite metadata ledger.
+Provision its absolute path in a private reader-writable directory outside the
+static files, exported index and KB folders. The directory and backups must be
+accessible only to the operator and reader account; the model worker must not
+have write access. No additional package is required. Invalid storage prevents
+startup; failed writes prevent new sessions and assistant submissions. Logout
+and revocation still invalidate the session even if their audit write fails.
+
+Each session receives a separate random audit identifier, unrelated to its
+cookie, cookie hash, phone number, email or npub. Events record creation, observed
+expiry, logout, operator revocation, assistant request IDs and observed job
+states. Repeated identical poll events are deduplicated. No prompts, responses,
+credentials or link grants are stored. `Ledger.export()` is an operator API;
+there is no public audit endpoint. Default retention is 30 days, bounded to
+1–90 days when constructing the ledger. Expired rows are removed on writes and
+excluded from exports. Retention does not erase operator backups or filesystem
+copies; those need their own retention policy. Expiry is recorded on the next
+session check, not by a scheduler. A reader restart invalidates in-memory
+sessions; it does not reconstruct them from the persistent ledger.
+
+Observed results are not guaranteed worker-completion events: a user who stops
+polling may leave the last audit state at queued/running. This first stage is a
+diagnostic trail, not a tamper-proof security archive or a full conversation
+history. A compromised reader or root can alter it. A separately protected sink
+and worker-side terminal events are needed before claiming stronger guarantees.
+
+`assistant_scope.py` is a tested, inactive policy primitive for a future
+verified-channel integration. It intersects explicit human and persona category
+and project grants, requires explicit non-secret classification, denies category
+0, and never infers access from numeric category order or job titles. It does
+not authenticate a sender, load persona memory, grant new knowledge access or
+change JEV. The current signer supplies no verified human recipient; an existing
+dashboard link therefore cannot establish the human identity required by this
+policy. Expanded knowledge must stay disabled until the channel adapter supplies
+trusted sender context, explicit operator-approved grants exist, and retrieval
+filters resources before model inference. Browser-supplied identity, email From
+alone and model-selected shell arguments are not authentication. No new human
+login is required if the verified channel context is securely carried forward.
+

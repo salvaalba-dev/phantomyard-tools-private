@@ -745,15 +745,29 @@ class Handler(BaseHTTPRequestHandler):
             owner, expires = gate.session_scope(self.headers)
             path = parsed.path.removeprefix("/api/assistant")
             if method == "GET" and (path == "/status" or re.fullmatch(r"/jobs/[a-f0-9-]{36}", path)):
-                return self.send(*client.call("GET", path, owner))
+                response = client.call("GET", path, owner)
+                if path != "/status" and response[0] == 200:
+                    gate.audit_event(self.headers, "assistant_response_observed",
+                                     job_id=response[1]["id"], status=response[1]["status"])
+                return self.send(*response)
             if method == "POST" and path == "/jobs":
                 from consultation import build_context
                 snapshot = self.server.observatory.data()["snapshot"]
                 payload = build_context(snapshot, body, gate.policy["actor"])
                 payload["expires_at"] = expires
-                return self.send(*client.call("POST", path, owner, payload))
+                gate.audit_event(self.headers, "assistant_requested", request_id=payload["request_id"],
+                                 mode="dashboard-analysis")
+                response = client.call("POST", path, owner, payload)
+                if response[0] in (200, 202):
+                    gate.audit_event(self.headers, "assistant_response_observed", request_id=payload["request_id"],
+                                     job_id=response[1]["id"], status=response[1]["status"])
+                return self.send(*response)
             if method == "POST" and re.fullmatch(r"/jobs/[a-f0-9-]{36}/cancel", path) and body == {}:
-                return self.send(*client.call("DELETE", path.removesuffix("/cancel"), owner))
+                response = client.call("DELETE", path.removesuffix("/cancel"), owner)
+                if response[0] == 200:
+                    gate.audit_event(self.headers, "assistant_response_observed",
+                                     job_id=response[1]["id"], status=response[1]["status"])
+                return self.send(*response)
             return self.send(404, {"error": "Unknown assistant operation"})
         except (ValueError, KeyError, TypeError):
             return self.send(400, {"error": "Invalid or stale assistant context; refresh PhantomView"})
@@ -872,7 +886,11 @@ def main():
         sys.path.insert(0, str(Path(args.access_module_dir).resolve()))
         from phantomblog import access
         policy = read_source(args.access_policy)
-        gate = Gate(access, policy, args.public_origin, args.port, args.session_seconds)
+        audit = None
+        if os.environ.get("PHANTOMVIEW_AUDIT_PATH"):
+            from session_audit import Ledger
+            audit = Ledger(os.environ["PHANTOMVIEW_AUDIT_PATH"])
+        gate = Gate(access, policy, args.public_origin, args.port, args.session_seconds, audit=audit)
         obs = SnapshotReader(args.reader_index, policy)
     else:
         if args.command == "serve" and (args.public_origin or args.reader_index):

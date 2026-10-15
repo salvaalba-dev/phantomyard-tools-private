@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 
 class Gate:
-    def __init__(self, access, policy, origin, port, session_seconds=1800, clock=time.monotonic):
+    def __init__(self, access, policy, origin, port, session_seconds=1800, clock=time.monotonic, audit=None):
         if type(session_seconds) is not int or not 60 <= session_seconds <= 3600:
             raise ValueError("La sesión debe durar entre 60 y 3600 segundos")
         if not isinstance(policy, dict) or not policy.get("identities"):
@@ -18,6 +18,8 @@ class Gate:
         self.access = access
         self.policy = policy
         self.sessions = {}
+        self.audit, self.audit_healthy = audit, True
+        self.session_ids = {}
         self.lock = threading.Lock()
         self.clock, self.seconds = clock, session_seconds
 
@@ -39,8 +41,42 @@ class Gate:
             if len(self.sessions) >= 100:
                 raise ValueError("Demasiadas sesiones")
             value = secrets.token_urlsafe(32)
-            self.sessions[self.digest(value)] = self.clock() + self.seconds
+            owner, ident = self.digest(value), secrets.token_hex(16)
+            if not self._record("session_created", ident, mode="dashboard-analysis"):
+                raise ValueError("Session audit unavailable")
+            self.sessions[owner] = self.clock() + self.seconds
+            self.session_ids[owner] = ident
             return value
+
+    def _record(self, event, ident, **metadata):
+        if self.audit is None:
+            return True
+        try:
+            self.audit.record(event, ident, **metadata)
+            self.audit_healthy = True
+            return True
+        except Exception:
+            # Never print exception text: storage errors can contain sensitive paths.
+            self.audit_healthy = False
+            return False
+
+    def audit_event(self, headers, event, **metadata):
+        owner, _ = self.session_scope(headers)
+        with self.lock:
+            ident = self.session_ids.get(owner)
+            if not ident or not self._record(event, ident, **metadata):
+                raise OSError("Session audit unavailable")
+
+    def revoke(self, ident):
+        """Operator-only revocation by random audit ID, never a web operation."""
+        with self.lock:
+            owner = next((key for key, value in self.session_ids.items() if value == ident), None)
+            if owner is None:
+                return False
+            self.sessions.pop(owner, None)
+            self.session_ids.pop(owner, None)
+            self._record("session_revoked", ident)
+            return True
 
     @staticmethod
     def digest(value):
@@ -48,7 +84,12 @@ class Gate:
 
     def _prune(self):
         current = self.clock()
-        self.sessions = {key: expiry for key, expiry in self.sessions.items() if expiry > current}
+        for key, expiry in list(self.sessions.items()):
+            if expiry <= current:
+                self.sessions.pop(key, None)
+                ident = self.session_ids.pop(key, None)
+                if ident:
+                    self._record("session_expired", ident)
 
     def session(self, headers):
         try:
@@ -85,7 +126,11 @@ class Gate:
         try:
             value = SimpleCookie(headers.get("Cookie", ""))["phantomview"].value
             with self.lock:
-                self.sessions.pop(self.digest(value), None)
+                owner = self.digest(value)
+                self.sessions.pop(owner, None)
+                ident = self.session_ids.pop(owner, None)
+                if ident:
+                    self._record("session_logout", ident)
         except (CookieError, KeyError, ValueError, TypeError):
             pass
 
