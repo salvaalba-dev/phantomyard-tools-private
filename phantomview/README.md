@@ -367,10 +367,11 @@ history. A compromised reader or root can alter it. A separately protected sink
 and worker-side terminal events are needed before claiming stronger guarantees.
 
 `assistant_scope.py` is a tested, inactive policy primitive for a future
-verified-channel integration. Humans inherit category and project grants from
-their explicitly linked persona; no second human ACL is maintained. It requires
+verified-channel integration. Ordinary humans inherit category and project grants
+from their explicitly linked persona; category 0 is an independent human grant
+defined in PhantomOrg. No duplicate ordinary human ACL is maintained. It requires
 explicit non-secret classification, and never infers access from numeric category
-order or job titles. The actor-scoped category-0 exception is described below. It does
+order or job titles. The human category-0 exception is described below. It does
 not authenticate a sender, load persona memory, grant new knowledge access or
 change JEV. The current signer supplies no verified human recipient; an existing
 dashboard link therefore cannot establish the human identity required by this
@@ -384,7 +385,8 @@ login is required if the verified channel context is securely carried forward.
 source, resolving `actors[].role` through `roles[].access_level` and
 `policies.access_levels`, plus `roles[].security_exceptions` and
 `actors[].actor_exceptions`. Numeric categories become exact declared labels such
-as `category-2`. An actor with a missing role or access level receives no grants.
+as `category-2`. A missing role or level never implies a level grant; explicitly
+declared actor exceptions still apply.
 Unknown category labels and duplicate principal IDs reject the policy. The
 policy revision changes when effective grants or counterpart bindings change;
 the future session adapter must reject stale policy revisions on each request.
@@ -404,10 +406,11 @@ policies:
 ```
 
 Human entries without `counterpart_persona` remain valid organization members
-but cannot obtain an identified assistant session. A counterpart must refer to
+but ordinary humans cannot obtain an identified assistant session. Category 0
+is the explicit exception to counterpart eligibility. A counterpart must refer to
 an existing actor and must be unique among humans. `reports_to_human` is a
 hierarchy relation and is never interpreted as a counterpart binding. Link
-eligibility requires the authenticated human's exact counterpart as issuer;
+eligibility ordinarily requires the authenticated human's exact counterpart as issuer;
 neither a caller-selected persona nor a matching job title is sufficient.
 Project grants are exact labels, inherited from the counterpart, and do not
 implicitly grant any category. A project resource requires both its category
@@ -415,16 +418,29 @@ and its project. The reader does not receive raw channel identifiers from this
 policy resolver. Existing legacy link issuance remains unchanged until the
 verified-channel adapter is implemented and explicitly activated.
 
-Category 0 is an explicit organization-wide information exception for its named
-human owner through that human's exact counterpart. It requires all of:
-`policies.security_categories.category-0.scope: actor`, an unambiguous declared
-human `owner`, `category-0` in the counterpart's **actor** exceptions, and an
-explicit human-to-persona binding. Owner references resolve by exact human ID or
-exact case-insensitive name, never fuzzy matching. Ambiguous or unknown owners
-reject the policy. A category-0 entry in a role or access level alone does not
-activate the exception. For this pair, all declared organization categories and
-projects are eligible; another organization or an undeclared category is not.
-Unbound humans and other counterparts cannot inherit the exception. This enables
+Category 0 is PhantomOrg's human "god mode" information grant, independent of a
+persona, counterpart relationship or executive job title. The source must declare
+`policies.security_categories.category-0`. Its explicit human `owner` takes
+precedence and may have no persona counterpart. Owner references resolve by exact
+case-insensitive human ID or name, never fuzzy matching. Unknown, empty or
+ambiguous explicit owners reject the policy and never trigger a fallback.
+
+Only when `owner` is absent, `Scope.from_org(org, default_persona=...)` resolves
+the unique human counterpart of the installation's verified default persona
+(Paco in AU). The default must come from trusted installation configuration, not
+the browser; no persona name is hardcoded. A missing category-0 declaration,
+unverified default, absent counterpart or ambiguous binding rejects the policy.
+Removing an explicit owner therefore invokes this documented fallback; it is
+not a way to disable category 0. Change the assignment explicitly to transfer it.
+
+The resolved human owner can access all declared organization categories and
+projects through a known persona, without inheriting that persona's narrower
+information scope. Other humans do not obtain god mode from a counterpart's
+actor exception or from role/level entries. A persona's `category-0` entry alone
+never grants god mode to a human. Another organization or an undeclared category
+remains outside this policy. Verified channel authentication and issuer checks
+are still necessary: policy eligibility is not proof of human identity and does
+not make an unsigned browser claim valid. This enables
 information scope only: it does not add tools, administration or credential
 disclosure. Explicit secret-resource exclusions still apply. Ordinary category-4
 role exceptions do not imply access to every project.

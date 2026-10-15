@@ -117,9 +117,9 @@ class ScopeTests(unittest.TestCase):
                "actors": [{"id": "paco", "role": "ceo"}, {"id": "pepa", "role": "staff"}, {"id": "roberto", "role": "staff"}],
                "humans": [{"id": "salvador", "counterpart_persona": "paco"},
                           {"id": "brigitte", "counterpart_persona": "pepa"},
-                          {"id": "fran", "counterpart_persona": "roberto"}, {"id": "beatriz"}],
+                          {"id": "fran", "counterpart_persona": "roberto"}, {"id": "beatriz"}, {"id": "custodian"}],
                "policies": {"access_levels": {"level-3": {"categories": [1, 2, 3]}, "level-2": {"categories": [1, 2]}},
-                            "security_categories": {"category-1": {}, "category-2": {}, "category-3": {}}}}
+                            "security_categories": {"category-0": {"owner": "custodian"}, "category-1": {}, "category-2": {}, "category-3": {}}}}
         scope = Scope.from_org(org)
         self.assertEqual(scope.human_grants("salvador")["categories"], ["category-1", "category-2", "category-3"])
         self.assertEqual(scope.human_grants("fran"), scope.human_grants("brigitte"))
@@ -136,7 +136,7 @@ class ScopeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Scope.from_org(org)
 
-    def test_absolute_actor_exception_only_for_its_named_human_counterpart(self):
+    def test_category_zero_is_a_human_assignment_independent_of_persona_binding(self):
         org = {"organization": {"id": "example"},
                "roles": [{"id": "ceo", "access_level": "executive"},
                          {"id": "staff", "access_level": "operational", "security_exceptions": ["category-3", "category-4"]}],
@@ -160,15 +160,35 @@ class ScopeTests(unittest.TestCase):
         self.assertIn("category-3", scope.human_grants("brigitte")["categories"])
         self.assertIn("category-4", scope.human_grants("brigitte")["categories"])
         del org["humans"][0]["counterpart_persona"]
-        self.assertFalse(Scope.from_org(org).permits("salvador", "paco", resource))
+        self.assertTrue(Scope.from_org(org).permits("salvador", "paco", resource))
+        self.assertTrue(Scope.from_org(org).permits("salvador", "pepa", resource))
+        self.assertFalse(Scope.from_org(org).can_issue("salvador", "unknown-persona"))
         org["humans"][0]["counterpart_persona"] = "paco"
         org["actors"][0]["actor_exceptions"] = []
         org["roles"][0]["security_exceptions"] = ["category-0"]
-        self.assertFalse(Scope.from_org(org).permits("salvador", "paco", resource))
+        self.assertTrue(Scope.from_org(org).permits("salvador", "paco", resource))
+        self.assertFalse(Scope.from_org(org).permits("brigitte", "pepa", {**resource, "category": "category-0"}))
+        org["policies"]["security_categories"]["category-0"]["owner"] = "brigitte"
+        del org["humans"][1]["counterpart_persona"]
+        reassigned = Scope.from_org(org, default_persona="paco")
+        self.assertTrue(reassigned.permits("brigitte", "paco", resource))
+        self.assertFalse(reassigned.permits("salvador", "paco", resource))
+        self.assertNotEqual(scope.revision, reassigned.revision)
         org["actors"][0]["actor_exceptions"] = ["category-0"]
         org["policies"]["security_categories"]["category-0"]["owner"] = "unknown"
         with self.assertRaises(ValueError):
+            Scope.from_org(org, default_persona="paco")
+        del org["policies"]["security_categories"]["category-0"]["owner"]
+        fallback = Scope.from_org(org, default_persona="paco")
+        self.assertTrue(fallback.permits("salvador", "pepa", resource))
+        with self.assertRaises(ValueError):
             Scope.from_org(org)
+        del org["humans"][0]["counterpart_persona"]
+        with self.assertRaises(ValueError):
+            Scope.from_org(org, default_persona="paco")
+        del org["policies"]["security_categories"]["category-0"]
+        with self.assertRaises(ValueError):
+            Scope.from_org(org, default_persona="paco")
 
 
 if __name__ == "__main__":
