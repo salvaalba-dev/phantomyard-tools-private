@@ -136,6 +136,40 @@ class ScopeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Scope.from_org(org)
 
+    def test_absolute_actor_exception_only_for_its_named_human_counterpart(self):
+        org = {"organization": {"id": "example"},
+               "roles": [{"id": "ceo", "access_level": "executive"},
+                         {"id": "staff", "access_level": "operational", "security_exceptions": ["category-3", "category-4"]}],
+               "actors": [{"id": "paco", "role": "ceo", "actor_exceptions": ["category-0"]},
+                          {"id": "pepa", "role": "staff"}],
+               "humans": [{"id": "salvador", "name": "Salvador", "counterpart_persona": "paco"},
+                          {"id": "brigitte", "counterpart_persona": "pepa"}],
+               "policies": {"access_levels": {"executive": {"categories": [1, 2, 3]}, "operational": {"categories": [1, 2]}},
+                            "security_categories": {"category-0": {"scope": "actor", "owner": "Salvador"},
+                                                    "category-1": {}, "category-2": {}, "category-3": {},
+                                                    "category-4": {}, "category-4-project": {}}}}
+        scope = Scope.from_org(org)
+        resource = {"organization": "example", "category": "category-4-project", "project": "any-project", "secret": False}
+        self.assertTrue(scope.permits("salvador", "paco", resource))
+        self.assertTrue(scope.permits("salvador", "paco", {**resource, "category": "category-0"}))
+        self.assertFalse(scope.permits("brigitte", "paco", resource))
+        self.assertFalse(scope.permits("brigitte", "pepa", resource))
+        self.assertFalse(scope.permits("salvador", "paco", {**resource, "organization": "other"}))
+        self.assertFalse(scope.permits("salvador", "paco", {**resource, "secret": True}))
+        self.assertFalse(scope.permits("salvador", "paco", {**resource, "category": "undeclared"}))
+        self.assertIn("category-3", scope.human_grants("brigitte")["categories"])
+        self.assertIn("category-4", scope.human_grants("brigitte")["categories"])
+        del org["humans"][0]["counterpart_persona"]
+        self.assertFalse(Scope.from_org(org).permits("salvador", "paco", resource))
+        org["humans"][0]["counterpart_persona"] = "paco"
+        org["actors"][0]["actor_exceptions"] = []
+        org["roles"][0]["security_exceptions"] = ["category-0"]
+        self.assertFalse(Scope.from_org(org).permits("salvador", "paco", resource))
+        org["actors"][0]["actor_exceptions"] = ["category-0"]
+        org["policies"]["security_categories"]["category-0"]["owner"] = "unknown"
+        with self.assertRaises(ValueError):
+            Scope.from_org(org)
+
 
 if __name__ == "__main__":
     unittest.main()

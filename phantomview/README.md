@@ -369,8 +369,8 @@ and worker-side terminal events are needed before claiming stronger guarantees.
 `assistant_scope.py` is a tested, inactive policy primitive for a future
 verified-channel integration. Humans inherit category and project grants from
 their explicitly linked persona; no second human ACL is maintained. It requires
-explicit non-secret classification, denies category
-0, and never infers access from numeric category order or job titles. It does
+explicit non-secret classification, and never infers access from numeric category
+order or job titles. The actor-scoped category-0 exception is described below. It does
 not authenticate a sender, load persona memory, grant new knowledge access or
 change JEV. The current signer supplies no verified human recipient; an existing
 dashboard link therefore cannot establish the human identity required by this
@@ -382,7 +382,8 @@ login is required if the verified channel context is securely carried forward.
 
 `Scope.from_org()` derives the private policy directly from an organization
 source, resolving `actors[].role` through `roles[].access_level` and
-`policies.access_levels`. Numeric categories become exact declared labels such
+`policies.access_levels`, plus `roles[].security_exceptions` and
+`actors[].actor_exceptions`. Numeric categories become exact declared labels such
 as `category-2`. An actor with a missing role or access level receives no grants.
 Unknown category labels and duplicate principal IDs reject the policy. The
 policy revision changes when effective grants or counterpart bindings change;
@@ -413,4 +414,18 @@ implicitly grant any category. A project resource requires both its category
 and its project. The reader does not receive raw channel identifiers from this
 policy resolver. Existing legacy link issuance remains unchanged until the
 verified-channel adapter is implemented and explicitly activated.
+
+Category 0 is an explicit organization-wide information exception for its named
+human owner through that human's exact counterpart. It requires all of:
+`policies.security_categories.category-0.scope: actor`, an unambiguous declared
+human `owner`, `category-0` in the counterpart's **actor** exceptions, and an
+explicit human-to-persona binding. Owner references resolve by exact human ID or
+exact case-insensitive name, never fuzzy matching. Ambiguous or unknown owners
+reject the policy. A category-0 entry in a role or access level alone does not
+activate the exception. For this pair, all declared organization categories and
+projects are eligible; another organization or an undeclared category is not.
+Unbound humans and other counterparts cannot inherit the exception. This enables
+information scope only: it does not add tools, administration or credential
+disclosure. Explicit secret-resource exclusions still apply. Ordinary category-4
+role exceptions do not imply access to every project.
 
