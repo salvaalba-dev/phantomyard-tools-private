@@ -113,12 +113,12 @@ class SnapshotReader:
     def refresh(self):
         return self.data()
 
-    def read_note(self, ident):
+    def read_note(self, ident, snapshot=None):
         import json
         import re
         if not re.fullmatch(r"[a-f0-9]{64}", ident):
             raise ValueError("Nota no válida")
-        state = self.data()
+        state = {"snapshot": snapshot} if snapshot is not None else self.data()
         owner = next((a["key"] for a in state["snapshot"].get("actors", [])
                       if any(n.get("id") == ident for n in a.get("knowledge", []))), None)
         if not owner:

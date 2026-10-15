@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {globalSearch,normalizeSearch}=require('./search.js');
+const snapshot={departments:[{id:'operations',key:'au:departments:operations',org:'au',name:'Operations'}],roles:[{id:'project',key:'au:roles:project',org:'au',department:'operations',name:'Project lead',description:'Proyecto ALMAPONIA',functions:['proyecto ALMAPONIA','seguimiento_campo']}],actors:[{key:'au:actors:alma',id:'alma',org:'au',role:'project',description:'ALMAPONIA',functions:['proyecto ALMAPONIA'],tool_accounts:{email:'hidden-contact-test'},knowledge:[{id:'note1',title:'ALMAPONIA handbook'},{id:'note2',title:'ALMAPONIA confidential',confidential:true}]}],documents:[{urn:'doc1',org:'au',slug:'ALMAPONIA plan'},{urn:'private',slug:'ALMAPONIA secrets',classification:'confidential'}]};
+const keys=q=>globalSearch(snapshot,q).map(r=>r.key);
+assert.deepEqual(keys('ALMAPONIA'),keys('álmaponia'));
+assert.deepEqual(keys('ALMAPONIA'),keys('almaponía'));
+assert.ok(keys('almapona').includes('au:roles:project'));
+assert.ok(keys('alma-ponia').includes('doc1'));
+assert.ok(keys('almaponia').includes('au:departments:operations'));
+assert.ok(!keys('almaponia').includes('private'));
+assert.ok(!keys('almaponia').includes('note2'));
+assert.equal(globalSearch(snapshot,'hidden-contact-test').length,0);
+assert.deepEqual(globalSearch(snapshot,'   '),[]);
+assert.deepEqual(globalSearch(snapshot,'almaponia'),globalSearch(snapshot,'almaponia'));
+assert.equal(normalizeSearch('<SCRIPT>Álmaponía</SCRIPT>'),'script almaponia script');
+console.log('Global search: normalized and approximate matching, stable ordering, cross-entity results, confidential exclusions, no contact indexing.');

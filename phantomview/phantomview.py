@@ -59,6 +59,26 @@ def text(value):
     return value[:4000] if isinstance(value, str) else ""
 
 
+def search_policy(item):
+    """Honor explicit search exclusions; do not infer permissions from category IDs."""
+    return (item.get("searchable") is not False and item.get("confidential") is not True
+            and str(item.get("visibility", item.get("classification", ""))).lower()
+            not in {"private", "confidential", "restricted", "secret"})
+
+
+def note_search_policy(content):
+    if not content.startswith('---\n') and not content.startswith('---\r\n'):
+        return True
+    front = re.split(r"(?m)^---\s*$", content[:16000], maxsplit=2)
+    if len(front) < 3:
+        return False
+    try:
+        metadata = yaml.safe_load(front[1]) or {}
+        return isinstance(metadata, dict) and search_policy(metadata)
+    except yaml.YAMLError:
+        return False
+
+
 def strings(value):
     return [text(x) for x in value[:100] if isinstance(x, str)] if isinstance(value, list) else []
 
@@ -228,7 +248,8 @@ class Observatory:
                                            ("roles", roles, ("id", "name", "department", "reports_to", "reports_to_human", "description", "access_level"))):
                 for item in mapping.values():
                     clean = {key: text(item.get(key)) for key in fields}
-                    clean.update(org=oid, key=f"{oid}:{kind}:{item['id']}", source=source)
+                    clean.update(org=oid, key=f"{oid}:{kind}:{item['id']}", source=source,
+                                 searchable=search_policy(item))
                     if kind == "roles":
                         clean["functions"] = strings(item.get("functions"))
                         clean["security_exceptions"] = strings(item.get("security_exceptions"))
@@ -268,6 +289,7 @@ class Observatory:
                 key = f"{oid}:actors:{aid}"
                 clean = {"id": aid, "key": key, "org": oid, "role": text(actor.get("role")),
                          "department": text(role.get("department")), "description": text(role.get("description")),
+                         "searchable": search_policy(actor) and search_policy(role),
                          "tools": strings(actor.get("tools")), "excluded": strings(actor.get("tools_excluded")),
                          "exceptions": strings(actor.get("actor_exceptions")), "source": source,
                          "installed": None, "runtime": "unknown", "integrations": [], "knowledge": [],
@@ -342,7 +364,8 @@ class Observatory:
                                                    "content": content, "truncated": len(raw) > 2_000_000,
                                                    "modified_at": datetime.fromtimestamp(note.stat().st_mtime, timezone.utc).isoformat()}
                                         self.note_payloads[ident] = payload
-                                        entry.update(id=ident, bytes=note.stat().st_size, modified_at=payload["modified_at"], truncated=payload["truncated"])
+                                        entry.update(id=ident, bytes=note.stat().st_size, modified_at=payload["modified_at"], truncated=payload["truncated"],
+                                                     searchable=clean["searchable"] and note_search_policy(content))
                                     except OSError:
                                         entry["unavailable"] = "Nota temporalmente no disponible"
                                 clean["knowledge"].append(entry)
@@ -375,7 +398,8 @@ class Observatory:
                 result["documents"].append({"org": oid, "kind": text(node.get("kind")), "urn": text(node.get("urn")),
                     "slug": text(node.get("slug")), "parent": text(node.get("parent")) or parent_urns.get(text(node.get("parentMac")), ""), "owners": strings(node.get("owners")),
                     "category": node.get("category") if isinstance(node.get("category"), (int, str)) else None,
-                    "location": text(node.get("location")), "source": str(Path(filename).resolve()), "integrity": "Sin comprobar"})
+                    "location": text(node.get("location")), "source": str(Path(filename).resolve()), "integrity": "Sin comprobar",
+                    "searchable": search_policy(node)})
             result["sources"].append({"kind": "documents", "path": str(Path(filename).resolve()), "checked_at": now()})
         if config.get("procedures_file"):
             procedures = rows(read_source(config["procedures_file"]))
@@ -475,7 +499,7 @@ class Observatory:
                     "last_attempt": self.last_attempt, "error": self.last_error, "config": copy.deepcopy(self.config),
                     "software_status": self.software_status}
 
-    def read_note(self, ident):
+    def read_note(self, ident, snapshot=None):
         if not re.fullmatch(r"[a-f0-9]{64}", ident):
             raise ValueError("Nota no válida")
         with self.lock:
@@ -575,6 +599,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed():
             return self.send(403, {"error": "Origen no permitido"})
         path = urlparse(self.path).path
+        if path == "/api/phantombot/status":
+            return self.bot_version_request()
         if path.startswith("/api/assistant/"):
             return self.assistant_request("GET")
         if path == "/api/access-info":
@@ -605,7 +631,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, self.server.observatory.data())
             except (ValueError, OSError):
                 return self.send(503, {"error": "Índice temporalmente no disponible"})
-        static = {"/consultation-ui.js": ("consultation-ui.js", "text/javascript; charset=utf-8"), "/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+        static = {"/search.js": ("search.js", "text/javascript; charset=utf-8"), "/version-ui.js": ("version-ui.js", "text/javascript; charset=utf-8"), "/consultation-ui.js": ("consultation-ui.js", "text/javascript; charset=utf-8"), "/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8"), "/review.js": ("review.js", "text/javascript; charset=utf-8"), "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"), "/assistant.js": ("assistant.js", "text/javascript; charset=utf-8")}
         if path not in static:
             return self.send(404, {"error": "No encontrado"})
@@ -622,6 +648,10 @@ class Handler(BaseHTTPRequestHandler):
             if length < 0 or length > 64000:
                 return self.send(413, {"error": "Petición demasiado grande"})
             body = json.loads(self.rfile.read(length) or b"{}")
+            if urlparse(self.path).path == "/api/search":
+                return self.search_request(body)
+            if urlparse(self.path).path == "/api/phantombot/check" and body == {}:
+                return self.bot_version_request(force=True)
             if urlparse(self.path).path == "/api/sync":
                 return self.send(200, self.server.observatory.refresh())
             if urlparse(self.path).path == "/api/config":
@@ -657,6 +687,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"ok": True}, cookie=gate.cookie(session))
             if not self.authenticated():
                 return self.send(401, {"error": "Pide un enlace temporal a la persona responsable"})
+            if parsed.path == "/api/search":
+                return self.search_request(body)
+            if parsed.path == "/api/phantombot/check" and body == {}:
+                return self.bot_version_request(force=True)
             if parsed.path.startswith("/api/assistant/"):
                 return self.assistant_request("POST", body)
             if parsed.path == "/api/logout":
@@ -669,6 +703,31 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(401, {"error": "Enlace o petición inválidos, caducados o ya utilizados"})
         except (OSError, TypeError):
             return self.send(503, {"error": "Servicio temporalmente no disponible"})
+
+    def bot_version_request(self, force=False):
+        if not self.authenticated():
+            return self.send(401, {"error": "Session required"})
+        parsed = urlparse(self.path)
+        if parsed.query or parsed.fragment:
+            return self.send(400, {"error": "Unexpected version request parameters"})
+        monitor = getattr(self.server, "bot_version_monitor", None)
+        if not monitor:
+            return self.send(200, {"status": "unknown", "error": "not-configured"})
+        return self.send(200, monitor.status(force))
+
+    def search_request(self, body):
+        if not self.authenticated():
+            return self.send(401, {"error": "Session required"})
+        parsed = urlparse(self.path)
+        if parsed.query or parsed.fragment or set(body) != {"query"}:
+            return self.send(400, {"error": "Invalid search request"})
+        try:
+            snapshot = self.server.observatory.data()["snapshot"]
+            return self.send(200, self.server.knowledge_search.search(snapshot, body["query"], self.server.observatory.read_note))
+        except (ValueError, TypeError, KeyError):
+            return self.send(400, {"error": "Invalid search query"})
+        except OSError:
+            return self.send(503, {"error": "Search index temporarily unavailable"})
 
     def assistant_request(self, method, body=None):
         # The existing cookie and exact-origin boundary authorize consultations.
@@ -708,6 +767,15 @@ def serve(obs, port, open_browser, gate=None):
     server.restart_requested = False
     server.observatory = obs
     server.gate = gate
+    from global_search import KnowledgeIndex
+    server.knowledge_search = KnowledgeIndex()
+    server.bot_version_monitor = None
+    if os.environ.get("PHANTOMVIEW_BOT_VERSION_CONFIG"):
+        from bot_version import Monitor
+        try:
+            server.bot_version_monitor = Monitor(read_source(Path(os.environ["PHANTOMVIEW_BOT_VERSION_CONFIG"])))
+        except (OSError, ValueError, KeyError, TypeError):
+            print("PhantomBot version observer not configured", flush=True)
     server.assistant_client = None
     if gate and os.environ.get("PHANTOMVIEW_ASSISTANT_CONFIG"):
         from consultation import BridgeClient

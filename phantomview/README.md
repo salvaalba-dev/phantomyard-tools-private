@@ -253,6 +253,40 @@ cross-origin embedding API to open that conversation automatically. No chat
 messages are sent by PhantomView, and dashboard source data stays read-only.
 # Analysis assistant pilot
 
+## Global search and PhantomBot version trigger
+
+The header shows `PhantomBot installed / available` for the configured binary and
+the latest official stable release. Set `PHANTOMVIEW_BOT_VERSION_CONFIG` to a
+root-owned JSON file containing an absolute `executable` and `shared: true` when
+the binary is shared. The authenticated observer executes only `--version`,
+checks GitHub's official stable release API hourly (manual checks are throttled
+to one per minute), and re-observes the binary every 15 seconds. Unknown or failed
+checks never claim the installation is current. This is the on-disk binary
+version; running daemons may still need a separately planned restart. The pinned
+analysis runtime is separate. The trigger opens release notes and a copyable
+official update command for a human administrator to execute in the terminal;
+the web process gains no install, restart, shell or sudo capability. Existing
+host update schedules are unchanged.
+
+Non-empty dashboard searches use a global results view independent of the
+selected section, organization and department. Matching is deterministic,
+case/accent/separator insensitive, with one-character approximate matching for
+words of at least five characters. Results cover organization/department/role
+descriptions, personas and responsibilities, declared public interfaces, tool
+names, KB titles and readable KB text, document metadata, procedures, installation
+components and findings in the authorized export only. KB search uses the existing
+authenticated note reader, caches by note identity and search policy, returns only
+bounded excerpts, and flags unavailable, truncated or over-budget results. It
+never follows arbitrary source paths or connects to Drive. The KB text budget is
+64 MB per authorized index; visible results are capped at 100. Source fields marked `searchable: false`, `confidential: true`, or
+`visibility`/`classification` of private/confidential/restricted/secret are
+excluded by the collector; KB front matter supports the same exclusions. Numeric document categories are not
+assumed to be access levels. Search adds no raw source filesystem, Drive, credential, external document-body
+or conversation-history access. It searches only the KB copies already available
+through the note reader. This exclusion is not a new ACL:
+the existing authenticated export remains the data boundary. JEV remains active
+for actual model consultations; deterministic search sends no model requests.
+
 PhantomView can host an analysis-only sidebar and a finding-specific **Prompt
 helper**. The UI adapts the AU website widget's message/polling pattern, but uses
 the dashboard's existing temporary session instead of a public visitor token or

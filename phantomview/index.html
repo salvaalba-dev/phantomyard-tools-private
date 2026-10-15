@@ -14,7 +14,7 @@
 <p id="assistant-status" class="assistant-help" role="status"></p>
 </section>
 <div class="sidebar-bottom"><span class="dot"></span> <span data-i18n="Local and private information">Información local y privada</span><small id="version">v0.1.0</small><button id="setup-side" class="text-button" data-i18n="Configure setup ↗">Configurar instalación ↗</button><a href="https://phantombot.bot/" target="_blank" rel="noreferrer">PhantomBot ↗</a></div></aside>
-<div class="shell"><header><div class="breadcrumbs">Phantomyard <span>/</span> <b id="breadcrumb" data-i18n="Organization">Organización</b></div><div class="header-actions"><span id="mode" class="badge amber">EJEMPLO</span><label class="global-language"><select id="global-language" data-i18n-aria="Language" aria-label="Idioma"><option value="en">English</option><option value="es">Español</option></select></label><button id="logout" class="button" hidden data-i18n="Log out">Cerrar sesión</button><button id="refresh" class="button" data-i18n="↻ Refresh now">↻ Actualizar ahora</button></div></header>
+<div class="shell"><header><div class="breadcrumbs">Phantomyard <span>/</span> <b id="breadcrumb" data-i18n="Organization">Organización</b></div><div class="header-actions"><button id="mode" type="button" class="badge amber">PhantomBot ? / ?</button><label class="global-language"><select id="global-language" data-i18n-aria="Language" aria-label="Idioma"><option value="en">English</option><option value="es">Español</option></select></label><button id="logout" class="button" hidden data-i18n="Log out">Cerrar sesión</button><button id="refresh" class="button" data-i18n="↻ Refresh now">↻ Actualizar ahora</button></div></header>
 <main><div id="error" role="alert" hidden></div><section class="page-head"><div><div class="eyebrow" data-i18n="YOUR ORGANIZATION AT A GLANCE">TU ORGANIZACIÓN, A LA VISTA</div><h1 id="title" data-i18n-html="Everything connected.<br>Everything in context.">Todo conectado.<br>Todo en contexto.</h1><p id="subtitle" data-i18n="People, responsibilities and resources: explore how they fit.">Personas, responsabilidades y recursos: explora cómo encajan.</p></div><div class="freshness"><span class="dot"></span><b id="sync-status" data-i18n="Reading sources">Leyendo fuentes</b><small id="sync-time"></small></div></section>
 <section class="controls"><label><span data-i18n="Organization">Organización</span><select id="org-filter"></select></label><label><span data-i18n="Department">Departamento</span><select id="dept-filter"></select></label><label class="search"><span data-i18n="Search this view">Buscar en esta vista</span><input id="search" data-i18n-placeholder="Persona, role, tool or document…" placeholder="Persona, rol, herramienta o documento…" autocomplete="off"></label></section>
 <div id="content" aria-live="polite"></div>
@@ -28,4 +28,6 @@
 <script src="/review.js" defer></script>
 <script src="/assistant.js" defer></script>
 <script src="/consultation-ui.js" defer></script>
-<script src="/app.js" defer></script></body></html>
+<script src="/search.js" defer></script>
+<script src="/app.js" defer></script>
+<script src="/version-ui.js" defer></script></body></html>
