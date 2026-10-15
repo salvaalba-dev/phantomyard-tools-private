@@ -410,6 +410,10 @@ for the inspected native channel boundaries, the inactive recipient/session
 adapter, a read-only matrix preview, real-signature tests and the remaining
 PhantomOrg schema/transport/retrieval work. No extended human access is enabled
 by these modules or by the existing dashboard link.
+The [private PhantomOrg compatibility patch](PHANTOMORG_HUMAN_ACCESS.md) now
+provides the proposed counterpart/project fields with coordinated schema,
+typed-model, reference and compiler tests. It is not applied to the live setup;
+the unpatched upstream release still does not accept these extensions.
 
 `assistant_scope.py` is a tested, inactive policy primitive for a future
 verified-channel integration. Ordinary humans inherit category and project grants

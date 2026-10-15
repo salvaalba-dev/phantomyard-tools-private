@@ -1,0 +1,665 @@
+--- a/phantomorg/README.md
++++ b/phantomorg/README.md
+@@ -14,6 +14,50 @@
+ RBAC/ABAC/PBAC) and the development backlog.
+ 
+ ## Install
++
++### Private human-access extension
++
++This private development patch adds optional `humans[].counterpart_persona` and
++`policies.phantomview.project_grants` metadata. These fields are not available in
++the unpatched upstream release. Omit a counterpart for an unbound human; a
++counterpart must name an existing actor and cannot be assigned to two humans.
++An email-only human can have a declared counterpart without being authenticated
++for dashboard access. `reports_to_human` remains a reporting relationship.
++
++```yaml
++humans:
++  - id: alice
++    counterpart_persona: coordinator
++    telegram_user_id: 123456789
++  - id: blair
++    counterpart_persona: treasurer
++    email: blair@example.org
++policies:
++  phantomview:
++    project_grants:
++      coordinator: [example-project]
++```
++
++These snippets extend the usual complete organization document. Project grants
++are exact identifiers assigned to existing actors; no project is inferred from
++a category number, reporting line or job title. Humans inherit their explicit
++counterpart's ordinary information scope in the PhantomView policy resolver.
++The patch also preserves the optional `organization.display_name` already used
++by the private dashboard; it is a label and never changes organization identity.
++
++When the optional `policies.phantomview` block is present, validation requires a
++declared `category-0`. Its explicit `owner` must resolve by case-insensitive human
++ID or name to exactly one registered human, who need not have a counterpart.
++Omitting the owner leaves resolution to PhantomView's verified installation
++default and its unique human counterpart. The compiler never guesses that
++default. Existing actor-category semantics remain unchanged for other consumers.
++
++This metadata does not authenticate channel senders, enable the expanded
++assistant, add tools, disclose credentials or change channel allowlists. The
++native verified-channel integration, per-request authorization and classified
++retrieval are separate activation requirements. Normal `po validate` checks the
++new shape and references; the typed model preserves the fields, and `HUMANS.md`
++shows counterparts when present. Legacy registries retain their existing format.
+ 
+ Installation is manual on all supported OSes (Linux, macOS, Windows). The
+ CLI itself and `po update` are OS-agnostic — Python 3.10+ and git are the
+--- a/phantomorg/phantomorg/spec/model.py
++++ b/phantomorg/phantomorg/spec/model.py
+@@ -18,6 +18,7 @@
+     sector: str
+     languages: list[str]
+     default_language: str | None = None
++    display_name: str | None = None
+ 
+     @classmethod
+     def from_dict(cls, d: dict) -> Organization:
+@@ -27,6 +28,7 @@
+             sector=d["sector"],
+             languages=list(d["languages"]),
+             default_language=d.get("default_language"),
++            display_name=d.get("display_name"),
+         )
+ 
+ 
+@@ -124,6 +126,7 @@
+     telegram_user_id: int | None = None
+     npub: str | None = None
+     email: str | None = None
++    counterpart_persona: str | None = None
+ 
+     @classmethod
+     def from_dict(cls, d: dict) -> Human:
+@@ -134,6 +137,7 @@
+             telegram_user_id=d.get("telegram_user_id"),
+             npub=d.get("npub"),
+             email=d.get("email"),
++            counterpart_persona=d.get("counterpart_persona"),
+         )
+ 
+ 
+@@ -152,9 +156,17 @@
+ 
+ 
+ @dataclass
++class PhantomViewPolicy:
++    """Information-scope metadata; never an authentication or execution grant."""
++
++    project_grants: dict[str, list[str]] = field(default_factory=dict)
++
++
++@dataclass
+ class Policies:
+     access_levels: dict[str, AccessLevel]
+     security_categories: dict[str, SecurityCategory]
++    phantomview: PhantomViewPolicy | None = None
+ 
+     @classmethod
+     def from_dict(cls, d: dict) -> Policies:
+@@ -171,7 +183,19 @@
+             )
+             for k, v in d.get("security_categories", {}).items()
+         }
+-        return cls(access_levels=levels, security_categories=cats)
++        view = d.get("phantomview")
++        return cls(
++            access_levels=levels,
++            security_categories=cats,
++            phantomview=PhantomViewPolicy(
++                project_grants={
++                    actor: list(projects)
++                    for actor, projects in view.get("project_grants", {}).items()
++                }
++            )
++            if view is not None
++            else None,
++        )
+ 
+ 
+ @dataclass
+--- a/phantomorg/phantomorg/spec/schema.json
++++ b/phantomorg/phantomorg/spec/schema.json
+@@ -50,6 +50,10 @@
+             "string",
+             "null"
+           ]
++        },
++        "display_name": {
++          "type": "string",
++          "minLength": 1
+         }
+       }
+     },
+@@ -277,8 +281,108 @@
+           "propertyNames": {
+             "pattern": "^[a-z0-9][a-z0-9_-]*$"
+           }
+-        }
+-      }
++        },
++        "phantomview": {
++          "type": "object",
++          "additionalProperties": false,
++          "description": "Private PhantomView information policy; never authenticates a human or grants tools.",
++          "properties": {
++            "project_grants": {
++              "type": "object",
++              "propertyNames": {
++                "type": "string",
++                "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                "maxLength": 64,
++                "not": {
++                  "enum": [
++                    "con",
++                    "prn",
++                    "aux",
++                    "nul",
++                    "com1",
++                    "com2",
++                    "com3",
++                    "com4",
++                    "com5",
++                    "com6",
++                    "com7",
++                    "com8",
++                    "com9",
++                    "lpt1",
++                    "lpt2",
++                    "lpt3",
++                    "lpt4",
++                    "lpt5",
++                    "lpt6",
++                    "lpt7",
++                    "lpt8",
++                    "lpt9"
++                  ]
++                }
++              },
++              "additionalProperties": {
++                "type": "array",
++                "items": {
++                  "type": "string",
++                  "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                  "maxLength": 64,
++                  "not": {
++                    "enum": [
++                      "con",
++                      "prn",
++                      "aux",
++                      "nul",
++                      "com1",
++                      "com2",
++                      "com3",
++                      "com4",
++                      "com5",
++                      "com6",
++                      "com7",
++                      "com8",
++                      "com9",
++                      "lpt1",
++                      "lpt2",
++                      "lpt3",
++                      "lpt4",
++                      "lpt5",
++                      "lpt6",
++                      "lpt7",
++                      "lpt8",
++                      "lpt9"
++                    ]
++                  }
++                },
++                "uniqueItems": true
++              }
++            }
++          }
++        }
++      },
++      "allOf": [
++        {
++          "if": {
++            "required": [
++              "phantomview"
++            ]
++          },
++          "then": {
++            "properties": {
++              "security_categories": {
++                "properties": {
++                  "category-0": {
++                    "properties": {
++                      "owner": {
++                        "type": "string"
++                      }
++                    }
++                  }
++                }
++              }
++            }
++          }
++        }
++      ]
+     },
+     "escalation_matrix": {
+       "type": "array",
+@@ -456,6 +560,37 @@
+               "null"
+             ],
+             "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
++          },
++          "counterpart_persona": {
++            "type": "string",
++            "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++            "maxLength": 64,
++            "not": {
++              "enum": [
++                "con",
++                "prn",
++                "aux",
++                "nul",
++                "com1",
++                "com2",
++                "com3",
++                "com4",
++                "com5",
++                "com6",
++                "com7",
++                "com8",
++                "com9",
++                "lpt1",
++                "lpt2",
++                "lpt3",
++                "lpt4",
++                "lpt5",
++                "lpt6",
++                "lpt7",
++                "lpt8",
++                "lpt9"
++              ]
++            }
+           }
+         }
+       }
+@@ -465,4 +600,4 @@
+       "description": "Opaque PhantomDocs namespace block (owned by phantomdocs, tolerated by PhantomOrg)"
+     }
+   }
+-}
+\ No newline at end of file
++}
+--- a/phantomorg/phantomorg/spec/shape_validator.py
++++ b/phantomorg/phantomorg/spec/shape_validator.py
+@@ -235,7 +235,7 @@
+     "communication",
+     "documents",
+ }
+-_ORG_KEYS = {"id", "name", "sector", "languages", "default_language"}
++_ORG_KEYS = {"id", "name", "sector", "languages", "default_language", "display_name"}
+ _DEPARTMENT_KEYS = {"id", "name", "access_policy", "parent"}
+ _ROLE_KEYS = {
+     "id",
+@@ -267,8 +267,9 @@
+     "telegram_user_id",
+     "npub",
+     "email",
++    "counterpart_persona",
+ }
+-_POLICIES_KEYS = {"access_levels", "security_categories"}
++_POLICIES_KEYS = {"access_levels", "security_categories", "phantomview"}
+ _ACCESS_LEVEL_KEYS = {"label", "categories"}
+ _SECURITY_CATEGORY_KEYS = {"label", "scope", "owner", "parent"}
+ _ESCALATION_KEYS = {"from", "to", "condition", "cross_department"}
+@@ -326,6 +327,10 @@
+         _require(org, key, "organization")
+     _require_id(org["id"], "organization.id")
+     _require_type(org["name"], str, "organization.name")
++    if "display_name" in org:
++        _require_type(org["display_name"], str, "organization.display_name")
++        if not org["display_name"]:
++            raise ShapeError("organization.display_name: cannot be empty")
+     _require_type(org["sector"], str, "organization.sector")
+     _require_string_list(org["languages"], "organization.languages")
+     if not org["languages"]:
+@@ -447,6 +452,10 @@
+             _require_id(h["id"], f"humans[{i}].id")
+             _require_optional_type(h.get("name"), str, f"humans[{i}].name")
+             _require_optional_type(h.get("role"), str, f"humans[{i}].role")
++            if "counterpart_persona" in h:
++                _require_id(
++                    h["counterpart_persona"], f"humans[{i}].counterpart_persona"
++                )
+             _require_optional_type(
+                 h.get("telegram_user_id"), int, f"humans[{i}].telegram_user_id"
+             )
+@@ -466,6 +475,23 @@
+ 
+     policies = _require_mapping(raw["policies"], "policies")
+     _reject_unknown_keys(policies, _POLICIES_KEYS, "policies")
++    if "phantomview" in policies:
++        view = _require_mapping(policies["phantomview"], "policies.phantomview")
++        _reject_unknown_keys(view, {"project_grants"}, "policies.phantomview")
++        grants = _require_mapping(
++            view.get("project_grants", {}), "policies.phantomview.project_grants"
++        )
++        for actor, projects in grants.items():
++            _require_id(actor, "policies.phantomview.project_grants actor")
++            _require_list(projects, f"policies.phantomview.project_grants.{actor}")
++            for project in projects:
++                _require_id(
++                    project, f"policies.phantomview.project_grants.{actor} project"
++                )
++            if len(set(projects)) != len(projects):
++                raise ShapeError(
++                    f"policies.phantomview.project_grants.{actor}: duplicate project"
++                )
+     for key in ["access_levels", "security_categories"]:
+         _require(policies, key, "policies")
+ 
+@@ -516,6 +542,10 @@
+         _require_optional_type(
+             cat.get("owner"), str, f"policies.security_categories.{cat_id}.owner"
+         )
++        if "phantomview" in policies and cat_id == "category-0" and "owner" in cat:
++            _require_type(
++                cat["owner"], str, "policies.security_categories.category-0.owner"
++            )
+         _require_optional_type(
+             cat.get("parent"), str, f"policies.security_categories.{cat_id}.parent"
+         )
+--- a/phantomorg/phantomorg/validator/refs.py
++++ b/phantomorg/phantomorg/validator/refs.py
+@@ -164,6 +164,59 @@
+     access_level_ids = set(spec.policies.access_levels.keys())
+     security_category_ids = set(spec.policies.security_categories.keys())
+ 
++    actor_ids = {a.id for a in spec.actors}
++    seen_counterparts: dict[str, str] = {}
++    seen_human_channels: dict[tuple[str, object], str] = {}
++    for human in spec.humans:
++        counterpart = human.counterpart_persona
++        if counterpart is not None:
++            if counterpart not in actor_ids:
++                problems.append(
++                    f"humans.{human.id}: counterpart_persona '{counterpart}' does not exist"
++                )
++            if counterpart in seen_counterparts:
++                problems.append(
++                    f"humans.{human.id}: counterpart_persona is already assigned to humans.{seen_counterparts[counterpart]}"
++                )
++            seen_counterparts[counterpart] = human.id
++        for channel in ("telegram_user_id", "npub"):
++            identity = getattr(human, channel)
++            if identity is not None:
++                key = (channel, identity)
++                if key in seen_human_channels:
++                    problems.append(
++                        f"humans.{human.id}: {channel} duplicated with humans.{seen_human_channels[key]}"
++                    )
++                seen_human_channels[key] = human.id
++
++    view = spec.policies.phantomview
++    if view is not None:
++        for actor in view.project_grants:
++            if actor not in actor_ids:
++                problems.append(
++                    f"policies.phantomview.project_grants: actor '{actor}' does not exist"
++                )
++        zero = spec.policies.security_categories.get("category-0")
++        if zero is None:
++            problems.append("policies.phantomview: category-0 must be declared")
++        elif zero.owner is not None:
++            owner = zero.owner.strip().casefold()
++            matches = [
++                h.id
++                for h in spec.humans
++                if owner
++                and (
++                    h.id.casefold() == owner
++                    or (h.name or "").strip().casefold() == owner
++                )
++            ]
++            if len(matches) != 1:
++                problems.append(
++                    "policies.phantomview: category-0 owner must resolve to exactly one registered human"
++                )
++        # Missing owner is resolved by the reader against its verified installation
++        # default. This validator never guesses a default from a role or job title.
++
+     # departments: parent must exist (or be null)
+     for d in spec.departments:
+         if d.parent is not None and d.parent not in dept_ids:
+--- a/phantomorg/phantomorg/compiler/humans.py
++++ b/phantomorg/phantomorg/compiler/humans.py
+@@ -41,13 +41,20 @@
+         "| id | name | role | telegram_user_id | npub | email |",
+         "|---|---|---|---|---|---|",
+     ]
++    show_counterparts = any(h.counterpart_persona is not None for h in spec.humans)
++    if show_counterparts:
++        lines[-2] = (
++            "| id | name | role | telegram_user_id | npub | email | counterpart_persona |"
++        )
++        lines[-1] = "|---|---|---|---|---|---|---|"
+     for h in spec.humans:
+         tg = str(h.telegram_user_id) if h.telegram_user_id is not None else "—"
+         npub = h.npub if h.npub else "—"
+         email = h.email if h.email else "—"
+-        lines.append(
+-            f"| `{h.id}` | {h.name or '—'} | {h.role or '—'} | {tg} | `{npub}` | {email} |"
+-        )
++        row = f"| `{h.id}` | {h.name or '—'} | {h.role or '—'} | {tg} | `{npub}` | {email} |"
++        if show_counterparts:
++            row += f" `{h.counterpart_persona or '—'}` |"
++        lines.append(row)
+     return "\n".join(lines) + "\n"
+ 
+ 
+--- /dev/null
++++ b/phantomorg/tests/test_human_access.py
+@@ -0,0 +1,200 @@
++"""Explicit human bindings are source metadata, never channel authentication."""
++
++import copy
++from dataclasses import asdict
++import json
++from pathlib import Path
++
++from jsonschema import Draft7Validator
++import pytest
++import yaml
++
++from phantomorg.compiler.humans import render_humans
++from phantomorg.spec.model import OrgSpec
++from phantomorg.spec.shape_validator import ShapeError, validate_shape
++from phantomorg.validator.refs import check_references
++
++ROOT = Path(__file__).parent.parent
++SCHEMA = json.loads((ROOT / "phantomorg/spec/schema.json").read_text(encoding="utf-8"))
++
++
++@pytest.fixture
++def org():
++    data = yaml.safe_load(
++        (ROOT / "organizations/verdant-aquaponics/org.yaml").read_text(encoding="utf-8")
++    )
++    data["humans"] = [
++        {
++            "id": "alice",
++            "name": "Alice",
++            "counterpart_persona": "marco",
++            "telegram_user_id": 101,
++        },
++        {
++            "id": "blair",
++            "name": "Blair",
++            "counterpart_persona": "lucia",
++            "telegram_user_id": 102,
++        },
++        {
++            "id": "chris",
++            "name": "Chris",
++            "counterpart_persona": "diego",
++            "email": "chris@example.org",
++        },
++    ]
++    data["policies"]["security_categories"]["category-0"]["owner"] = "alice"
++    data["policies"]["phantomview"] = {"project_grants": {"lucia": ["greenroot"]}}
++    return data
++
++
++def assert_shape_agrees(org, accepted):
++    assert Draft7Validator(SCHEMA).is_valid(org) is accepted
++    if accepted:
++        validate_shape(org)
++    else:
++        with pytest.raises(ShapeError):
++            validate_shape(org)
++
++
++def test_valid_matrix_is_preserved_in_typed_model_and_registry(org):
++    assert_shape_agrees(org, True)
++    model = OrgSpec.from_dict(org)
++    assert check_references(model) == []
++    assert model.humans[0].counterpart_persona == "marco"
++    assert model.humans[2].telegram_user_id is None
++    assert model.humans[2].email == "chris@example.org"
++    assert asdict(model.policies.phantomview) == {
++        "project_grants": {"lucia": ["greenroot"]}
++    }
++    assert "counterpart_persona" in render_humans(model)
++    assert "`diego`" in render_humans(model)
++
++
++@pytest.mark.parametrize(
++    "value", [None, True, 4, "", "../marco", "marco\n", "con", "a" * 65]
++)
++def test_counterpart_shape_and_schema_reject_invalid_ids(org, value):
++    org["humans"][0]["counterpart_persona"] = value
++    assert_shape_agrees(org, False)
++
++
++@pytest.mark.parametrize(
++    "value",
++    [
++        None,
++        [],
++        {"unexpected": {}},
++        {"project_grants": []},
++        {"project_grants": {"lucia": "greenroot"}},
++        {"project_grants": {"lucia": ["greenroot", "greenroot"]}},
++        {"project_grants": {"../actor": []}},
++        {"project_grants": {"lucia": ["../project"]}},
++    ],
++)
++def test_policy_shape_and_schema_reject_invalid_project_grants(org, value):
++    org["policies"]["phantomview"] = value
++    assert_shape_agrees(org, False)
++
++
++def test_omitted_fields_are_backward_compatible_and_do_not_change_legacy_registry(org):
++    del org["policies"]["phantomview"]
++    for human in org["humans"]:
++        del human["counterpart_persona"]
++    assert_shape_agrees(org, True)
++    model = OrgSpec.from_dict(org)
++    assert model.policies.phantomview is None
++    assert all(h.counterpart_persona is None for h in model.humans)
++    assert "counterpart_persona" not in render_humans(model)
++    assert check_references(model) == []
++
++
++@pytest.mark.parametrize(
++    "mutation, message",
++    [
++        (
++            lambda o: o["humans"][0].update(counterpart_persona="missing"),
++            "does not exist",
++        ),
++        (
++            lambda o: o["humans"][1].update(counterpart_persona="marco"),
++            "already assigned",
++        ),
++        (
++            lambda o: o["humans"][1].update(telegram_user_id=101),
++            "telegram_user_id duplicated",
++        ),
++        (
++            lambda o: o["policies"]["phantomview"]["project_grants"].update(missing=[]),
++            "actor 'missing'",
++        ),
++        (
++            lambda o: o["policies"]["security_categories"]["category-0"].update(
++                owner="unknown"
++            ),
++            "exactly one",
++        ),
++        (
++            lambda o: o["policies"]["security_categories"]["category-0"].update(
++                owner=""
++            ),
++            "exactly one",
++        ),
++        (lambda o: o["humans"][1].update(name="Alice"), "exactly one"),
++    ],
++)
++def test_reference_validation_rejects_ambiguous_or_missing_principals(
++    org, mutation, message
++):
++    mutation(org)
++    validate_shape(org)
++    assert any(
++        message in problem for problem in check_references(OrgSpec.from_dict(org))
++    )
++
++
++def test_independent_category_zero_owner_need_not_have_a_counterpart(org):
++    del org["humans"][0]["counterpart_persona"]
++    assert check_references(OrgSpec.from_dict(org)) == []
++    org["policies"]["security_categories"]["category-0"].pop("owner")
++    # Runtime default resolution still needs a trusted installation and unique binding.
++    assert check_references(OrgSpec.from_dict(org)) == []
++
++
++def test_explicit_null_category_zero_owner_never_triggers_runtime_fallback(org):
++    org["policies"]["security_categories"]["category-0"]["owner"] = None
++    assert_shape_agrees(org, False)
++    del org["policies"]["phantomview"]
++    assert_shape_agrees(org, True)
++
++
++def test_no_category_zero_declaration_is_rejected_only_for_opt_in_policy(org):
++    org["policies"]["security_categories"].pop("category-0")
++    org["actors"][0]["actor_exceptions"] = []
++    assert any(
++        "category-0 must be declared" in p
++        for p in check_references(OrgSpec.from_dict(org))
++    )
++    org["policies"].pop("phantomview")
++    assert check_references(OrgSpec.from_dict(org)) == []
++
++
++def test_legacy_category_owner_semantics_are_unchanged_without_opt_in(org):
++    org["policies"].pop("phantomview")
++    org["policies"]["security_categories"]["category-0"]["owner"] = "Legacy actor label"
++    before = copy.deepcopy(org)
++    assert check_references(OrgSpec.from_dict(org)) == []
++    assert org == before
++
++
++def test_existing_dashboard_display_name_is_preserved_without_changing_org_identity(
++    org,
++):
++    org["organization"]["display_name"] = "Example NGO"
++    assert_shape_agrees(org, True)
++    model = OrgSpec.from_dict(org)
++    assert model.organization.display_name == "Example NGO"
++    assert model.organization.id == "verdant-aquaponics"
++    for value in (None, "", False):
++        org["organization"]["display_name"] = value
++        assert_shape_agrees(org, False)

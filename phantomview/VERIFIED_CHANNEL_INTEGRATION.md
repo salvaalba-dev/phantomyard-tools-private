@@ -67,7 +67,10 @@ edits a source, adds an allowlist entry, issues a link or enables the assistant.
 
 The inspected PhantomOrg JSON schema and shape validator reject unknown human
 fields. `humans[].counterpart_persona` and `policies.phantomview.project_grants`
-are proposed private extensions, not supported upstream fields. Adding them only
+are private extensions, not supported upstream fields. The
+[private compatibility patch](PHANTOMORG_HUMAN_ACCESS.md) implements coordinated
+schema, model, shape and reference support and is tested separately. It has not
+been applied to AU. Adding the fields only
 to YAML would break normal validation. The schema, shape validator, model and
 reference validation must be extended together and tested before changing live
 sources. `roles[].reports_to_human` describes reporting, not an explicit
