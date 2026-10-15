@@ -160,6 +160,8 @@ class Observatory:
     def validate_config(config):
         if not isinstance(config, dict) or config.get("mode") not in ("demo", "new", "existing"):
             raise ValueError("Modo no válido")
+        if type(config.get("auto_procedures", True)) is not bool:
+            raise ValueError("Automatic procedure discovery must be a boolean")
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
                 raise ValueError(f"Configuración no válida: {key}")
@@ -219,6 +221,7 @@ class Observatory:
 
     def collect(self):
         config = self.config
+        procedure_orgs = []
         result = {"organizations": [], "departments": [], "roles": [], "actors": [],
                   "humans": [], "edges": [], "documents": [], "procedures": [], "findings": [], "sources": []}
         def finding(severity, entity, title, source):
@@ -233,6 +236,7 @@ class Observatory:
             if any(x["id"] == oid for x in result["organizations"]):
                 raise ValueError("Organización duplicada entre fuentes")
             source = str(Path(filename).resolve())
+            procedure_orgs.append((org, source))
             result["sources"].append({"kind": "org", "path": source, "checked_at": now()})
             result["organizations"].append({"id": oid, "name": text(org["organization"].get("name")) or oid,
                                             "display_name": text(org["organization"].get("display_name")),
@@ -402,6 +406,11 @@ class Observatory:
                     "location": text(node.get("location")), "source": str(Path(filename).resolve()), "integrity": "Sin comprobar",
                     "searchable": search_policy(node)})
             result["sources"].append({"kind": "documents", "path": str(Path(filename).resolve()), "checked_at": now()})
+        if config.get("auto_procedures", True):
+            from procedures import discover
+            discovered, status = discover(procedure_orgs, result["actors"], self.note_payloads, result["documents"])
+            result["procedures"].extend(discovered)
+            result["procedure_discovery"] = status
         if config.get("procedures_file"):
             procedures = rows(read_source(config["procedures_file"]))
             for p in procedures:

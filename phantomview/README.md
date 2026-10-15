@@ -48,6 +48,45 @@ be opened through an older identifier once they leave the selected index.
 
 ## Installation and dependencies
 
+### Automatic procedure discovery
+
+Setup and every collection automatically rebuild the procedure index from the
+selected organization sources, current readable KB copies and registered document
+metadata. No separate catalogue needs to be maintained. The existing scheduled
+collector updates new, changed and removed sources; the dashboard's read-index
+button reads the latest export. Standalone installations can use their configured
+sync interval or `python phantomview.py sync`. `auto_procedures: false` explicitly
+disables discovery. An optional `procedures_file` remains supported alongside it.
+
+PhantomOrg escalation entries appear as independent conditional rules, preserving
+their conditions and declared hop limit. An optional organization `procedures`
+list is imported as structured source data. These are collector-supported input
+fields, not a claim that a new upstream PhantomOrg schema has been installed.
+Procedural document metadata is shown as a reference only; no external document
+body or Drive content is fetched.
+
+KB discovery recognizes protocol/procedure/workflow/checklist/pipeline/SOP/playbook/norm
+titles and headings in English and Spanish. Ordered lists, separate sections and
+conditional bullet lists retain their source structure. Code fences and link-only
+indexes are excluded. A detected document without structured steps keeps an open-
+source link instead of inventing steps. Source ownership is distinct from step
+responsibility; missing owners, inputs and outputs are explicitly unspecified.
+Discovery does not verify that a procedure was reviewed or executed. It makes no
+model calls, executes no instructions and never changes a source document.
+
+Only notes present in the current authorized export and allowed for search are
+eligible. Excluded/private, unavailable, truncated, stale-owner and remote-only
+sources are not scanned. Discovery is bounded to 8 MB of KB text, 200,000 characters
+per note, 150 entries and 40 items per entry; incomplete readings are labelled.
+Oversized recognizable notes remain source references without extracting their
+steps. Byte-identical complete notes can share cards while retaining up to 100
+source-copy links and their owners. Cards are grouped by source to keep the view compact.
+Rows have source-derived identifiers and source-note links, so updates appear in
+change history and removed notes cannot remain accessible through stale rows.
+
+Run `python -m unittest test_procedures test_phantomview` and
+`node test_procedures.cjs` to verify discovery and rendering boundaries.
+
 The single language selector in the top header controls the entire interface:
 navigation, filters, dates, statuses, access screens, persona and KB reader controls,
 findings/review panels, setup forms and the installation inventory. English is the

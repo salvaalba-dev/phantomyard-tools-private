@@ -32,3 +32,4 @@
 
 /* Organization identity comes from the configured organization model. */
 .breadcrumbs strong{font-weight:500;color:var(--muted)}
+.procedure-card>summary{cursor:pointer;list-style:none;gap:12px}.procedure-card>summary::-webkit-details-marker{display:none}.procedure-card>summary h3{margin:0 0 4px}.procedure-card>summary::before{content:'▸';color:var(--green)}.procedure-card[open]>summary::before{content:'▾'}.procedure-card>summary>div{flex:1;min-width:0}.procedure-card .step p{white-space:pre-wrap;overflow-wrap:anywhere}.procedure-card .source{overflow-wrap:anywhere}
