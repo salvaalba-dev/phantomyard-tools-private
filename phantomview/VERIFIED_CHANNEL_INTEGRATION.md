@@ -73,6 +73,12 @@ See [private handoff](TRUSTED_HANDOFF.md) for the account-isolation contract,
 bounded frame protocol, tests and remaining native-hook requirements. It is not
 imported by the live reader, and no listener or channel service has been enabled.
 
+`handoff_client.py` supplies the inactive native-side client: fixed private socket,
+reader kernel UID verification before sending context, bounded replies, exact
+HTTPS fragment-link validation and no automatic retry. The dedicated isolated
+handoff CI job tests real signing and separate kernel accounts on a disposable
+runner. This does not install or authenticate the missing native message hook.
+
 `scoped_knowledge.py` adds the inactive retrieval boundary over an identified
 session. It calls `identified_scope` before retrieval, checks each resource with
 the private directory before opening or searching its payload, and rejects draft
@@ -130,8 +136,8 @@ be enabled. Human category zero currently names Salvador explicitly.
   keep it before inference and deliver links only to that verified direct sender.
 - Support the explicit counterpart/project extensions consistently in PhantomOrg,
   then validate the reviewed AU matrix and register missing channel identities.
-- Integrate the prepared private handoff with the reader and an isolated native
-  channel component; test positive cross-account kernel acceptance and direct
+- Integrate the prepared private handoff/client with the reader and an isolated
+  native channel component; verify AU account separation and actual direct-message
   delivery. No publicly submitted identity field or model-readable signing secret.
 - Review the fingerprinted classification catalog, then wire the prepared scoped
   retrieval before inference; dashboard KB exports alone do not establish

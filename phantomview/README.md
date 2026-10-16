@@ -590,4 +590,8 @@ Linux Unix-socket protocol with kernel peer-account checks before request reads.
 It requires separately isolated native channel, reader and model accounts; it
 does not authenticate model-supplied channel claims or start a listener on import.
 Native channel integration and deployment checks remain prerequisites.
+Its native-side client verifies the reader's kernel UID before sending context
+and accepts only the configured HTTPS fragment-link response. A dedicated Linux
+CI job tests signed issuance and rejection under separate disposable process
+accounts; it does not provision accounts or enable the native hook on AU.
 

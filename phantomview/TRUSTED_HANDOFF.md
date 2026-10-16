@@ -52,6 +52,26 @@ web session/redeem handler. Starting an independent broker with another gate wou
 not share the in-memory single-use grants or recipient bindings. No persistence or
 cross-process session transfer is provided here.
 
+## Native client
+
+`handoff_client.request_access` is an inactive library function for the isolated
+native channel service, not a CLI, browser API or model tool. Its `ReaderPolicy`
+requires a separate expected reader UID and an explicit nonroot model-account
+inventory. The native issuer itself must also be a nonroot, separate account.
+
+Before connecting, it checks the fixed socket path, socket ownership, protected
+parent directory and absence of symlink parents. After connecting, it verifies
+the reader's Linux kernel UID before sending the signed event or sender context.
+It validates the response schema and exact configured HTTPS origin and accepts
+only the existing `/#c=<43-character-grant>` delivery shape. It never derives a
+destination from returned data, falls back to a network endpoint or retries a
+signed request. A lost reply requires a fresh signed event.
+
+The native caller must deliver the returned link directly to the verified sender
+without logging it or passing it to a model. Receiver authentication does not
+replace the channel's actual sender authentication or the server's signing checks.
+This library does not register a PhantomBot command or alter its shared dispatcher.
+
 ## Native request contract
 
 Only the native pre-model direct-message handler may construct a request, after
@@ -109,9 +129,20 @@ frame bounds/deadlines, duplicate fields, reader-owned origin/persona and generi
 errors. The optional installed PhantomBlog access extra enables actual Schnorr
 issuance, single-use redemption, scope binding, signature rejection, replay and
 policy-revocation tests. Linux CI additionally checks actual kernel rejection and
-socket ownership/mode behavior. Positive cross-account kernel acceptance and
-native message delivery still require a provisioned multi-account integration
-environment; synthetic peer tests do not establish that deployment property.
+socket ownership/mode behavior. The dedicated `PhantomView isolated handoff` job
+uses the exact reviewed PhantomBlog fork revision and real access dependencies.
+It runs the complete suite, then starts disposable reader, issuer and model
+processes with separate numeric UIDs on its ephemeral runner. It checks positive
+signed scoped issuance and single-use redemption, model rejection despite a valid
+signed event, and reader-UID rejection before sender-context transmission.
+
+The account test driver requires Linux, root and the explicit
+`PHANTOMVIEW_ACCOUNT_TESTS=1` flag. Its child processes permanently drop their UIDs;
+it creates no users, groups or services and writes only its temporary runtime
+directory. Do not run this privileged test driver on the production VPS. Its CI
+job has read-only repository permissions, no persisted checkout credentials and
+no VPS credentials or access. CI isolation does not prove AU's native channel
+handler or message delivery is correctly configured.
 
 Before AU activation: provision and verify the isolated channel component; connect
 the native pre-model handler and reader listener; test verified direct delivery;

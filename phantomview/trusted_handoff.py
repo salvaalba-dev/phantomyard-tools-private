@@ -103,6 +103,11 @@ def _request(connection, deadline):
     if not 0 < length <= MAX_FRAME:
         raise ValueError('Handoff frame exceeds bounds')
     document = json.loads(_read(connection, length, deadline), object_pairs_hook=_unique)
+    return validate_request(document)
+
+
+def validate_request(document):
+    """Shared version-one frame shape; identity still depends on the native peer."""
     fields = {'schema_version', 'authorization', 'channel', 'sender', 'direct',
               'principal_authenticated', 'scope_id'}
     if (not isinstance(document, dict) or set(document) != fields
