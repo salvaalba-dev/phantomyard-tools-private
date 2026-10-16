@@ -673,3 +673,6 @@ to that transport, with a compact sidebar, visible-record focus, explicit retrie
 cancellation and plain-text answers bound to the current authorized view. Browser
 verification uses synthetic data; no AU service is changed.
 
+The [AU readiness inspection](AU_PILOT_READINESS.md) records the observed runtime,
+account and policy gaps and the required migration order before scoped activation.
+

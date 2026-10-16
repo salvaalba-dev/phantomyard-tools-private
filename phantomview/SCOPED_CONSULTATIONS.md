@@ -5,7 +5,8 @@ Pass it as `scoped_consultations=service` to `serve` with the exact same scoped
 backend and identified gate. The protected executor registry must implement
 `run(envelope, cancelled=event)`; plain uncancellable callables are rejected.
 Scoped mode never constructs the legacy bridge client from environment settings.
-There is no CLI activation, browser widget, new credential or live AU change.
+There is no CLI activation, new credential or live AU change. The opt-in
+[scoped widget](SCOPED_WIDGET.md) uses this transport when explicitly configured.
 
 ## Closed HTTP surface
 
