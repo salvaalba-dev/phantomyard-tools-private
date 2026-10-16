@@ -1,0 +1,47 @@
+name: PhantomView scoped native runtime
+
+on:
+  push:
+    paths:
+      - 'phantomview/native_scoped*'
+      - 'phantomview/native_assistant_patch.py'
+      - '.github/workflows/phantomview-native-scoped.yml'
+  pull_request:
+    paths:
+      - 'phantomview/native_scoped*'
+      - 'phantomview/native_assistant_patch.py'
+      - '.github/workflows/phantomview-native-scoped.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: phantomyard/phantombot
+          ref: 5af27060327ee8c53fe730dd8b98b6b305c62add
+          path: native-source
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.11'
+      - name: Prepare the dedicated variant in the disposable checkout
+        run: |
+          python3 phantomview/native_scoped_patch.py native-source
+          cp phantomview/native_scoped_runtime.test.ts native-source/tests/phantomview-scoped.test.ts
+      - name: Install locked native dependencies
+        working-directory: native-source
+        run: bun install --frozen-lockfile
+      - name: Verify native screening, JEV wiring and prompt isolation
+        working-directory: native-source
+        run: bun test tests/phantomview-scoped.test.ts
+      - name: Compile the dedicated baseline executable
+        working-directory: native-source
+        run: bun run build:x64
