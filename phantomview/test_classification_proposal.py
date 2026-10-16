@@ -3,6 +3,7 @@ import copy
 import unittest
 
 from classification_proposal import build_proposal, render_html
+from assistant_scope import Scope
 
 
 class ProposalTests(unittest.TestCase):
@@ -60,6 +61,46 @@ class ProposalTests(unittest.TestCase):
         report = render_html(first)
         self.assertNotIn('<script>', report)
         self.assertIn('&lt;script&gt;', report)
+
+    def access_preview(self):
+        policy = {'organization': 'example',
+                  'humans': {'owner': {}, 'member': {'counterpart_persona': 'lead'}, 'unbound': {}},
+                  'personas': {'lead': {'categories': ['category-2', 'category-3'], 'projects': []}},
+                  'category_zero': {'owner': 'owner', 'categories': list(self.inventory['categories'])}}
+        scope = Scope(policy)
+        return {'organization': 'example', 'preview_only': True, 'live_access_changed': False,
+                'policy': policy, 'policy_revision': scope.revision}
+
+    def test_human_scope_and_absolute_owner_are_separate(self):
+        self.inventory['folders'][0]['folder'] = 'kb/infra'
+        self.inventory['categories']['category-3']['label'] = 'Existing source meaning'
+        result = build_proposal(self.inventory, self.access_preview(), 'category-3')
+        rule = result['rules'][0]
+        self.assertEqual(rule['suggested_category'], 'category-3')
+        self.assertEqual(rule['category_label'], 'Existing source meaning')
+        self.assertEqual(rule['human_category_scope'], ['member'])
+        self.assertEqual(result['access_preview']['absolute_humans'], [{'human': 'owner', 'counterpart': None}])
+        report = render_html(result)
+        self.assertIn('Category 0 · Absolute human information access', report)
+        self.assertIn('Existing source meaning', report)
+
+    def test_incompatible_or_active_preview_is_rejected(self):
+        for key, value in (('organization', 'other'), ('live_access_changed', True),
+                           ('preview_only', False), ('policy_revision', 'incorrect')):
+            preview = self.access_preview()
+            preview[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                build_proposal(self.inventory, preview)
+
+    def test_changed_category_set_is_rejected(self):
+        preview = self.access_preview()
+        self.inventory['categories']['category-4'] = {}
+        with self.assertRaises(ValueError):
+            build_proposal(self.inventory, preview)
+
+    def test_category_zero_cannot_be_selected_for_folders(self):
+        with self.assertRaises(ValueError):
+            build_proposal(self.inventory, confidential_category='category-0')
 
 
 if __name__ == '__main__':

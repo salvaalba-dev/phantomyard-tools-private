@@ -506,6 +506,24 @@ include note bodies, credentials or human channel identifiers.
 python classification_proposal.py inventory.json --output draft.json --html review.html
 ```
 
+To align a review with an inert access-matrix preview derived from trusted
+PhantomOrg source, add `--access-preview access-preview.json`. The preview must
+contain the same organization, `preview_only: true`, `live_access_changed: false`,
+the `Scope` policy and its matching `policy_revision`. The report displays source
+category meanings, exact persona grants and ordinary human category eligibility
+inherited through counterparts. Category 0 owners appear separately as holders
+of the independent absolute information privilege, never as a document category.
+Category eligibility alone does not establish an authenticated channel, project
+access, deployment or permission to obtain a link.
+
+`--confidential-category category-3` can select that existing category for
+confidential folder suggestions when the organization wants its narrower access
+scope. The default remains `category-2`. These exact labels are references to
+existing PhantomOrg categories, not a new hierarchy; their source meanings and
+grants are never rewritten. If a selected category is undeclared, affected notes
+remain unclassified. Neither category 0 nor project categories can be selected by
+this option. All suggestions still require content review before activation.
+
 Every rule is unapproved, nonrecursive and scoped to one actor and exact folder.
 Suggestions use folder names only and require content review: they do not prove
 classification. Mixed roots, imported documents and unidentified projects remain
