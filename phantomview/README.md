@@ -687,3 +687,9 @@ source-owned IDs/timestamps in pinned Telegram and PhantomChat adapters. It keep
 receipt routing and authentication unchanged and is tested only in disposable
 source copies; it does not start an isolated host or change AU.
 
+Private [Telegram and PhantomChat adapters](NATIVE_CHANNEL_ADAPTERS.md) now add
+opt-in pre-model hooks to both pinned native server loops. They consume reserved
+commands, enforce explicit direct principals and fixed persona/scope/account
+bindings, and pass canonical source context to a cancellable protected callback.
+No host callback, signer or live channel is connected by this increment.
+
