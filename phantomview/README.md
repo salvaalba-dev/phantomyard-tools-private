@@ -713,3 +713,10 @@ restricted runner also gains deterministic pipe cleanup and process-group
 termination. A compatible native JSON entry point, containment for tool-capable
 execution and live ingress integration remain required before activation.
 
+The separate [native conversation worker variant](NATIVE_CONVERSATION_WORKER.md)
+now accepts fixed-persona principal/private text jobs, retains native screening/JEV
+and persistent persona history, and refuses unsupported shared contexts before
+inference. It remains tool-less and separate from the scoped projection-only
+assistant. Credential-store isolation, reviewed artifacts and full channel
+queue/control integration remain required before live activation.
+

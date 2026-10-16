@@ -1,6 +1,6 @@
 """Inactive process lifecycle for the ordinary-turn worker contract.
 
-No native artifact currently supplied by PhantomView implements this entry point.
+A separate private native build supplies the first principal text entry point.
 Trusted embedding must provision and review it before activating this boundary.
 """
 import hashlib
@@ -33,7 +33,11 @@ class ConversationProcess:
         self.inbox, self.executable, self.sha256 = inbox, str(executable), sha256
         self.working_dir = str(working_dir)
         # No ambient issuer/channel environment is inherited.
-        self.environment = MappingProxyType(environment.copy())
+        fixed = {'PHANTOMVIEW_WORKER_PERSONA': inbox.persona,
+                 'PHANTOMVIEW_WORKER_UID': str(inbox.policy.worker_uid)}
+        if any(key in environment and environment[key] != value for key, value in fixed.items()):
+            raise ValueError('Worker environment cannot override the fixed persona/account')
+        self.environment = MappingProxyType(environment.copy() | fixed)
         self._slot = threading.Lock()
         self.verify()
 

@@ -45,7 +45,8 @@ class ConversationExecutionTests(unittest.TestCase):
         self.assertEqual((doc['persona'], doc['tier'], doc['audience']), ('guide', 'principal', 'private'))
         self.assertEqual(doc['text'], 'Question')
         self.assertNotIn('authorization', doc)
-        self.assertEqual(kwargs['environment'], {})
+        self.assertEqual(kwargs['environment'], {'PHANTOMVIEW_WORKER_PERSONA': 'guide',
+                                                 'PHANTOMVIEW_WORKER_UID': str(POLICY.worker_uid)})
         self.assertIs(reply.call_args.args[1], self.job)
 
     def test_native_hold_never_releases_model_stdout(self):
@@ -89,6 +90,12 @@ class ConversationExecutionTests(unittest.TestCase):
                 run.assert_not_called()
         finally:
             self.executor._slot.release()
+
+    def test_environment_cannot_override_fixed_persona_or_worker_uid(self):
+        for environment in ({'PHANTOMVIEW_WORKER_PERSONA': 'other'}, {'PHANTOMVIEW_WORKER_UID': '1'}):
+            with patch.object(ConversationProcess, 'verify'), self.assertRaises(ValueError):
+                ConversationProcess(inbox=self.inbox, executable='/protected/native', sha256='a' * 64,
+                                    working_dir='/protected/work', environment=environment)
 
     @unittest.skipUnless(sys.platform == 'linux', 'Real Unix disconnect and process groups required')
     def test_real_disconnect_stops_ignoring_native_fixture_and_releases_slot(self):

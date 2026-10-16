@@ -1,10 +1,10 @@
 # Ordinary worker process lifecycle
 
 Status: inactive transport-to-process lifecycle with synthetic executables and
-real isolated-account CI tests. **No supplied native PhantomBot artifact implements
-the `__conversation-worker` entry point yet.** No service or AU configuration is
-enabled by this increment. This is execution infrastructure, not proof of native
-persona, memory, screening or fallback integration.
+real isolated-account CI tests. A separate [native worker build](NATIVE_CONVERSATION_WORKER.md)
+now implements the first principal/private text entry point. No service or AU
+configuration is enabled. Synthetic native tests do not establish live persona,
+provider or complete channel integration.
 
 ## Fixed execution binding
 
@@ -87,9 +87,10 @@ fixture executable. A second test closes the issuer connection after the child
 starts, verifies failure without an answer, and confirms the direct child was
 reaped. These fixtures prove lifecycle composition, not native model behavior.
 
-Next: implement and review the native `__conversation-worker` JSON entry point,
-retaining native JEV, tier/audience semantics and ordinary persona memory, then
-wire the single native ingress owner and its queue/control behavior. Every model,
+The private native JSON entry now retains native screening/JEV and ordinary
+persona memory for its principal/private text slice. Next: wire the single native
+ingress owner and its queue/control behavior after credential-store isolation and
+installed-release review. Every model,
 recovery, extraction and fallback path still belongs outside the issuer account.
 Media, groups, reactions and streaming remain outside this first text-job slice.
 The scoped PhantomView assistant continues to require its separate projection-

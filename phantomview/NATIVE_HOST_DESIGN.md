@@ -136,6 +136,8 @@ The [ordinary-execution protocol](CONVERSATION_FORWARDING.md) now supplies a fir
 text direct-conversation transport slice and its isolated account tests.
 The [worker lifecycle](CONVERSATION_EXECUTION.md) adds
 disconnect cancellation and process-group cleanup, tested with protected synthetic
-executables. A compatible native JSON entry point and native queue/control
-integration remain pending. None of the five complete cutover gates is claimed
+executables. The [private native worker](NATIVE_CONVERSATION_WORKER.md) adds the
+first screened principal/private text JSON entry with persistent persona history.
+Credential-store isolation and native queue/control integration remain pending.
+None of the five complete cutover gates is claimed
 as completed by these libraries alone.

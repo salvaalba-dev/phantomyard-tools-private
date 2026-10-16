@@ -91,8 +91,9 @@ account tests only on the explicitly enabled ephemeral runner, never on the VPS.
 
 The [worker lifecycle](CONVERSATION_EXECUTION.md) now supplies disconnect/deadline
 cancellation and bounded process-group cleanup with synthetic executable coverage.
-Next: implement the compatible native JSON entry point, native ingress binding
-and ordinary queue/control integration. Media,
+The [native worker build](NATIVE_CONVERSATION_WORKER.md) implements the first
+principal/private text JSON entry. Native ingress binding and ordinary
+queue/control integration remain pending. Media,
 groups, reactions, streaming, memory extraction, recovery and every fallback
 must be preserved by the complete host split before live cutover. Native JEV
 screening remains required; it is neither implemented nor bypassed by this wire
