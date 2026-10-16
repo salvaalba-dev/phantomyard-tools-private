@@ -48,7 +48,11 @@ class HumanDirectory:
                 if identity in self.senders[channel]:
                     raise ValueError("Ambiguous channel identity")
                 self.senders[channel][identity] = human["id"]
-        encoded = json.dumps({"scope": self.scope.revision, "senders": self.senders}, sort_keys=True).encode()
+        authority = {'policy': self.scope.policy, 'categories': org['policies']['security_categories']}
+        self.authority_revision = hashlib.sha256(json.dumps(
+            authority, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+        encoded = json.dumps({"scope": self.scope.revision, "authority": self.authority_revision,
+                              "senders": self.senders}, sort_keys=True).encode()
         self.revision = hashlib.sha256(encoded).hexdigest()
 
     def resolve(self, *, channel, sender, persona, direct, principal_authenticated, scope_id=None):

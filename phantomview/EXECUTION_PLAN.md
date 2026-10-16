@@ -112,6 +112,12 @@ Commit: `feat: bind verified channel recipients to scoped sessions`
 
 ### 5 Backend filtering
 
+Implementation status: generic classified resource projection, graph/count/search
+filtering and closed HTTP dispatch are prepared and tested. See
+[scoped backend](SCOPED_BACKEND.md). Legacy-source adapters, non-KB review tooling,
+frontend adaptation, scoped history/exports and assistant worker integration remain
+work. No live reader activation is implied.
+
 Apply the same resource authorization to detail views, graphs, search, documents,
 procedures, history, counters, exports and assistant evidence. Calculate aggregates
 from permitted records rather than hiding unauthorized records in the browser.

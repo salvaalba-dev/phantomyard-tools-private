@@ -599,3 +599,10 @@ to the same gate as HTTP redemption. Default CLI behavior is unchanged. See the
 private handoff guide for lifecycle checks, native isolation constraints and the
 backend-filtering prerequisite before any expanded session access.
 
+The opt-in [scoped resource backend](SCOPED_BACKEND.md) adds authorization before
+record loading, relationship construction, counts and global search. Its closed
+HTTP dispatch prevents fallback to unfiltered legacy APIs. It requires a separate
+reviewed projection catalog and the same identified gate as redemption; no CLI
+activation or automatic legacy-export conversion is supplied. The existing UI
+still needs adaptation to its generic resource schema before deployment.
+

@@ -608,6 +608,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.allowed():
             return self.send(403, {"error": "Origen no permitido"})
+        if getattr(self.server, 'scoped_backend', None) is not None:
+            from scoped_http import dispatch
+            if dispatch(self, 'GET'):
+                return
         path = urlparse(self.path).path
         if path == "/api/phantombot/status":
             return self.bot_version_request()
@@ -649,6 +653,10 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(200, (HERE / file).read_bytes(), mime)
 
     def do_POST(self):
+        if getattr(self.server, 'scoped_backend', None) is not None:
+            from scoped_http import dispatch
+            if dispatch(self, 'POST'):
+                return
         if getattr(self.server, "gate", None):
             return self.gated_post()
         if not self.allowed() or not self.authenticated():
@@ -784,13 +792,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(503, {"error": "Assistant unavailable"})
 
 
-def serve(obs, port, open_browser, gate=None, handoff=None):
+def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None):
+    if scoped_backend is not None:
+        from scoped_backend import ScopedBackend
+        if not isinstance(scoped_backend, ScopedBackend) or scoped_backend.gate is not gate:
+            raise ValueError('Scoped HTTP projection and redemption must share the same identified gate')
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.token = os.environ.get("PHANTOMVIEW_TOKEN") or secrets.token_urlsafe(32)
     os.environ["PHANTOMVIEW_TOKEN"] = server.token
     server.restart_requested = False
     server.observatory = obs
     server.gate = gate
+    server.scoped_backend = scoped_backend
     from global_search import KnowledgeIndex
     server.knowledge_search = KnowledgeIndex()
     server.bot_version_monitor = None

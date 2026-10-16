@@ -92,6 +92,14 @@ that same account cannot supply isolated native authority. The native ingress or
 model-execution isolation design remains unresolved and must be reviewed before
 activation, without introducing a competing channel listener.
 
+`scoped_backend.py` and `scoped_http.py` add an opt-in resource projection and
+closed API boundary. They authorize before record reads, graph edges, counts and
+search, then revalidate source, catalog and session state. Directory revisions now
+include category-definition meaning changes. Legacy snapshot, KB and assistant
+routes cannot be reached through scoped dispatch. This is a new resource schema;
+it has no automatic legacy-export adapter or live activation. See
+[scoped backend](SCOPED_BACKEND.md) for the remaining source/UI/worker boundaries.
+
 `scoped_knowledge.py` adds the inactive retrieval boundary over an identified
 session. It calls `identified_scope` before retrieval, checks each resource with
 the private directory before opening or searching its payload, and rejects draft

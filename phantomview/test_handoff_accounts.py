@@ -19,6 +19,8 @@ import unittest
 
 from handoff_client import ReaderPolicy, request_access
 from reader_handoff import ReaderHandoff
+from scoped_backend import ScopedBackend
+from test_scoped_backend import ProjectionFixture
 import phantomview as pv
 import test_signed_recipient as signatures
 from test_view_permissions import scoped_organization
@@ -109,8 +111,11 @@ class CrossAccountTests(unittest.TestCase):
 
             gate.issue_identified = issue
             runtime = ReaderHandoff(self.path, ISSUER, PeerPolicy(ISSUER, frozenset({MODEL})), gate)
+            projection = ProjectionFixture()
+            projection.setUp()
             with pv.ThreadingHTTPServer(('127.0.0.1', 0), pv.Handler) as http:
                 http.gate, http.access_errors = gate, (ValueError, gate.access.core.Invalid)
+                http.scoped_backend = ScopedBackend(gate, lambda: projection.catalog, projection.load)
                 thread = threading.Thread(target=http.serve_forever, daemon=True)
                 thread.start()
                 try:
@@ -131,6 +136,14 @@ class CrossAccountTests(unittest.TestCase):
                         cookie = SimpleCookie(response.getheader('Set-Cookie'))['phantomview'].value
                         response.read()
                         recipient, _ = gate.identified_scope({'Cookie': 'phantomview=' + cookie})
+                        connection.request('GET', '/api/state', headers={'Cookie': 'phantomview=' + cookie})
+                        response = connection.getresponse()
+                        if response.status != 200:
+                            raise AssertionError('Scoped projection rejected identified HTTP session')
+                        view = json.loads(response.read())
+                        scoped_counts = view['counts']
+                        if view['scope_id'] != 'river-project' or set(projection.loaded) != {projection.project}:
+                            raise AssertionError('HTTP projection read outside the bound project')
                         connection.request('POST', '/api/redeem', body, {'Content-Type': 'application/json'})
                         response = connection.getresponse()
                         replay_rejected = response.status == 401
@@ -142,7 +155,8 @@ class CrossAccountTests(unittest.TestCase):
                     http.shutdown()
                     thread.join(timeout=3)
             return {'accepted': accepted, 'human': recipient.human, 'scope': recipient.scope_id,
-                    'replay_rejected': replay_rejected, 'socket_removed': not Path(self.path).exists()}
+                    'replay_rejected': replay_rejected, 'socket_removed': not Path(self.path).exists(),
+                    'scoped_counts': scoped_counts}
 
         server = self.start(reader)
         native = finish(spawn(ISSUER, lambda: {'fragment_only': '/#c=' in self.native()}))
@@ -151,7 +165,8 @@ class CrossAccountTests(unittest.TestCase):
         self.assertEqual(native, {'ok': True, 'value': {'fragment_only': True}})
         self.assertEqual(result, {'ok': True, 'value': {'accepted': True, 'human': 'owner',
                                                      'scope': 'river-project', 'replay_rejected': True,
-                                                     'socket_removed': True}})
+                                                     'socket_removed': True,
+                                                     'scoped_counts': {'partner': 1, 'relationship': 0}}})
 
     def test_model_account_cannot_use_socket_even_with_valid_signing_event(self):
         def reader():
