@@ -38,6 +38,10 @@ size is bounded to 65,536 UTF-8 bytes; existing wrapper bounds also remain activ
 
 ## Remaining filesystem boundary
 
+The [dedicated credential reader](WORKER_STORE.md) now provides an optional fixed
+model-only file to the process wrapper, with protected Linux metadata checks.
+It does not validate the worker's remaining configuration or memory stores.
+
 An allowed absolute path does not prove a safe store. This check does not inspect
 its ownership, sanitize its contents or deny access to another account. Pointing
 at the issuer home remains incorrect. Provision a separate worker home/config,

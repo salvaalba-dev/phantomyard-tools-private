@@ -104,6 +104,28 @@ class ConversationExecutionTests(unittest.TestCase):
                                     working_dir='/protected/work', environment={key: 'PRIVATE_SENTINEL'})
             verify.assert_not_called()
 
+    def test_model_store_is_reloaded_per_turn_and_missing_store_never_releases_an_answer(self):
+        self.executor.credential_file = '/protected/model.json'
+        with patch('conversation_execution.load_credentials', side_effect=[
+                {'PHANTOMBOT_PI_API_KEY': 'first'}, {'PHANTOMBOT_PI_API_KEY': 'second'}]) as loader:
+            first, run_one, _ = self.serve()
+            second, run_two, _ = self.serve()
+        self.assertEqual((first, second, loader.call_count), ('complete', 'complete', 2))
+        self.assertEqual(run_one.call_args.kwargs['environment']['PHANTOMBOT_PI_API_KEY'], 'first')
+        self.assertEqual(run_two.call_args.kwargs['environment']['PHANTOMBOT_PI_API_KEY'], 'second')
+        self.assertNotIn('PHANTOMBOT_PI_API_KEY', self.executor.environment)
+        with patch('conversation_execution.load_credentials', side_effect=ValueError('unavailable')):
+            outcome, run, reply = self.serve()
+            self.assertEqual(outcome, 'unavailable')
+            run.assert_not_called()
+            reply.assert_not_called()
+
+    def test_inline_credentials_cannot_override_a_protected_store(self):
+        with patch.object(ConversationProcess, 'verify'), self.assertRaises(ValueError):
+            ConversationProcess(inbox=self.inbox, executable='/protected/native', sha256='a' * 64,
+                                working_dir='/protected/work', credential_file='/protected/model.json',
+                                environment={'PHANTOMBOT_PI_API_KEY': 'INLINE_SENTINEL'})
+
     @unittest.skipUnless(sys.platform == 'linux', 'Real Unix disconnect and process groups required')
     def test_real_disconnect_stops_ignoring_native_fixture_and_releases_slot(self):
         with tempfile.TemporaryDirectory() as folder:

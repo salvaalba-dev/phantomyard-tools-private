@@ -34,16 +34,16 @@ ENABLED = (sys.platform == 'linux' and getattr(os, 'geteuid', lambda: -1)() == 0
            and os.environ.get('PHANTOMVIEW_ACCOUNT_TESTS') == '1')
 
 
-def spawn(uid, operation):
+def spawn(uid, operation, *, gid=None):
     read_fd, write_fd = os.pipe()
     pid = os.fork()
     if pid == 0:
         os.close(read_fd)
         try:
-            # A common test group deliberately permits socket connection; UID
-            # checks must still reject the model account after it connects.
+            # Default shared group permits socket connection for peer-UID tests.
+            # Credential-store tests explicitly select a separate primary group.
             os.setgroups([])
-            os.setgid(ISSUER)
+            os.setgid(ISSUER if gid is None else gid)
             os.setuid(uid)
             result = {'ok': True, 'value': operation()}
         except BaseException as error:

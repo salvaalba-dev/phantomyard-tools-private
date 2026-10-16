@@ -12,6 +12,7 @@ from conversation_execution import ConversationProcess
 from test_conversation_forwarding import frame, request
 from test_handoff_accounts import ENABLED, ISSUER, MODEL, READER, finish, spawn
 from trusted_handoff import bind_listener
+from worker_store import encode_credentials, load_credentials
 
 OTHER_MODEL = 29004
 POLICY = AccountPolicy(ISSUER, MODEL, READER, frozenset({MODEL, OTHER_MODEL}))
@@ -144,6 +145,101 @@ class ConversationAccountTests(unittest.TestCase):
             listener.settimeout(6)
             connection, _ = listener.accept()
             return executor.serve_connection(connection)
+
+    def credential_fixture(self):
+        directory = tempfile.TemporaryDirectory(prefix='phantomview-model-store-', dir='/run')
+        self.addCleanup(directory.cleanup)
+        os.chown(directory.name, 0, MODEL)
+        os.chmod(directory.name, 0o710)
+        path = Path(directory.name) / 'model.json'
+        path.write_bytes(encode_credentials(persona='guide', worker_uid=MODEL,
+                         credentials={'PHANTOMBOT_PI_API_KEY': 'SYNTHETIC_MODEL_ONLY'}))
+        os.chown(path, 0, MODEL)
+        path.chmod(0o640)
+        return path
+
+    def test_protected_model_store_is_readable_only_by_its_worker_and_not_writable(self):
+        path = self.credential_fixture()
+
+        def worker():
+            values = load_credentials(str(path), persona='guide', worker_uid=MODEL)
+            try:
+                path.write_bytes(b'changed')
+            except PermissionError:
+                return {'selected': values == {'PHANTOMBOT_PI_API_KEY': 'SYNTHETIC_MODEL_ONLY'},
+                        'write_denied': True}
+            return {'write_denied': False}
+
+        self.assertEqual(finish(spawn(MODEL, worker, gid=MODEL)),
+                         {'ok': True, 'value': {'selected': True, 'write_denied': True}})
+
+        def denied():
+            try:
+                path.read_bytes()
+            except PermissionError:
+                return True
+            return False
+
+        for uid in (ISSUER, READER, OTHER_MODEL):
+            self.assertEqual(finish(spawn(uid, denied)), {'ok': True, 'value': True})
+
+    def test_model_store_rejects_linked_or_mutable_sources(self):
+        path = self.credential_fixture()
+
+        def refused():
+            try:
+                load_credentials(str(path), persona='guide', worker_uid=MODEL)
+            except ValueError:
+                return True
+            return False
+
+        path.chmod(0o660)
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
+        path.chmod(0o640)
+        alias = path.with_name('alias.json')
+        os.link(path, alias)
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
+        alias.unlink()
+        path.rename(alias)
+        path.symlink_to(alias)
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
+        path.unlink()
+        alias.rename(path)
+        path.rename(alias)
+        os.mkfifo(path, 0o640)
+        os.chown(path, 0, MODEL)
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
+        path.unlink()
+        alias.rename(path)
+        os.chmod(path.parent, 0o730)
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
+
+    def test_protected_model_store_reaches_only_the_fixed_child_environment(self):
+        path = self.credential_fixture()
+        binary, digest = self.process_fixture('import json,os,sys\njson.load(sys.stdin)\n'
+            'assert os.environ["PHANTOMBOT_PI_API_KEY"] == "SYNTHETIC_MODEL_ONLY"\n'
+            'assert "TELEGRAM_BOT_TOKEN" not in os.environ\n'
+            'sys.stdout.write("Synthetic project summary")\n')
+
+        def worker():
+            inbox = WorkerInbox(persona='guide', policy=POLICY)
+            executor = ConversationProcess(inbox=inbox, executable=binary, sha256=digest,
+                working_dir=self.folder.name, environment={}, credential_file=str(path))
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(self.path)
+                listener.listen(1)
+                os.write(self.ready_write, b'1')
+                listener.settimeout(6)
+                connection, _ = listener.accept()
+                return executor.serve_connection(connection)
+
+        server = spawn(MODEL, worker, gid=MODEL)
+        self.wait_ready()
+        os.chown(self.path, MODEL, ISSUER)
+        os.chmod(self.path, 0o660)
+        client = finish(spawn(ISSUER, self.issuer))
+        self.assertEqual(finish(server), {'ok': True, 'value': 'complete'})
+        self.assertEqual(client, {'ok': True, 'value': {'denied': False, 'bound': True, 'answer': True}})
 
     def test_isolated_worker_process_receives_full_metadata_and_returns_bound_reply(self):
         binary, digest = self.process_fixture('import json,sys\njob=json.load(sys.stdin)\n'

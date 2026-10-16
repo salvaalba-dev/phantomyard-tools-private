@@ -14,12 +14,13 @@ import time
 from assistant_worker import HeldMarker
 from bounded_process import run
 from conversation_forwarding import AccountPolicy, MAX_TEXT, WorkerInbox
-from worker_environment import environment as model_environment
+from worker_environment import MODEL_CREDENTIALS, environment as model_environment
+from worker_store import load_credentials
 
 
 class ConversationProcess:
     """One fixed-persona execution slot; never accepts command/config from a frame."""
-    def __init__(self, *, inbox, executable, sha256, working_dir, environment):
+    def __init__(self, *, inbox, executable, sha256, working_dir, environment, credential_file=None):
         if not isinstance(inbox, WorkerInbox) or not isinstance(inbox.policy, AccountPolicy):
             raise ValueError('A fixed authenticated worker inbox is required')
         if (not isinstance(sha256, str) or len(sha256) != 64
@@ -38,8 +39,21 @@ class ConversationProcess:
         if any(key in environment and environment[key] != value for key, value in fixed.items()):
             raise ValueError('Worker environment cannot override the fixed persona/account')
         self.environment = model_environment(environment.copy() | fixed)
+        if credential_file is not None and (
+                not isinstance(credential_file, str) or not credential_file
+                or MODEL_CREDENTIALS & self.environment.keys()):
+            raise ValueError('Use one fixed model credential source')
+        self.credential_file = credential_file
         self._slot = threading.Lock()
         self.verify()
+
+    def launch_environment(self):
+        """Read a fresh protected selection per turn, without caching secret values."""
+        values = dict(self.environment)
+        if self.credential_file is not None:
+            values.update(load_credentials(self.credential_file, persona=self.inbox.persona,
+                                           worker_uid=self.inbox.policy.worker_uid))
+        return dict(model_environment(values))
 
     def verify(self):
         self.inbox.policy.check('worker')
@@ -97,7 +111,7 @@ class ConversationProcess:
                 marker = HeldMarker()
                 raw = run([self.executable, '__conversation-worker'], payload,
                           cwd=self.working_dir, deadline=job.deadline, cancelled=cancelled,
-                          stderr_sink=marker.feed, environment=dict(self.environment), output_limit=MAX_TEXT)
+                          stderr_sink=marker.feed, environment=self.launch_environment(), output_limit=MAX_TEXT)
                 if cancelled():
                     return 'cancelled'
                 if marker.seen:
