@@ -5,11 +5,15 @@ on:
     paths:
       - 'phantomview/native_ingress*'
       - 'phantomview/test_native_ingress_patch.py'
+      - 'phantomview/native_channel*'
+      - 'phantomview/test_native_channel_patch.py'
       - '.github/workflows/phantomview-native-ingress.yml'
   pull_request:
     paths:
       - 'phantomview/native_ingress*'
       - 'phantomview/test_native_ingress_patch.py'
+      - 'phantomview/native_channel*'
+      - 'phantomview/test_native_channel_patch.py'
       - '.github/workflows/phantomview-native-ingress.yml'
 
 permissions:
@@ -36,17 +40,18 @@ jobs:
         working-directory: phantomview
         env:
           PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/native-source
-        run: python3 -m unittest test_native_ingress_patch -v
+        run: python3 -m unittest test_native_ingress_patch test_native_channel_patch -v
       - name: Prepare the provenance variant in the disposable checkout
         run: |
-          python3 phantomview/native_ingress_patch.py native-source
+          python3 phantomview/native_channel_patch.py native-source
           cp phantomview/native_ingress_runtime.test.ts native-source/tests/phantomview-ingress.test.ts
+          cp phantomview/native_channel_runtime.test.ts native-source/tests/phantomview-native-channel.test.ts
       - name: Install locked native dependencies
         working-directory: native-source
         run: bun install --frozen-lockfile
       - name: Verify real parsing, gift-wrap crypto and existing channel behavior
         working-directory: native-source
-        run: bun test tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts
+        run: bun test tests/phantomview-ingress.test.ts tests/phantomview-native-channel.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
       - name: Compile the provenance variant baseline executable
         working-directory: native-source
         run: bun run build:x64
