@@ -1,5 +1,9 @@
 # Ordinary worker process lifecycle
 
+The [closed environment contract](WORKER_ENVIRONMENT.md) rejects unknown launch
+variables and channel credentials before execution. Store/account isolation is
+still a separate activation prerequisite.
+
 Status: inactive transport-to-process lifecycle with synthetic executables and
 real isolated-account CI tests. A separate [native worker build](NATIVE_CONVERSATION_WORKER.md)
 now implements the first principal/private text entry point. No service or AU

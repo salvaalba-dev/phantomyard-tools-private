@@ -97,6 +97,13 @@ class ConversationExecutionTests(unittest.TestCase):
                 ConversationProcess(inbox=self.inbox, executable='/protected/native', sha256='a' * 64,
                                     working_dir='/protected/work', environment=environment)
 
+    def test_channel_credentials_and_loader_injection_never_create_an_executor(self):
+        for key in ('TELEGRAM_BOT_TOKEN', 'NOSTR_NSEC', 'NODE_OPTIONS', 'LD_PRELOAD'):
+            with patch.object(ConversationProcess, 'verify') as verify, self.assertRaises(ValueError):
+                ConversationProcess(inbox=self.inbox, executable='/protected/native', sha256='a' * 64,
+                                    working_dir='/protected/work', environment={key: 'PRIVATE_SENTINEL'})
+            verify.assert_not_called()
+
     @unittest.skipUnless(sys.platform == 'linux', 'Real Unix disconnect and process groups required')
     def test_real_disconnect_stops_ignoring_native_fixture_and_releases_slot(self):
         with tempfile.TemporaryDirectory() as folder:

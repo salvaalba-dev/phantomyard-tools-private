@@ -68,6 +68,11 @@ category or project scope is not widened by this ordinary conversation build.
 
 ## Credential and deployment prerequisites
 
+The [closed worker environment](WORKER_ENVIRONMENT.md) is enforced by the process
+wrapper. It accepts only reviewed model credential names and explicit locations,
+rejecting channel keys and launch overrides. It does not sanitize or authenticate
+the contents of a referenced filesystem store.
+
 Provision a worker-only persona/configuration/vault projection containing only
 the reviewed model credentials and material it may read. The explicit process
 environment and early CLI branch prevent ambient channel credential injection;

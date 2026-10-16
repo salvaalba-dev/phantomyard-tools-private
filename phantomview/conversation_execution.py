@@ -10,11 +10,11 @@ import select
 import subprocess
 import threading
 import time
-from types import MappingProxyType
 
 from assistant_worker import HeldMarker
 from bounded_process import run
 from conversation_forwarding import AccountPolicy, MAX_TEXT, WorkerInbox
+from worker_environment import environment as model_environment
 
 
 class ConversationProcess:
@@ -37,7 +37,7 @@ class ConversationProcess:
                  'PHANTOMVIEW_WORKER_UID': str(inbox.policy.worker_uid)}
         if any(key in environment and environment[key] != value for key, value in fixed.items()):
             raise ValueError('Worker environment cannot override the fixed persona/account')
-        self.environment = MappingProxyType(environment.copy() | fixed)
+        self.environment = model_environment(environment.copy() | fixed)
         self._slot = threading.Lock()
         self.verify()
 
