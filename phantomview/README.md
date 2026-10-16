@@ -572,6 +572,13 @@ validator rejects this output even if only its top-level status is changed. An
 operator must review confidentiality/exclusions before producing an approved
 catalog. A digest is a change detector, not a signature or proof of approval.
 
+`resource_review.py` adds an offline, versioned review workflow over these drafts.
+It requires explicit authoritative scopes, binds decisions to exact draft, content
+and PhantomOrg revisions, and supports bulk review of current exact-folder members.
+Protected revision files preserve provenance and history without selecting a live
+catalog. See [versioned resource classification](RESOURCE_REVIEW.md) for the review
+contract, storage requirements and activation boundaries.
+
 There is no HTTP route or CLI activation for these primitives. Trusted loaders,
 catalog integrity, native channel identity, policy validation at worker dispatch
 and response delivery, audit integration and JEV remain activation prerequisites.

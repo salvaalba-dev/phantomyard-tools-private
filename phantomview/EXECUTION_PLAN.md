@@ -72,6 +72,11 @@ Commit: `feat: validate scope-aware PhantomOrg permissions`
 
 ### 3 Classified organizational resources
 
+Implementation status: versioned offline KB review primitives prepared and tested;
+not deployed. See [resource review](RESOURCE_REVIEW.md). The installation's actual
+classifications remain draft pending scope migration and content/secret review.
+Other dashboard resource types and automatic copy-lineage propagation remain work.
+
 Classify the current selected PhantomView sources using stable resource identities,
 source provenance, exact scopes and reviewed content revisions. Prepare bulk review
 from folder rules and verified source classifications. Retain collector exclusions
