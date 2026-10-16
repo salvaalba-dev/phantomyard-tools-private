@@ -693,3 +693,10 @@ commands, enforce explicit direct principals and fixed persona/scope/account
 bindings, and pass canonical source context to a cancellable protected callback.
 No host callback, signer or live channel is connected by this increment.
 
+The [native host isolation design](NATIVE_HOST_DESIGN.md) now identifies the
+foreground, screening, recovery, extraction and background execution surfaces
+that must leave the issuer account. A read-only source compatibility check pins
+the unchanged review baseline and rejects drift. It never reports activation
+readiness; ordinary forwarding, the isolated host and live integration remain
+pending.
+
