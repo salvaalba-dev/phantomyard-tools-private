@@ -16,6 +16,10 @@ select a human, persona, scope, category, URL or credential.
 The inspected source is `5af27060327ee8c53fe730dd8b98b6b305c62add`; its compatibility
 with the installed AU executable is not established by these tests.
 
+The private [provenance variant](NATIVE_INGRESS_PROVENANCE.md) preserves the
+source-owned ID/time these adapters need. Use its `sourceMessage` metadata;
+the existing application-level receipt ID is not interchangeable with that ID.
+
 - Telegram: `src/channels/core/engine.ts` computes
   `principalAuthenticated` from a nonempty explicit numeric allowlist before its
   inline slash-command path. The integration must use the transport's actual

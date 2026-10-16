@@ -682,3 +682,8 @@ attempts and delivers fragment links only to the verified sender. It reuses the
 existing peer-authenticated client and signing protocol. The isolated native host
 and installed-release hook remain required; this is not AU activation.
 
+The private [native provenance patch](NATIVE_INGRESS_PROVENANCE.md) now preserves
+source-owned IDs/timestamps in pinned Telegram and PhantomChat adapters. It keeps
+receipt routing and authentication unchanged and is tested only in disposable
+source copies; it does not start an isolated host or change AU.
+
