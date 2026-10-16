@@ -256,6 +256,8 @@ const uiSpanish = {
   "Enter →": "Entrar →",
   "Possible circular escalation route: review conditions and hop limit": "Ruta circular posible de escalado: revisar condiciones y límite de saltos",
   "Circular hierarchy": "Ciclo en jerarquía",
+  "Declared persona capability": "Capacidad declarada de la persona",
+  "Incomplete profile: missing": "Perfil incompleto: falta",
   "Role does not exist": "Rol inexistente",
   "Declared persona is not installed": "Persona declarada pero no instalada",
   "Installed role differs from specification": "El rol instalado difiere de la especificación",
@@ -361,7 +363,7 @@ let uiLanguage=localStorage.getItem('phantomview-language')||localStorage.getIte
 if(!['en','es'].includes(uiLanguage))uiLanguage='es';
 const uiEnglishBySpanish=Object.fromEntries(Object.entries(uiSpanish).map(([en,es])=>[es,en]));
 function uiText(key){return uiLanguage==='es'?(uiSpanish[key]||key):key;}
-function uiMessage(value){const text=String(value||'');const key=uiEnglishBySpanish[text]||text;if(uiSpanish[key])return uiText(key);if(uiLanguage==='en'&&text.startsWith('Perfil incompleto: falta '))return 'Incomplete profile: missing '+text.slice('Perfil incompleto: falta '.length);if(text.startsWith('Python distribution metadata: '))return uiText('Python distribution metadata')+': '+text.slice('Python distribution metadata: '.length);return text;}
+function uiMessage(value){const text=String(value||'');const key=uiEnglishBySpanish[text]||text;if(uiSpanish[key])return uiText(key);if(uiLanguage==='en'&&text.startsWith('Perfil incompleto: falta '))return 'Incomplete profile: missing '+text.slice('Perfil incompleto: falta '.length);if(text.startsWith('Incomplete profile: missing '))return uiText('Incomplete profile: missing')+' '+text.slice('Incomplete profile: missing '.length);if(text.startsWith('Python distribution metadata: '))return uiText('Python distribution metadata')+': '+text.slice('Python distribution metadata: '.length);return text;}
 function uiSourceKind(kind){const keys={org:'Organization model',persona:'Persona profile',documents:'Document registry',installation:'Installation manifest','doctor-export':'Diagnostic report export','local-diagnostics':'Local diagnostic export','default-persona':'Default persona observation','persona remota declarada':'Declared remote persona'};return uiText(keys[kind]||kind);}
 let accessLastMessage='';
 function applyUiChrome(){

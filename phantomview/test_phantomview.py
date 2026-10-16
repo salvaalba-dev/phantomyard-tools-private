@@ -1,6 +1,5 @@
 import copy
 import json
-import os
 from pathlib import Path
 import tempfile
 import threading
@@ -100,7 +99,7 @@ class ObservatoryTests(unittest.TestCase):
         profile = self.root / "personas" / "atlas"
         (profile / "kb").mkdir(parents=True)
         (profile / "kb" / "secrets.md").write_text("NEVER_EXPORT", encoding="utf8")
-        (profile / "kb" / "role.md").write_text("password: NEVER_EXPORT\n# Funciones\nFormación", encoding="utf8")
+        (profile / "kb" / "role.md").write_text("password: NEVER_EXPORT\n# Responsibilities\nTraining", encoding="utf8")
         self.obs.config.update(mode="existing", personas_dir=str(profile.parent))
         data = self.obs.refresh()
         actor = next(a for a in data["snapshot"]["actors"] if a["id"] == "atlas")
@@ -149,8 +148,8 @@ class ObservatoryTests(unittest.TestCase):
         self.obs.config.update(mode="existing", org_files=[str(file)])
         data = self.obs.refresh()
         titles = [x["title"] for x in data["snapshot"]["findings"]]
-        self.assertIn("Rol inexistente", titles)
-        self.assertIn("Ciclo en jerarquía", titles)
+        self.assertIn("Role does not exist", titles)
+        self.assertIn("Circular hierarchy", titles)
 
     def test_duplicate_ids_are_rejected(self):
         org = pv.read_source(pv.HERE / "example-org.yaml")
@@ -215,7 +214,7 @@ class ObservatoryTests(unittest.TestCase):
         self.assertEqual(iris["profile_path"], str(profile.resolve()))
         self.assertNotIn("private profile content", json.dumps(data))
         self.assertFalse(any("tools.md" in f["title"] for f in data["snapshot"]["findings"]))
-        self.assertTrue(any("sin ruta" in f["title"] for f in data["snapshot"]["findings"]))
+        self.assertTrue(any("no selected profile path" in f["title"] for f in data["snapshot"]["findings"]))
         cfg["persona_paths"] = {"other:iris": str(profile)}
         self.assertIsNotNone(self.obs.configure(cfg)["error"])
 
@@ -239,15 +238,15 @@ class ObservatoryTests(unittest.TestCase):
 
     def test_remote_persona_is_declared_without_local_probe(self):
         cfg = pv.default_config()
-        cfg.update(mode="existing", remote_personas={"demo:iris": "PC local"}, persona_paths={"demo:atlas": str(self.root / "atlas")})
+        cfg.update(mode="existing", remote_personas={"demo:iris": "Local PC"}, persona_paths={"demo:atlas": str(self.root / "atlas")})
         data = self.obs.configure(cfg)
         self.assertIsNone(data["error"])
         iris = next(a for a in data["snapshot"]["actors"] if a["id"] == "iris")
         self.assertIsNone(iris["installed"])
         self.assertEqual(iris["runtime"], "unknown")
         self.assertTrue(iris["profile_remote"])
-        self.assertEqual(iris["profile_location"], "PC local")
-        self.assertFalse(any(f["entity"] == iris["key"] and "sin ruta" in f["title"] for f in data["snapshot"]["findings"]))
+        self.assertEqual(iris["profile_location"], "Local PC")
+        self.assertFalse(any(f["entity"] == iris["key"] and "no selected profile path" in f["title"] for f in data["snapshot"]["findings"]))
         cfg["persona_paths"]["demo:iris"] = str(self.root / "iris")
         with self.assertRaises(ValueError):
             self.obs.validate_config(cfg)
@@ -277,7 +276,7 @@ class ObservatoryTests(unittest.TestCase):
         cfg = pv.default_config()
         cfg.update(mode="existing", org_files=[str(file)])
         data = self.obs.configure(cfg)
-        findings = [f for f in data["snapshot"]["findings"] if "escalado" in f["title"]]
+        findings = [f for f in data["snapshot"]["findings"] if "escalation" in f["title"]]
         self.assertTrue(findings)
         self.assertTrue(all(f["severity"] == "warning" for f in findings))
 

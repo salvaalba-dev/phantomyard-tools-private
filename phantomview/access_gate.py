@@ -10,9 +10,9 @@ from urllib.parse import urlsplit
 class Gate:
     def __init__(self, access, policy, origin, port, session_seconds=1800, clock=time.monotonic, audit=None):
         if type(session_seconds) is not int or not 60 <= session_seconds <= 3600:
-            raise ValueError("La sesión debe durar entre 60 y 3600 segundos")
+            raise ValueError("Session lifetime must be between 60 and 3600 seconds")
         if not isinstance(policy, dict) or not policy.get("identities"):
-            raise ValueError("Es necesaria una lista explícita de emisores")
+            raise ValueError("An explicit issuer allowlist is required")
         self.origin = access.public_origin(origin, port)
         self.links = access.AccessLinks(policy["identities"])
         self.access = access
@@ -39,7 +39,7 @@ class Gate:
         with self.lock:
             self._prune()
             if len(self.sessions) >= 100:
-                raise ValueError("Demasiadas sesiones")
+                raise ValueError("Too many sessions")
             value = secrets.token_urlsafe(32)
             owner, ident = self.digest(value), secrets.token_hex(16)
             if not self._record("session_created", ident, mode="dashboard-analysis"):
@@ -142,15 +142,15 @@ class SnapshotReader:
         self.path = Path(path)
         self.policy = policy
         self.config = {"sync_interval": 0, "software_interval": 0}
-        self.software_status = "Administración local"
+        self.software_status = "Local administration"
 
     def data(self):
         import json
         if self.path.is_symlink() or self.path.stat().st_size > 8_000_000:
-            raise ValueError("Índice no válido")
+            raise ValueError("Invalid index")
         result = json.loads(self.path.read_text(encoding="utf-8"))
         if not isinstance(result, dict) or not isinstance(result.get("snapshot"), dict):
-            raise ValueError("Índice no válido")
+            raise ValueError("Invalid index")
         result["read_only"] = True
         result["access"] = {key: self.policy.get(key, "") for key in ("actor", "role", "request_instructions")}
         return result
@@ -162,17 +162,17 @@ class SnapshotReader:
         import json
         import re
         if not re.fullmatch(r"[a-f0-9]{64}", ident):
-            raise ValueError("Nota no válida")
+            raise ValueError("Invalid note")
         state = {"snapshot": snapshot} if snapshot is not None else self.data()
         owner = next((a["key"] for a in state["snapshot"].get("actors", [])
                       if any(n.get("id") == ident for n in a.get("knowledge", []))), None)
         if not owner:
-            raise ValueError("Nota fuera del índice seleccionado")
+            raise ValueError("Note is outside the selected index")
         folder = self.path.parent / "kb"
         file = folder / (ident + ".json")
         if folder.is_symlink() or file.is_symlink() or file.stat().st_size > 12_000_000:
-            raise ValueError("Nota no válida")
+            raise ValueError("Invalid note")
         result = json.loads(file.read_text(encoding="utf-8"))
         if result.get("id") != ident or result.get("actor") != owner:
-            raise ValueError("Nota de otra persona")
+            raise ValueError("Note belongs to another persona")
         return result

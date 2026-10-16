@@ -50,7 +50,7 @@ def atomic_json(path, data):
 def read_source(path):
     path = Path(path)
     if path.is_symlink() or path.stat().st_size > MAX_SOURCE_BYTES:
-        raise ValueError("Fuente enlazada o demasiado grande")
+        raise ValueError("Source is a symlink or exceeds the size limit")
     text = path.read_text(encoding="utf-8-sig")
     return json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
 
@@ -85,25 +85,25 @@ def strings(value):
 
 def rows(value):
     if not isinstance(value, list) or len(value) > 10000 or any(not isinstance(x, dict) for x in value):
-        raise ValueError("Se esperaba una lista de registros")
+        raise ValueError("Expected a list of records")
     return value
 
 
 def validate_org(org):
     if not isinstance(org, dict) or not isinstance(org.get("organization"), dict):
-        raise ValueError("Organización no válida")
+        raise ValueError("Invalid organization")
     if org.get("version") != 1:
-        raise ValueError("Versión de organización no soportada")
+        raise ValueError("Unsupported organization version")
     oid = org["organization"].get("id", "")
     if not isinstance(oid, str) or not IDENTIFIER.fullmatch(oid):
-        raise ValueError("Identificador de organización no válido")
+        raise ValueError("Invalid organization identifier")
     for kind in ("departments", "roles", "actors"):
         items = rows(org.get(kind))
         ids = [x.get("id") for x in items]
         if any(not isinstance(x, str) or not IDENTIFIER.fullmatch(x) for x in ids):
-            raise ValueError(f"Identificador no válido en {kind}")
+            raise ValueError(f"Invalid identifier in {kind}")
         if len(set(ids)) != len(ids):
-            raise ValueError(f"Identificador duplicado en {kind}")
+            raise ValueError(f"Duplicate identifier in {kind}")
     return org
 
 
@@ -122,7 +122,7 @@ def cycle_nodes(edges):
         done.add(node)
     # Iterative depth is bounded by the accepted spec, preventing recursion abuse.
     if len(edges) > 200:
-        return {"grafo-demasiado-grande"}
+        return {"Graph exceeds display bounds"}
     for node in edges:
         visit(node, [])
     return cycles
@@ -151,7 +151,7 @@ class Observatory:
         self.last_attempt = None
         self.last_error = None
         self.history = []
-        self.software_status = "Actualización de software manual"
+        self.software_status = "Manual software updates"
         self.state_path = self.path.parent / "snapshot.json"
         if self.state_path.exists():
             try:
@@ -164,33 +164,33 @@ class Observatory:
     @staticmethod
     def validate_config(config):
         if not isinstance(config, dict) or config.get("mode") not in ("demo", "new", "existing"):
-            raise ValueError("Modo no válido")
+            raise ValueError("Invalid mode")
         if type(config.get("auto_procedures", True)) is not bool:
             raise ValueError("Automatic procedure discovery must be a boolean")
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
-                raise ValueError(f"Configuración no válida: {key}")
+                raise ValueError(f"Invalid configuration: {key}")
         for key in ("personas_dir", "procedures_file", "doctor_file", "diagnostics_file", "default_persona_file", "installation_file", "software_tag"):
             if not isinstance(config.get(key, ""), str):
-                raise ValueError(f"Configuración no válida: {key}")
+                raise ValueError(f"Invalid configuration: {key}")
         paths = config.get("persona_paths", {})
         if not isinstance(paths, dict) or len(paths) > 1000:
-            raise ValueError("Mapa de personas no válido")
+            raise ValueError("Invalid persona mapping")
         for key, value in paths.items():
             parts = key.split(":") if isinstance(key, str) else []
             if len(parts) != 2 or not all(IDENTIFIER.fullmatch(x) for x in parts):
-                raise ValueError("Usa organización:persona para cada ruta explícita")
+                raise ValueError("Use organization:persona for each explicit path")
             if not isinstance(value, str) or not Path(value).is_absolute():
-                raise ValueError("Cada persona necesita una ruta absoluta")
+                raise ValueError("Each persona requires an absolute path")
         if len({str(Path(p).resolve()) for p in paths.values()}) != len(paths):
-            raise ValueError("Una carpeta no puede asignarse a dos personas o setups")
+            raise ValueError("A folder cannot be assigned to two personas or setups")
         remote = config.get("remote_personas", {})
         if not isinstance(remote, dict) or len(remote) > 1000:
-            raise ValueError("Mapa de personas remotas no válido")
+            raise ValueError("Invalid remote persona mapping")
         for key, value in remote.items():
             parts = key.split(":") if isinstance(key, str) else []
             if len(parts) != 2 or not all(IDENTIFIER.fullmatch(x) for x in parts) or not isinstance(value, str) or not value.strip():
-                raise ValueError("Cada persona remota necesita organización:persona y ubicación declarada")
+                raise ValueError("Each remote persona requires organization:persona and a declared location")
         labels = config.get("installation_labels", {})
         if not isinstance(labels, dict) or len(labels) > 1000:
             raise ValueError("Invalid installation label mapping")
@@ -199,13 +199,13 @@ class Observatory:
             if len(parts) != 2 or not all(IDENTIFIER.fullmatch(x) for x in parts) or not isinstance(value, str) or not value.strip() or len(value) > 48:
                 raise ValueError("Installation labels require organization:persona and at most 48 characters")
         if set(remote) & set(paths):
-            raise ValueError("Una persona no puede tener ruta local y ubicación remota simultáneas")
+            raise ValueError("A persona cannot have both a local path and a remote location")
         for key in ("sync_interval", "software_interval"):
             value = config.get(key, 0)
             if type(value) is not int or not (value == 0 or 30 <= value <= 86400):
-                raise ValueError("El intervalo debe ser 0 o entre 30 y 86400 segundos")
+                raise ValueError("The interval must be 0 or between 30 and 86400 seconds")
         if config.get("software_interval") and not re.fullmatch(r"v\d+\.\d+\.\d+", config.get("software_tag", "")):
-            raise ValueError("La actualización automática necesita una versión firmada explícita")
+            raise ValueError("Automatic updates require an explicit signed release")
 
     def configure(self, config):
         self.validate_config(config)
@@ -239,7 +239,7 @@ class Observatory:
             org = validate_org(read_source(filename))
             oid = org["organization"]["id"]
             if any(x["id"] == oid for x in result["organizations"]):
-                raise ValueError("Organización duplicada entre fuentes")
+                raise ValueError("Duplicate organization across sources")
             source = str(Path(filename).resolve())
             procedure_orgs.append((org, source))
             result["sources"].append({"kind": "org", "path": source, "checked_at": now()})
@@ -252,7 +252,7 @@ class Observatory:
             roles = {x["id"]: x for x in org["roles"]}
             policies = org.get("policies") or {}
             if not isinstance(policies, dict) or not isinstance(policies.get("access_levels", {}), dict):
-                raise ValueError("Políticas no válidas")
+                raise ValueError("Invalid policies")
             hierarchy, escalation = {}, {}
             for kind, mapping, fields in (("departments", deps, ("id", "name", "parent", "access_policy")),
                                            ("roles", roles, ("id", "name", "department", "reports_to", "reports_to_human", "description", "access_level"))):
@@ -264,35 +264,35 @@ class Observatory:
                         clean["functions"] = strings(item.get("functions"))
                         clean["security_exceptions"] = strings(item.get("security_exceptions"))
                         if item.get("department") not in deps:
-                            finding("error", clean["key"], "Departamento inexistente", source)
+                            finding("error", clean["key"], "Department does not exist", source)
                         parent = text(item.get("reports_to"))
                         hierarchy[item["id"]] = [parent] if parent else []
                         if parent:
                             if parent not in roles:
-                                finding("error", clean["key"], "Superior inexistente", source)
+                                finding("error", clean["key"], "Supervisor does not exist", source)
                             result["edges"].append({"from": clean["key"], "to": f"{oid}:roles:{parent}", "type": "reports", "label": "Reporta a"})
                     elif item.get("parent"):
                         if item["parent"] not in deps:
-                            finding("error", clean["key"], "Departamento superior inexistente", source)
+                            finding("error", clean["key"], "Parent department does not exist", source)
                         result["edges"].append({"from": clean["key"], "to": f"{oid}:departments:{text(item['parent'])}", "type": "department", "label": "Pertenece a"})
                     result[kind].append(clean)
             for entry in rows(org.get("escalation_matrix", [])):
                 a, b = text(entry.get("from")), text(entry.get("to"))
                 if b not in roles or (a != "*" and a not in roles):
-                    finding("error", oid, "Escalado con rol inexistente", source)
+                    finding("error", oid, "Escalation role does not exist", source)
                 starts = [x for x in roles if x != b] if a == "*" else [a]
                 for start in starts:
                     escalation.setdefault(start, []).append(b)
                 result["edges"].append({"from": f"{oid}:roles:{a}", "to": f"{oid}:roles:{b}", "type": "escalation", "label": text(entry.get("condition"))})
-            for name, graph in (("jerarquía", hierarchy), ("escalado", escalation)):
+            for name, graph in (("hierarchy", hierarchy), ("escalation", escalation)):
                 for node in cycle_nodes(graph):
-                    if name == "escalado":
+                    if name == "escalation":
                         # Conditional escalations may be reciprocal and bounded by TTL;
                         # the static graph cannot prove a runtime protocol violation.
                         finding("warning", f"{oid}:roles:{node}",
-                                "Ruta circular posible de escalado: revisar condiciones y límite de saltos", source)
+                                "Possible circular escalation route: review conditions and hop limit", source)
                     else:
-                        finding("error", f"{oid}:roles:{node}", f"Ciclo en {name}", source)
+                        finding("error", f"{oid}:roles:{node}", f"Circular {name}", source)
             for actor in org["actors"]:
                 aid = actor["id"]
                 role = roles.get(actor.get("role"), {})
@@ -309,48 +309,48 @@ class Observatory:
                 level = policies.get("access_levels", {}).get(role.get("access_level"), {})
                 clean["categories"] = [x for x in level.get("categories", []) if type(x) is int] if isinstance(level, dict) else []
                 if not role:
-                    finding("error", key, "Rol inexistente", source)
+                    finding("error", key, "Role does not exist", source)
                 selected_path = explicit_paths.get(f"{oid}:{aid}")
                 clean["installation_label"] = text(config.get("installation_labels", {}).get(f"{oid}:{aid}"))
                 remote_location = remote_personas.get(f"{oid}:{aid}")
                 if remote_location:
                     clean["profile_location"] = text(remote_location)
                     clean["profile_remote"] = True
-                    result["sources"].append({"kind": "persona remota declarada", "org": oid, "actor": aid,
+                    result["sources"].append({"kind": "Declared remote persona", "org": oid, "actor": aid,
                                                "path": text(remote_location), "checked_at": None})
                 elif pbase or selected_path:
                     persona = Path(selected_path) if selected_path else pbase / aid
                     if any(p.is_symlink() for p in (persona, *persona.parents)):
-                        raise ValueError("Ruta de persona enlazada")
+                        raise ValueError("Persona path is a symlink")
                     if not selected_path and not persona.resolve().is_relative_to(pbase):
-                        raise ValueError("Ruta de persona fuera de su raíz")
+                        raise ValueError("Persona path is outside its root")
                     resolved = str(persona.resolve())
                     if resolved in used_paths:
-                        raise ValueError("Carpeta de persona compartida entre fuentes seleccionadas")
+                        raise ValueError("Persona folder is shared across selected sources")
                     used_paths.add(resolved)
                     clean["profile_path"] = resolved
                     result["sources"].append({"kind": "persona", "org": oid, "actor": aid, "path": resolved, "checked_at": now()})
                     clean["installed"] = persona.is_dir()
                     if not clean["installed"]:
-                        finding("warning", key, "Persona declarada pero no instalada", source)
+                        finding("warning", key, "Declared persona is not installed", source)
                     else:
                         for file in ("IDENTITY.md", "SOUL.md", "tools.md"):
                             if file == "tools.md" and (persona / "tools").is_dir():
                                 continue
                             if not (persona / file).is_file():
-                                finding("warning", key, f"Perfil incompleto: falta {file}", str(persona))
+                                finding("warning", key, f"Incomplete profile: missing {file}", str(persona))
                         provenance = persona / ".phantomorg.yaml"
                         if provenance.exists():
                             prov = read_source(provenance)
                             installed_role = prov.get("role_id", prov.get("role")) if isinstance(prov, dict) else None
                             if installed_role and installed_role != clean["role"]:
-                                finding("warning", key, "El rol instalado difiere de la especificación", str(provenance))
+                                finding("warning", key, "Installed role differs from specification", str(provenance))
                         mcp = persona / "mcp.json"
                         if mcp.exists():
                             reg = read_source(mcp)
                             servers = reg.get("mcpServers", {}) if isinstance(reg, dict) else {}
                             if not isinstance(servers, dict):
-                                raise ValueError("Registro MCP no válido")
+                                raise ValueError("Invalid MCP registry")
                             clean["integrations"] = [{"id": text(i), "transport": text(v.get("transport")), "status": "Sin comprobar"}
                                                      for i, v in servers.items() if isinstance(v, dict)]
                         kb = persona / "kb"
@@ -361,7 +361,7 @@ class Observatory:
                                 relative = note.relative_to(persona).as_posix()
                                 entry = {"title": note.stem, "path": relative}
                                 if re.search(r"(?:^|[/_.-])(secrets?|credentials?|vault|identity)(?:$|[/_.-])", relative, re.I):
-                                    entry["unavailable"] = "Archivo de credenciales: lectura excluida"
+                                    entry["unavailable"] = "Credentials file: reading excluded"
                                 else:
                                     try:
                                         with note.open("rb") as handle:
@@ -377,28 +377,28 @@ class Observatory:
                                         entry.update(id=ident, bytes=note.stat().st_size, modified_at=payload["modified_at"], truncated=payload["truncated"],
                                                      searchable=clean["searchable"] and note_search_policy(content))
                                     except OSError:
-                                        entry["unavailable"] = "Nota temporalmente no disponible"
+                                        entry["unavailable"] = "Note temporarily unavailable"
                                 clean["knowledge"].append(entry)
                 elif explicit_paths:
-                    finding("warning", key, "Persona declarada sin ruta de perfil seleccionada", source)
+                    finding("warning", key, "Declared persona has no selected profile path", source)
                 result["actors"].append(clean)
             for human in rows(org.get("humans", [])):
                 result["humans"].append({"id": text(human.get("id")), "org": oid, "name": text(human.get("name")), "role": text(human.get("role"))})
         declared_keys = {f"{a['org']}:{a['id']}" for a in result["actors"]}
         if (set(explicit_paths) | set(remote_personas) | set(config.get("installation_labels", {}))) - declared_keys:
-            raise ValueError("Ruta explícita para una persona ajena a las organizaciones seleccionadas")
+            raise ValueError("Explicit path references a persona outside the selected organizations")
         if pbase and pbase.exists():
             declared = {a["id"] for a in result["actors"]}
             for p in pbase.iterdir():
                 if p.is_dir() and not p.name.startswith(".") and p.name not in declared:
-                    finding("warning", p.name, "Persona instalada sin asignación en las fuentes seleccionadas", str(pbase))
+                    finding("warning", p.name, "Installed persona has no assignment in the selected sources", str(pbase))
         for filename in config.get("docs_manifests", []):
             manifest = read_source(filename)
             if not isinstance(manifest, dict) or not isinstance(manifest.get("manifest"), dict):
-                raise ValueError("Manifiesto documental no válido")
+                raise ValueError("Invalid document manifest")
             oid = text(manifest["manifest"].get("org"))
             if oid not in {o["id"] for o in result["organizations"]}:
-                raise ValueError("El manifiesto pertenece a una organización no seleccionada")
+                raise ValueError("The manifest belongs to an unselected organization")
             heads = manifest.get("currentVersions", {})
             nodes = rows(manifest.get("nodes", []))
             parent_urns = {text(n.get("mac")): text(n.get("urn")) for n in nodes if n.get("mac")}
@@ -424,7 +424,7 @@ class Observatory:
         if config.get("doctor_file"):
             report = read_source(config["doctor_file"])
             if not isinstance(report, dict):
-                raise ValueError("Informe doctor no válido")
+                raise ValueError("Invalid doctor report")
             for actor in result["actors"]:
                 checks = []
                 for channel in ("telegram", "phantomchat"):
@@ -512,7 +512,7 @@ class Observatory:
                     except (OSError, ValueError):
                         pass  # Preserve the collection error; never fall back to approval.
                 # Never include parser excerpts: source files may contain private material.
-                self.last_error = "No se pudo leer o validar una fuente. Se conserva la última lectura válida; revisa las rutas y el formato."
+                self.last_error = "Source could not be read or validated. The last valid reading is preserved; check paths and format."
             return self.data()
 
     def data(self):
@@ -523,10 +523,10 @@ class Observatory:
 
     def read_note(self, ident, snapshot=None):
         if not re.fullmatch(r"[a-f0-9]{64}", ident):
-            raise ValueError("Nota no válida")
+            raise ValueError("Invalid note")
         with self.lock:
             if not any(n.get("id") == ident for a in (self.snapshot or {}).get("actors", []) for n in a.get("knowledge", [])):
-                raise ValueError("Nota fuera del índice seleccionado")
+                raise ValueError("Note is outside the selected index")
             return copy.deepcopy(self.note_payloads[ident])
 
     def export(self, path, state):
@@ -553,20 +553,20 @@ def git(*args, cwd=None):
 def update_software(tag, check=False):
     """Only operator-selected, cryptographically signed release tags may activate."""
     if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
-        raise ValueError("Selecciona una versión como v0.1.0")
+        raise ValueError("Select a release such as v0.1.0")
     root = Path(git("rev-parse", "--show-toplevel")).resolve()
     if git("remote", "get-url", "origin").rstrip("/") not in (REMOTE, REMOTE[:-4], "git@github.com:salvaalba-dev/phantomyard-tools-private.git"):
-        raise ValueError("El origen no coincide con el repositorio privado autorizado")
+        raise ValueError("The origin does not match the authorized private repository")
     if git("status", "--porcelain"):
-        raise ValueError("Hay cambios locales; se conserva la instalación")
+        raise ValueError("Local changes exist; preserving the installation")
     git("fetch", "origin", f"refs/tags/{tag}:refs/tags/{tag}")
     git("verify-tag", tag)
     candidate = git("rev-parse", f"{tag}^{{commit}}")
     current = git("rev-parse", "HEAD")
     if candidate == current:
-        return "Ya tienes esta versión"
+        return "This version is already installed"
     if check:
-        return f"Versión firmada disponible: {tag}"
+        return f"Signed release available: {tag}"
     with tempfile.TemporaryDirectory(prefix="phantomview-release-") as temp:
         # Isolated checkout; never overwrite a running installation during validation.
         git("clone", "--no-hardlinks", str(root), temp)
@@ -576,7 +576,7 @@ def update_software(tag, check=False):
     previous = root / ".phantomview" / "previous-release.json"
     atomic_json(previous, {"commit": current, "at": now()})
     git("checkout", "--detach", candidate)
-    return f"Activada {tag}; reinicia PhantomView. La configuración y el índice se conservan."
+    return f"Activated {tag}; restart PhantomView. Configuration and index are preserved."
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -619,7 +619,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if not self.allowed():
-            return self.send(403, {"error": "Origen no permitido"})
+            return self.send(403, {"error": "Origin not allowed"})
         if getattr(self.server, 'scoped_backend', None) is not None:
             from scoped_http import dispatch
             if dispatch(self, 'GET'):
@@ -645,25 +645,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, info)
         if path.startswith("/api/knowledge/"):
             if not self.authenticated():
-                return self.send(401, {"error": "Autenticación necesaria"})
+                return self.send(401, {"error": "Authentication necessary"})
             try:
                 return self.send(200, self.server.observatory.read_note(path.removeprefix("/api/knowledge/")))
             except (ValueError, KeyError, OSError):
-                return self.send(404, {"error": "Nota no disponible en el índice seleccionado"})
+                return self.send(404, {"error": "Note is unavailable in the selected index"})
         if path == "/api/state":
             if not self.authenticated():
-                return self.send(401, {"error": "Autenticación necesaria"})
+                return self.send(401, {"error": "Authentication necessary"})
             try:
                 return self.send(200, self.server.observatory.data())
             except (ValueError, OSError):
-                return self.send(503, {"error": "Índice temporalmente no disponible"})
+                return self.send(503, {"error": "Index temporarily unavailable"})
         static = {"/search.js": ("search.js", "text/javascript; charset=utf-8"), "/version-ui.js": ("version-ui.js", "text/javascript; charset=utf-8"), "/consultation-ui.js": ("consultation-ui.js", "text/javascript; charset=utf-8"), "/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8"), "/review.js": ("review.js", "text/javascript; charset=utf-8"), "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"), "/assistant.js": ("assistant.js", "text/javascript; charset=utf-8")}
         if path not in static:
             if path in {'/scoped-ui.js', '/scoped-ui.css', '/scoped-chat.js'}:
                 static[path] = (path.removeprefix('/'), 'text/javascript; charset=utf-8' if path.endswith('.js') else 'text/css; charset=utf-8')
             else:
-                return self.send(404, {"error": "No encontrado"})
+                return self.send(404, {"error": "Not found"})
         if path == '/' and getattr(self.server, 'scoped_backend', None) is not None:
             static[path] = ('scoped-index.html', 'text/html; charset=utf-8')
         file, mime = static[path]
@@ -684,11 +684,11 @@ class Handler(BaseHTTPRequestHandler):
         if getattr(self.server, "gate", None):
             return self.gated_post()
         if not self.allowed() or not self.authenticated():
-            return self.send(403, {"error": "Acceso no permitido"})
+            return self.send(403, {"error": "Access not allowed"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if length < 0 or length > 64000:
-                return self.send(413, {"error": "Petición demasiado grande"})
+                return self.send(413, {"error": "Request is too large"})
             body = json.loads(self.rfile.read(length) or b"{}")
             if urlparse(self.path).path == "/api/search":
                 return self.search_request(body)
@@ -698,37 +698,37 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, self.server.observatory.refresh())
             if urlparse(self.path).path == "/api/config":
                 return self.send(200, self.server.observatory.configure(body))
-            return self.send(404, {"error": "No encontrado"})
+            return self.send(404, {"error": "Not found"})
         except (ValueError, TypeError, OSError):
-            return self.send(400, {"error": "Configuración o petición no válida"})
+            return self.send(400, {"error": "Configuration or request is invalid"})
 
     def gated_post(self):
         gate = self.server.gate
         if not self.allowed():
-            return self.send(403, {"error": "Origen no permitido"})
+            return self.send(403, {"error": "Origin not allowed"})
         parsed = urlparse(self.path)
         if parsed.query or parsed.fragment:
-            return self.send(400, {"error": "No se aceptan credenciales en la URL"})
+            return self.send(400, {"error": "Credentials in the URL are not accepted"})
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json" or not 0 < length <= 8192:
-                return self.send(400, {"error": "Petición no válida"})
+                return self.send(400, {"error": "Invalid request"})
             raw = self.rfile.read(length)
             body = json.loads(raw)
             if not isinstance(body, dict):
-                return self.send(400, {"error": "Petición no válida"})
+                return self.send(400, {"error": "Invalid request"})
             if parsed.path == "/api/access-link":
                 if raw != b"{}":
-                    return self.send(400, {"error": "La petición firmada debe estar vacía"})
+                    return self.send(400, {"error": "The signed request must be empty"})
                 link = gate.issue(self.headers.get("Authorization", ""), self.request_origin)
                 return self.send(200, {"link": link})
             if parsed.path == "/api/redeem":
                 if set(body) != {"code"}:
-                    return self.send(400, {"error": "Petición no válida"})
+                    return self.send(400, {"error": "Invalid request"})
                 session = gate.redeem(body["code"])
                 return self.send(200, {"ok": True}, cookie=gate.cookie(session))
             if not self.authenticated():
-                return self.send(401, {"error": "Pide un enlace temporal a la persona responsable"})
+                return self.send(401, {"error": "Request a temporary link from the responsible persona"})
             if parsed.path == "/api/search":
                 return self.search_request(body)
             if parsed.path == "/api/phantombot/check" and body == {}:
@@ -740,11 +740,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"ok": True}, cookie=gate.cookie())
             if parsed.path == "/api/sync":
                 return self.send(200, self.server.observatory.data())
-            return self.send(403, {"error": "Acceso de consulta; administración local"})
+            return self.send(403, {"error": "Read-only access; local administration"})
         except self.server.access_errors:
-            return self.send(401, {"error": "Enlace o petición inválidos, caducados o ya utilizados"})
+            return self.send(401, {"error": "Link or request is invalid, expired or already used"})
         except (OSError, TypeError):
-            return self.send(503, {"error": "Servicio temporalmente no disponible"})
+            return self.send(503, {"error": "Service temporarily unavailable"})
 
     def bot_version_request(self, force=False):
         if not self.authenticated():
@@ -881,7 +881,7 @@ def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None,
                         server.shutdown()
                         return
                 except (ValueError, subprocess.SubprocessError, OSError):
-                    obs.software_status = "No se pudo actualizar; se conserva la versión instalada"
+                    obs.software_status = "Update failed; preserving the installed version"
                 last_update = time.monotonic()
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
@@ -907,16 +907,16 @@ def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None,
 
 
 def main():
-    parser = argparse.ArgumentParser(description="PhantomView — organización, personas y documentos")
+    parser = argparse.ArgumentParser(description="PhantomView - organization, personas and documents")
     parser.add_argument("--config", default=str(HERE.parent / ".phantomview" / "config.json"))
     sub = parser.add_subparsers(dest="command", required=True)
     start = sub.add_parser("serve")
     start.add_argument("--port", type=int, default=8765)
     start.add_argument("--open", action="store_true")
-    start.add_argument("--reader-index", help="Índice exportado; proceso web sin acceso a fuentes")
-    start.add_argument("--access-policy", help="JSON con identidades públicas de emisores autorizados")
-    start.add_argument("--access-module-dir", help="Ruta al paquete PhantomBlog instalado")
-    start.add_argument("--public-origin", help="Origen HTTPS exacto del proxy")
+    start.add_argument("--reader-index", help="Exported index; web process has no source access")
+    start.add_argument("--access-policy", help="JSON containing authorized issuer public identities")
+    start.add_argument("--access-module-dir", help="Path to the installed PhantomBlog package")
+    start.add_argument("--public-origin", help="Exact HTTPS origin of the proxy")
     start.add_argument("--session-seconds", type=int, default=1800)
     setup = sub.add_parser("setup")
     setup.add_argument("--mode", choices=["demo", "new", "existing"], default="existing")
@@ -927,7 +927,7 @@ def main():
     setup.add_argument("--interval", type=int, default=0)
     setup.add_argument("--installation", default="", help="Explicit installation inventory manifest")
     sync = sub.add_parser("sync")
-    sync.add_argument("--export", help="Exporta el índice de consulta sin conceder acceso a fuentes")
+    sync.add_argument("--export", help="Export the read-only index without granting source access")
     for command in (setup, sync):
         command.add_argument("--review-root", help="Existing private operator directory for automatic review drafts")
         command.add_argument("--review-org", help="Trusted PhantomOrg source with explicit scopes for draft review")
@@ -941,19 +941,19 @@ def main():
         return
     if args.command == "rollback":
         if git("status", "--porcelain"):
-            raise ValueError("Hay cambios locales; no se cambia de versión")
+            raise ValueError("Local changes exist; refusing to switch versions")
         previous = read_source(Path(git("rev-parse", "--show-toplevel")) / ".phantomview" / "previous-release.json")
         commit = previous.get("commit", "")
         if not re.fullmatch(r"[a-f0-9]{40}", commit):
-            raise ValueError("Punto de restauración no válido")
+            raise ValueError("Invalid restore point")
         git("checkout", "--detach", commit)
-        print("Versión anterior restaurada; reinicia PhantomView")
+        print("Previous version restored; restart PhantomView")
         return
     gate = None
     if args.command == "serve" and args.access_policy:
         from access_gate import Gate, SnapshotReader
         if not args.reader_index or not args.public_origin or not args.access_module_dir:
-            parser.error("Acceso delegado requiere índice exportado, origen y módulo PhantomBlog")
+            parser.error("Delegated access requires an exported index, origin and PhantomBlog module")
         import sys
         sys.path.insert(0, str(Path(args.access_module_dir).resolve()))
         from phantomblog import access
@@ -966,7 +966,7 @@ def main():
         obs = SnapshotReader(args.reader_index, policy)
     else:
         if args.command == "serve" and (args.public_origin or args.reader_index):
-            parser.error("Un origen remoto requiere acceso delegado")
+            parser.error("A remote origin requires delegated access")
         queue = None
         if args.command in ("setup", "sync"):
             if bool(args.review_root) != bool(args.review_org):
@@ -981,14 +981,14 @@ def main():
               "personas_dir": args.personas, "docs_manifests": args.docs, "procedures_file": args.procedures,
               "doctor_file": "", "installation_file": args.installation, "sync_interval": args.interval, "software_tag": "", "software_interval": 0}
         state = obs.configure(cfg)
-        print("Configuración guardada" if not state["error"] else state["error"])
+        print("Configuration saved" if not state["error"] else state["error"])
         if state["error"]:
             raise SystemExit(1)
     elif args.command == "sync":
         state = obs.refresh()
         if args.export:
             obs.export(args.export, state)
-        print("Información actualizada" if not state["error"] else state["error"])
+        print("Information updated" if not state["error"] else state["error"])
         if state["error"]:
             raise SystemExit(1)
     else:

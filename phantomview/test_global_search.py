@@ -19,9 +19,9 @@ class SearchTests(unittest.TestCase):
 
     def test_secret_values_are_not_searchable_and_excerpt_is_relevant(self):
         snapshot={'actors':[{'key':'a','id':'a','knowledge':[{'id':'x','title':'Handbook'}]}]}
-        reader=Mock(return_value={'content':'Introduction '+(' '*400)+'riego por goteo. api_key=sk-abcdefghijklmnopqrstuvwx'})
+        reader=Mock(return_value={'content':'Introduction '+(' '*400)+'drip irrigation. api_key=sk-abcdefghijklmnopqrstuvwx'})
         index=KnowledgeIndex()
-        self.assertIn('riego',index.search(snapshot,'riego',reader)['results'][0]['text'])
+        self.assertIn('irrigation',index.search(snapshot,'irrigation',reader)['results'][0]['text'])
         self.assertEqual(index.search(snapshot,'abcdefghijklmnopqrstuvwx',reader)['results'],[])
 
     def test_content_search_is_repeatable_and_excludes_confidential_notes(self):
@@ -50,4 +50,5 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(result['results'],[])
 
 
-if __name__=='__main__':unittest.main()
+if __name__ == '__main__':
+    unittest.main()

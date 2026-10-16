@@ -101,7 +101,7 @@ def collect(manifest, actors, organization_ids, source):
             tool_id = "tool:" + actor["org"] + ":" + tool
             if tool_id not in ids:
                 ids.add(tool_id)
-                result.append({"id": tool_id, "org": actor["org"], "name": tool, "kind": "tool", "description": translated({"en": "Declared persona capability", "es": "Capacidad declarada de la persona"}),
+                result.append({"id": tool_id, "org": actor["org"], "name": tool, "kind": "tool", "description": translated("Declared persona capability"),
                                "status": "unknown", "evidence": "declared", "source": actor["source"], "location": "", "version": "", "shared": False, "owner": ""})
             relationships.append({"from": person_id, "to": tool_id, "type": "uses", "evidence": "declared"})
     bindings = manifest.get("tool_bindings", [])

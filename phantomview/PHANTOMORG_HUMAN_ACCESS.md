@@ -76,6 +76,9 @@ python3 -m compileall -q phantomorg/phantomorg
 
 The dedicated private CI job applies the patch to that exact **fork** revision
 and runs the complete suite on Linux, plus PhantomView's cross-package test.
+Before applying it, CI checks that HEAD equals the manifest's base revision and
+that every original file matches its recorded SHA-256. After applying it, CI
+checks every resulting file against the manifest. A mismatch stops the job.
 It has read-only repository permissions and never contacts the VPS or writes to
 either the public fork or upstream.
 

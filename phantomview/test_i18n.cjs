@@ -23,6 +23,9 @@ assert.equal(vm.runInContext('uiMessage("Ruta circular posible de escalado: revi
 assert.equal(vm.runInContext('uiMessage("My original KB document text")',fixture.sandbox),'My original KB document text');
 fixture.sandbox.state={snapshot:{}};
 fixture.events.change({target:{id:'global-language',value:'es'}});
+assert.equal(vm.runInContext('uiMessage("Circular hierarchy")',fixture.sandbox),'Ciclo en jerarquía');
+assert.equal(vm.runInContext('uiMessage("Incomplete profile: missing SOUL.md")',fixture.sandbox),'Perfil incompleto: falta SOUL.md');
+assert.equal(vm.runInContext('uiMessage("Declared persona capability")',fixture.sandbox),'Capacidad declarada de la persona');
 assert.ok(fixture.calls.includes('filters')&&fixture.calls.includes('render'));
 assert.equal(vm.runInContext('uiText("Tools")',fixture.sandbox),'Herramientas');
 vm.runInContext('setUiLanguage("unsupported")',fixture.sandbox);

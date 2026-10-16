@@ -6,7 +6,7 @@ const installationLabels = {
 };
 let installationMode='software', installationFocus='', installationEvidence='';
 const installationText=key=>installationLabels[uiLanguage][key]||key;
-const componentDescription=c=>c.description?.[uiLanguage]||c.description?.en||'';
+const componentDescription=c=>uiMessage(c.description?.[uiLanguage]||c.description?.en||'');
 
 function installationData(){
  const data=state?.snapshot?.installation||{components:[],relations:[]};

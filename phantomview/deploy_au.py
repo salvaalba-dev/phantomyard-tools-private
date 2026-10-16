@@ -14,7 +14,7 @@ import yaml
 def public_hex(value):
     # NIP-19 public key only. Reject nsec and all other identifiers.
     if not isinstance(value, str) or not value.startswith("npub1") or len(value) != 63 or value != value.lower():
-        raise ValueError("Se esperaba una clave pública npub")
+        raise ValueError("Expected an npub public key")
     digits = ["qpzry9x8gf2tvdw0s3jn54khce6mua7l".index(c) for c in value[5:]]
     expanded = [ord(c) >> 5 for c in "npub"] + [0] + [ord(c) & 31 for c in "npub"]
     checksum = 1
@@ -25,7 +25,7 @@ def public_hex(value):
             if top >> bit & 1:
                 checksum ^= generator
     if checksum != 1:
-        raise ValueError("Checksum de clave pública no válido")
+        raise ValueError("Invalid public key checksum")
     result, accumulator, bits = bytearray(), 0, 0
     for digit in digits[:-6]:
         accumulator = (accumulator << 5) | digit
@@ -34,7 +34,7 @@ def public_hex(value):
             bits -= 8
             result.append((accumulator >> bits) & 255)
     if len(result) != 32 or bits >= 5 or ((accumulator << (8 - bits)) & 255):
-        raise ValueError("Clave pública no válida")
+        raise ValueError("Invalid public key")
     return bytes(result).hex()
 
 
@@ -47,27 +47,27 @@ def main():
     parser.add_argument("--origin", required=True)
     parser.add_argument("--actor", required=True)
     parser.add_argument("--role", required=True)
-    parser.add_argument("--apply", action="store_true", help="Instala solo tras aprobación humana")
+    parser.add_argument("--apply", action="store_true", help="Install only after human approval")
     args = parser.parse_args()
     if os.geteuid() != 0:
-        raise ValueError("La instalación de servicios requiere administrador")
+        raise ValueError("Service installation requires an administrator")
     source = Path("/opt/phantomview-au")
     state = Path("/var/lib/phantomview-au")
     units = [Path("/etc/systemd/system") / name for name in
              ("phantomview-au-collect.service", "phantomview-au-collect.timer", "phantomview-au.service")]
     if any(path.exists() for path in [source, state, *units]):
-        raise ValueError("Ya existe un destino de PhantomView AU; no se sobrescribe")
+        raise ValueError("A PhantomView AU destination already exists; refusing to overwrite it")
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     if len(config.get("org_files", [])) != 1 or config.get("software_interval"):
-        raise ValueError("La prueba requiere una organización y actualizaciones de software manuales")
+        raise ValueError("The pilot requires one organization and manual software updates")
     org = yaml.safe_load(Path(config["org_files"][0]).read_text())
     if org.get("organization", {}).get("id") != "aquaponics-united":
-        raise ValueError("Este instalador está limitado a AU")
+        raise ValueError("This installer is limited to AU")
     actor = next(a for a in org["actors"] if a["id"] == args.actor)
     if actor["role"] != args.role:
-        raise ValueError("El rol de la persona no coincide con el organigrama")
+        raise ValueError("The persona role does not match the organization model")
     policy = {"identities": [public_hex(actor["npub"])], "actor": args.actor, "role": args.role,
-              "request_instructions": "Solicita a la persona responsable una URL temporal de PhantomView."}
+              "request_instructions": "Request a temporary PhantomView URL from the responsible persona."}
     sys.path.insert(0, "/opt/phantomblog-tool")
     from phantomblog import access
     access.public_origin(args.origin, 8789)
@@ -76,24 +76,25 @@ def main():
     for port in (8789, 8790):
         with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", port)) == 0:
-                raise ValueError(f"Puerto {port} ocupado")
-    uid, gid = pwd.getpwnam("aunited").pw_uid, grp.getgrnam("aunited").gr_gid
-    print("Plan: /opt/phantomview-au; /var/lib/phantomview-au; 3 unidades propias; lector aunited; puerto local 8789.")
-    print("El proxy HTTPS 8790 se configura aparte. No se cambian perfiles ni servicios existentes.")
+                raise ValueError(f"Port {port} is occupied")
+    pwd.getpwnam("aunited")
+    gid = grp.getgrnam("aunited").gr_gid
+    print("Plan: /opt/phantomview-au; /var/lib/phantomview-au; 3 dedicated units; reader aunited; loopback port 8789.")
+    print("Configure the HTTPS proxy on port 8790 separately. Existing profiles and services remain unchanged.")
     if not args.apply:
         return
     # Validate the entire archive before writing any member.
     with zipfile.ZipFile(args.bundle) as archive:
         members = [member for member in archive.infolist() if member.filename.startswith("phantomview/") and not member.is_dir()]
         if not members or sum(member.file_size for member in members) > 16_000_000:
-            raise ValueError("Paquete no válido")
+            raise ValueError("Invalid bundle")
         names = [Path(member.filename).name for member in members]
         if len(set(names)) != len(names) or not {"phantomview.py", "access_gate.py", "app.js", "index.html", "style.css", "logo.png"}.issubset(names):
-            raise ValueError("Paquete incompleto o duplicado")
+            raise ValueError("Incomplete or duplicate bundle")
         for member in members:
             relative = Path(member.filename).relative_to("phantomview")
             if len(relative.parts) != 1 or relative.name.startswith("."):
-                raise ValueError("Ruta de paquete no permitida")
+                raise ValueError("Bundle path is not allowed")
         source.mkdir(mode=0o755)
         for member in members:
             target = source / Path(member.filename).name
@@ -157,7 +158,7 @@ WantedBy=multi-user.target
     subprocess.run(["systemctl", "daemon-reload"], check=True)
     subprocess.run(["systemctl", "start", "phantomview-au-collect.service"], check=True)
     subprocess.run(["systemctl", "enable", "--now", "phantomview-au-collect.timer", "phantomview-au.service"], check=True)
-    print("Servicios propios instalados. Verificar el índice y después configurar el proxy privado.")
+    print("Dedicated services installed. Verify the index, then configure the private proxy.")
 
 
 if __name__ == "__main__":

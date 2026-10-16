@@ -38,8 +38,31 @@ jobs:
       - name: Apply the private counterpart patch
         working-directory: compatibility-source
         run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          manifest = json.loads(pathlib.Path('../phantomview/phantomorg-human-access.manifest.json').read_text())
+          revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if revision != manifest['base']:
+              raise SystemExit('PhantomOrg patch requires its exact reviewed base revision')
+          for name, hashes in manifest['files'].items():
+              if hashes['base_sha256_lf'] is None:
+                  if pathlib.Path(name).exists():
+                      raise SystemExit('PhantomOrg patch requires a new path: ' + name)
+                  continue
+              normalized = pathlib.Path(name).read_text(encoding='utf-8').replace('\r\n', '\n').encode('utf-8')
+              if hashlib.sha256(normalized).hexdigest() != hashes['base_sha256_lf']:
+                  raise SystemExit('PhantomOrg patch base hash mismatch: ' + name)
+          PY
           git apply --check ../phantomview/phantomorg-human-access.patch
           git apply ../phantomview/phantomorg-human-access.patch
+          python - <<'PY'
+          import hashlib, json, pathlib
+          manifest = json.loads(pathlib.Path('../phantomview/phantomorg-human-access.manifest.json').read_text())
+          for name, hashes in manifest['files'].items():
+              normalized = pathlib.Path(name).read_text(encoding='utf-8').replace('\r\n', '\n').encode('utf-8')
+              if hashlib.sha256(normalized).hexdigest() != hashes['result_sha256_lf']:
+                  raise SystemExit('PhantomOrg patch result hash mismatch: ' + name)
+          PY
       - name: Install PhantomOrg test dependencies
         run: python -m pip install -e './compatibility-source/phantomorg[dev]'
       - name: Run the full PhantomOrg suite on Linux
