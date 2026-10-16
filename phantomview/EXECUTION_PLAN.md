@@ -92,6 +92,11 @@ Commit: `feat: add versioned organizational resource classification`
 
 ### 4 Verified temporary sessions
 
+Implementation status: recipient-bound signed sessions and a Linux peer-credential
+handoff boundary are prepared. See [private handoff](TRUSTED_HANDOFF.md). Native
+pre-model delivery, provisioned account isolation and live reader wiring remain
+work; no expanded session access is enabled.
+
 Implement the native pre-model channel integration and a genuinely trusted
 recipient handoff. Preserve the existing single-use signed access-link protocol.
 Bind the session to the verified human and issuing persona; validate current

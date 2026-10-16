@@ -585,3 +585,9 @@ and response delivery, audit integration and JEV remain activation prerequisites
 The live assistant is still the bounded analysis pilot. See
 [integration status](VERIFIED_CHANNEL_INTEGRATION.md) for the remaining work.
 
+The inactive [private verified-channel handoff](TRUSTED_HANDOFF.md) adds a bounded
+Linux Unix-socket protocol with kernel peer-account checks before request reads.
+It requires separately isolated native channel, reader and model accounts; it
+does not authenticate model-supplied channel claims or start a listener on import.
+Native channel integration and deployment checks remain prerequisites.
+

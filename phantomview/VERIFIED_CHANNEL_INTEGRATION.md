@@ -65,6 +65,14 @@ An authenticated IPC implementation must keep the channel's authority away from
 model-controlled tool processes; a shared secret that those processes can read
 would not establish that separation.
 
+`trusted_handoff.py` now provides an inactive Linux Unix-socket boundary using
+kernel peer credentials. It accepts only a separately provisioned native issuer
+account, rejects model/unknown accounts before reading claims, and retains the
+existing signed-link protocol. Persona and origin come from the reader's gate.
+See [private handoff](TRUSTED_HANDOFF.md) for the account-isolation contract,
+bounded frame protocol, tests and remaining native-hook requirements. It is not
+imported by the live reader, and no listener or channel service has been enabled.
+
 `scoped_knowledge.py` adds the inactive retrieval boundary over an identified
 session. It calls `identified_scope` before retrieval, checks each resource with
 the private directory before opening or searching its payload, and rejects draft
@@ -122,8 +130,9 @@ be enabled. Human category zero currently names Salvador explicitly.
   keep it before inference and deliver links only to that verified direct sender.
 - Support the explicit counterpart/project extensions consistently in PhantomOrg,
   then validate the reviewed AU matrix and register missing channel identities.
-- Transport the recipient association through a genuine trusted boundary to the
-  reader. No publicly submitted identity field or model-readable signing secret.
+- Integrate the prepared private handoff with the reader and an isolated native
+  channel component; test positive cross-account kernel acceptance and direct
+  delivery. No publicly submitted identity field or model-readable signing secret.
 - Review the fingerprinted classification catalog, then wire the prepared scoped
   retrieval before inference; dashboard KB exports alone do not establish
   per-resource category/project labels sufficient for expanded access.
