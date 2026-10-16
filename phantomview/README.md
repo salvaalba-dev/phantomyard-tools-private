@@ -494,3 +494,32 @@ information scope only: it does not add tools, administration or credential
 disclosure. Explicit secret-resource exclusions still apply. Ordinary category-4
 role exceptions do not imply access to every project.
 
+### Folder classification review drafts
+
+`classification_proposal.py` prepares an offline JSON draft and optional HTML
+review table from a metadata-only inventory. An inventory includes the trusted
+organization ID, declared `categories`, and `folders` entries containing `actor`,
+canonical relative `folder` (under `kb`) and positive `notes` counts. Do not
+include note bodies, credentials or human channel identifiers.
+
+```sh
+python classification_proposal.py inventory.json --output draft.json --html review.html
+```
+
+Every rule is unapproved, nonrecursive and scoped to one actor and exact folder.
+Suggestions use folder names only and require content review: they do not prove
+classification. Mixed roots, imported documents and unidentified projects remain
+unclassified. Category 0 is never suggested as a document category. Missing
+organization categories are never invented. Potential secret folders are marked
+for separate exclusion review; a numeric category never makes credentials safe.
+
+The assistant does not consume these drafts, and this command cannot activate
+permissions. Output files are created exclusively to preserve prior review work.
+New notes and changed bodies need separate review: the metadata-only inventory
+contains no content hashes and cannot attest to later content. Before activation,
+the eventual policy implementation must bind accepted classifications to current
+sources, enforce exact project grants and exclusions, invalidate changed content,
+and apply authorization before retrieval or model inference. Keep installation
+inventories and review artifacts outside the repository; commit only generic code
+and synthetic fixtures.
+
