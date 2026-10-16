@@ -46,8 +46,15 @@ class Catalog:
         seen, paths = set(), set()
         fields = {'id', 'actor', 'path', 'category', 'project', 'secret', 'payload_sha256'}
         for row in document['resources']:
-            if not isinstance(row, dict) or set(row) != fields:
+            if not isinstance(row, dict) or not fields <= set(row) or set(row) - fields - {'scope'}:
                 raise ValueError('Invalid resource classification')
+            if 'scope' in row:
+                scope = row['scope']
+                if (not isinstance(scope, dict) or set(scope) != {'id', 'kind'}
+                        or not isinstance(scope['id'], str) or not IDENTIFIER.fullmatch(scope['id'])
+                        or not isinstance(scope['kind'], str)
+                        or scope['kind'] not in {'organization', 'department', 'project'}):
+                    raise ValueError('Invalid classified resource scope')
             if (not isinstance(row['id'], str) or not HEX.fullmatch(row['id'])
                     or not isinstance(row['payload_sha256'], str) or not HEX.fullmatch(row['payload_sha256'])
                     or not isinstance(row['actor'], str) or not IDENTIFIER.fullmatch(row['actor'])
@@ -194,6 +201,8 @@ def retrieve(gate, headers, catalog_loader, note_loader, question):
     for row in document['resources']:
         resource = {'organization': document['organization'], 'category': row['category'],
                     'project': row['project'], 'secret': row['secret']}
+        if 'scope' in row:
+            resource['scope'] = row['scope']
         if not directory.permits(recipient, resource):
             continue
         raw = note_loader(row['id'])
@@ -223,13 +232,16 @@ def retrieve(gate, headers, catalog_loader, note_loader, question):
         # Excerpts and titles remain untrusted evidence for JEV, never instructions.
         positions = [content.find(term) for term in terms if term in content]
         start = max(0, min(positions, default=0) - 200)
-        matches.append((score, row['id'], {
+        evidence = {
             'id': row['id'], 'actor': row['actor'], 'title': note['title'],
             'category': row['category'], 'project': row['project'],
             'payload_sha256': row['payload_sha256'], 'trust': 'untrusted',
             'excerpt': note['content'][start:start + EXCERPT_CHARS],
             'excerpt_only': True,
-        }))
+        }
+        if 'scope' in row:
+            evidence['scope'] = row['scope']
+        matches.append((score, row['id'], evidence))
     # Expiry, logout and policy/channel-identity changes during retrieval must
     # discard all collected evidence before it can be handed to a model.
     current, _ = gate.identified_scope(headers)

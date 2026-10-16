@@ -151,7 +151,7 @@ class ScopeTests(unittest.TestCase):
         scope = Scope.from_org(org)
         resource = {"organization": "example", "category": "category-4-project", "project": "any-project", "secret": False}
         self.assertTrue(scope.permits("salvador", "paco", resource))
-        self.assertTrue(scope.permits("salvador", "paco", {**resource, "category": "category-0"}))
+        self.assertFalse(scope.permits("salvador", "paco", {**resource, "category": "category-0"}))
         self.assertFalse(scope.permits("brigitte", "paco", resource))
         self.assertFalse(scope.permits("brigitte", "pepa", resource))
         self.assertFalse(scope.permits("salvador", "paco", {**resource, "organization": "other"}))

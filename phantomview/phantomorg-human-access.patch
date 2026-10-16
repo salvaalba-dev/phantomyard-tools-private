@@ -1,6 +1,6 @@
 --- a/phantomorg/README.md
 +++ b/phantomorg/README.md
-@@ -14,6 +14,50 @@
+@@ -14,6 +14,57 @@
  RBAC/ABAC/PBAC) and the development backlog.
  
  ## Install
@@ -32,6 +32,13 @@
 +are exact identifiers assigned to existing actors; no project is inferred from
 +a category number, reporting line or job title. Humans inherit their explicit
 +counterpart's ordinary information scope in the PhantomView policy resolver.
++The private extension also supports explicit `scope_definitions`,
++`persona_scope_grants` and `human_action_grants` under `policies.phantomview`.
++Scope kinds are organization, department and project. Project scope grants need
++matching explicit project grants. Human capabilities for resource editing,
++classification, personal-view editing and shared-view editing are independent of
++read categories and category zero. Unknown references and duplicate grants are
++rejected. These fields do not install an action executor or change live access.
 +The patch also preserves the optional `organization.display_name` already used
 +by the private dashboard; it is a label and never changes organization identity.
 +
@@ -85,14 +92,25 @@
          )
  
  
-@@ -152,9 +156,17 @@
+@@ -152,9 +156,28 @@
  
  
  @dataclass
++class ViewScopeDefinition:
++    """A declared presentation/data boundary, not a numeric security category."""
++
++    kind: str
++    label: str | None = None
++
++
++@dataclass
 +class PhantomViewPolicy:
-+    """Information-scope metadata; never an authentication or execution grant."""
++    """Private access metadata; never authenticates a human or enables tools."""
 +
 +    project_grants: dict[str, list[str]] = field(default_factory=dict)
++    scope_definitions: dict[str, ViewScopeDefinition] | None = None
++    persona_scope_grants: dict[str, list[str]] = field(default_factory=dict)
++    human_action_grants: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 +
 +
 +@dataclass
@@ -103,7 +121,7 @@
  
      @classmethod
      def from_dict(cls, d: dict) -> Policies:
-@@ -171,7 +183,19 @@
+@@ -171,7 +194,30 @@
              )
              for k, v in d.get("security_categories", {}).items()
          }
@@ -116,7 +134,18 @@
 +                project_grants={
 +                    actor: list(projects)
 +                    for actor, projects in view.get("project_grants", {}).items()
-+                }
++                },
++                scope_definitions={
++                    ident: ViewScopeDefinition(kind=row["kind"], label=row.get("label"))
++                    for ident, row in view["scope_definitions"].items()
++                } if "scope_definitions" in view else None,
++                persona_scope_grants={
++                    actor: list(scopes) for actor, scopes in view.get("persona_scope_grants", {}).items()
++                },
++                human_action_grants={
++                    human: {action: list(scopes) for action, scopes in grants.items()}
++                    for human, grants in view.get("human_action_grants", {}).items()
++                },
 +            )
 +            if view is not None
 +            else None,
@@ -137,12 +166,10 @@
          }
        }
      },
-@@ -277,8 +281,108 @@
+@@ -277,8 +281,420 @@
            "propertyNames": {
              "pattern": "^[a-z0-9][a-z0-9_-]*$"
            }
--        }
--      }
 +        },
 +        "phantomview": {
 +          "type": "object",
@@ -217,9 +244,322 @@
 +                },
 +                "uniqueItems": true
 +              }
++            },
++            "scope_definitions": {
++              "type": "object",
++              "minProperties": 1,
++              "propertyNames": {
++                "type": "string",
++                "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                "maxLength": 64,
++                "not": {
++                  "enum": [
++                    "con",
++                    "prn",
++                    "aux",
++                    "nul",
++                    "com1",
++                    "com2",
++                    "com3",
++                    "com4",
++                    "com5",
++                    "com6",
++                    "com7",
++                    "com8",
++                    "com9",
++                    "lpt1",
++                    "lpt2",
++                    "lpt3",
++                    "lpt4",
++                    "lpt5",
++                    "lpt6",
++                    "lpt7",
++                    "lpt8",
++                    "lpt9"
++                  ]
++                }
++              },
++              "additionalProperties": {
++                "type": "object",
++                "required": [
++                  "kind"
++                ],
++                "additionalProperties": false,
++                "properties": {
++                  "kind": {
++                    "enum": [
++                      "organization",
++                      "department",
++                      "project"
++                    ]
++                  },
++                  "label": {
++                    "type": "string",
++                    "pattern": "\\S"
++                  }
++                }
++              }
++            },
++            "persona_scope_grants": {
++              "type": "object",
++              "propertyNames": {
++                "type": "string",
++                "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                "maxLength": 64,
++                "not": {
++                  "enum": [
++                    "con",
++                    "prn",
++                    "aux",
++                    "nul",
++                    "com1",
++                    "com2",
++                    "com3",
++                    "com4",
++                    "com5",
++                    "com6",
++                    "com7",
++                    "com8",
++                    "com9",
++                    "lpt1",
++                    "lpt2",
++                    "lpt3",
++                    "lpt4",
++                    "lpt5",
++                    "lpt6",
++                    "lpt7",
++                    "lpt8",
++                    "lpt9"
++                  ]
++                }
++              },
++              "additionalProperties": {
++                "type": "array",
++                "items": {
++                  "type": "string",
++                  "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                  "maxLength": 64,
++                  "not": {
++                    "enum": [
++                      "con",
++                      "prn",
++                      "aux",
++                      "nul",
++                      "com1",
++                      "com2",
++                      "com3",
++                      "com4",
++                      "com5",
++                      "com6",
++                      "com7",
++                      "com8",
++                      "com9",
++                      "lpt1",
++                      "lpt2",
++                      "lpt3",
++                      "lpt4",
++                      "lpt5",
++                      "lpt6",
++                      "lpt7",
++                      "lpt8",
++                      "lpt9"
++                    ]
++                  }
++                },
++                "uniqueItems": true
++              }
++            },
++            "human_action_grants": {
++              "type": "object",
++              "propertyNames": {
++                "type": "string",
++                "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                "maxLength": 64,
++                "not": {
++                  "enum": [
++                    "con",
++                    "prn",
++                    "aux",
++                    "nul",
++                    "com1",
++                    "com2",
++                    "com3",
++                    "com4",
++                    "com5",
++                    "com6",
++                    "com7",
++                    "com8",
++                    "com9",
++                    "lpt1",
++                    "lpt2",
++                    "lpt3",
++                    "lpt4",
++                    "lpt5",
++                    "lpt6",
++                    "lpt7",
++                    "lpt8",
++                    "lpt9"
++                  ]
++                }
++              },
++              "additionalProperties": {
++                "type": "object",
++                "additionalProperties": false,
++                "properties": {
++                  "resource.edit": {
++                    "type": "array",
++                    "items": {
++                      "type": "string",
++                      "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                      "maxLength": 64,
++                      "not": {
++                        "enum": [
++                          "con",
++                          "prn",
++                          "aux",
++                          "nul",
++                          "com1",
++                          "com2",
++                          "com3",
++                          "com4",
++                          "com5",
++                          "com6",
++                          "com7",
++                          "com8",
++                          "com9",
++                          "lpt1",
++                          "lpt2",
++                          "lpt3",
++                          "lpt4",
++                          "lpt5",
++                          "lpt6",
++                          "lpt7",
++                          "lpt8",
++                          "lpt9"
++                        ]
++                      }
++                    },
++                    "uniqueItems": true
++                  },
++                  "resource.classify": {
++                    "type": "array",
++                    "items": {
++                      "type": "string",
++                      "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                      "maxLength": 64,
++                      "not": {
++                        "enum": [
++                          "con",
++                          "prn",
++                          "aux",
++                          "nul",
++                          "com1",
++                          "com2",
++                          "com3",
++                          "com4",
++                          "com5",
++                          "com6",
++                          "com7",
++                          "com8",
++                          "com9",
++                          "lpt1",
++                          "lpt2",
++                          "lpt3",
++                          "lpt4",
++                          "lpt5",
++                          "lpt6",
++                          "lpt7",
++                          "lpt8",
++                          "lpt9"
++                        ]
++                      }
++                    },
++                    "uniqueItems": true
++                  },
++                  "view.personal.edit": {
++                    "type": "array",
++                    "items": {
++                      "type": "string",
++                      "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                      "maxLength": 64,
++                      "not": {
++                        "enum": [
++                          "con",
++                          "prn",
++                          "aux",
++                          "nul",
++                          "com1",
++                          "com2",
++                          "com3",
++                          "com4",
++                          "com5",
++                          "com6",
++                          "com7",
++                          "com8",
++                          "com9",
++                          "lpt1",
++                          "lpt2",
++                          "lpt3",
++                          "lpt4",
++                          "lpt5",
++                          "lpt6",
++                          "lpt7",
++                          "lpt8",
++                          "lpt9"
++                        ]
++                      }
++                    },
++                    "uniqueItems": true
++                  },
++                  "view.shared.edit": {
++                    "type": "array",
++                    "items": {
++                      "type": "string",
++                      "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                      "maxLength": 64,
++                      "not": {
++                        "enum": [
++                          "con",
++                          "prn",
++                          "aux",
++                          "nul",
++                          "com1",
++                          "com2",
++                          "com3",
++                          "com4",
++                          "com5",
++                          "com6",
++                          "com7",
++                          "com8",
++                          "com9",
++                          "lpt1",
++                          "lpt2",
++                          "lpt3",
++                          "lpt4",
++                          "lpt5",
++                          "lpt6",
++                          "lpt7",
++                          "lpt8",
++                          "lpt9"
++                        ]
++                      }
++                    },
++                    "uniqueItems": true
++                  }
++                }
++              }
 +            }
++          },
++          "dependencies": {
++            "persona_scope_grants": [
++              "scope_definitions"
++            ],
++            "human_action_grants": [
++              "scope_definitions"
++            ]
 +          }
-+        }
+         }
+-      }
 +      },
 +      "allOf": [
 +        {
@@ -248,7 +588,7 @@
      },
      "escalation_matrix": {
        "type": "array",
-@@ -456,6 +560,37 @@
+@@ -456,6 +872,37 @@
                "null"
              ],
              "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
@@ -286,7 +626,7 @@
            }
          }
        }
-@@ -465,4 +600,4 @@
+@@ -465,4 +912,4 @@
        "description": "Opaque PhantomDocs namespace block (owned by phantomdocs, tolerated by PhantomOrg)"
      }
    }
@@ -337,13 +677,48 @@
              _require_optional_type(
                  h.get("telegram_user_id"), int, f"humans[{i}].telegram_user_id"
              )
-@@ -466,6 +475,23 @@
+@@ -466,6 +475,58 @@
  
      policies = _require_mapping(raw["policies"], "policies")
      _reject_unknown_keys(policies, _POLICIES_KEYS, "policies")
 +    if "phantomview" in policies:
 +        view = _require_mapping(policies["phantomview"], "policies.phantomview")
-+        _reject_unknown_keys(view, {"project_grants"}, "policies.phantomview")
++        _reject_unknown_keys(view, {"project_grants", "scope_definitions", "persona_scope_grants",
++                                    "human_action_grants"}, "policies.phantomview")
++        if ("persona_scope_grants" in view or "human_action_grants" in view) and "scope_definitions" not in view:
++            raise ShapeError("policies.phantomview: scope_definitions required for scope/action grants")
++        if "scope_definitions" in view:
++            scopes = _require_mapping(view["scope_definitions"], "policies.phantomview.scope_definitions")
++            if not scopes:
++                raise ShapeError("policies.phantomview.scope_definitions: must not be empty")
++            for scope_id, definition in scopes.items():
++                _require_id(scope_id, "policies.phantomview.scope_definitions scope")
++                definition = _require_mapping(definition, "policies.phantomview.scope_definitions entry")
++                _reject_unknown_keys(definition, {"kind", "label"}, "policies.phantomview.scope_definitions entry")
++                _require_type(definition.get("kind"), str, "policies.phantomview.scope_definitions kind")
++                if definition["kind"] not in {"organization", "department", "project"}:
++                    raise ShapeError("policies.phantomview.scope_definitions: invalid kind")
++                if "label" in definition:
++                    _require_type(definition["label"], str, "policies.phantomview.scope_definitions label")
++                    if not definition["label"].strip():
++                        raise ShapeError("policies.phantomview.scope_definitions: empty label")
++        for field in ("persona_scope_grants", "human_action_grants"):
++            values = _require_mapping(view.get(field, {}), f"policies.phantomview.{field}")
++            for principal, grants_ in values.items():
++                _require_id(principal, f"policies.phantomview.{field} principal")
++                if field == "human_action_grants":
++                    grants_ = _require_mapping(grants_, "policies.phantomview.human_action_grants entry")
++                    _reject_unknown_keys(grants_, {"resource.edit", "resource.classify", "view.personal.edit",
++                                                   "view.shared.edit"}, "policies.phantomview.human_action_grants entry")
++                    lists = grants_.values()
++                else:
++                    lists = [grants_]
++                for scope_ids in lists:
++                    _require_list(scope_ids, f"policies.phantomview.{field} scopes")
++                    for scope_id in scope_ids:
++                        _require_id(scope_id, f"policies.phantomview.{field} scope")
++                    if len(set(scope_ids)) != len(scope_ids):
++                        raise ShapeError(f"policies.phantomview.{field}: duplicate scope")
 +        grants = _require_mapping(
 +            view.get("project_grants", {}), "policies.phantomview.project_grants"
 +        )
@@ -361,7 +736,7 @@
      for key in ["access_levels", "security_categories"]:
          _require(policies, key, "policies")
  
-@@ -516,6 +542,10 @@
+@@ -516,6 +577,10 @@
          _require_optional_type(
              cat.get("owner"), str, f"policies.security_categories.{cat_id}.owner"
          )
@@ -374,7 +749,7 @@
          )
 --- a/phantomorg/phantomorg/validator/refs.py
 +++ b/phantomorg/phantomorg/validator/refs.py
-@@ -164,6 +164,59 @@
+@@ -164,6 +164,86 @@
      access_level_ids = set(spec.policies.access_levels.keys())
      security_category_ids = set(spec.policies.security_categories.keys())
  
@@ -410,6 +785,33 @@
 +                problems.append(
 +                    f"policies.phantomview.project_grants: actor '{actor}' does not exist"
 +                )
++        if view.scope_definitions is not None:
++            scopes = view.scope_definitions
++            for ident, scope in scopes.items():
++                if scope.kind == "organization" and ident != spec.organization.id:
++                    problems.append("policies.phantomview: organization scope must use the organization ID")
++                if scope.kind == "department" and ident not in dept_ids:
++                    problems.append(f"policies.phantomview: department scope '{ident}' does not exist")
++            for actor, projects in view.project_grants.items():
++                for project in projects:
++                    if project not in scopes or scopes[project].kind != "project":
++                        problems.append(f"policies.phantomview: project grant '{project}' requires a project scope")
++            for actor, granted in view.persona_scope_grants.items():
++                if actor not in actor_ids:
++                    problems.append(f"policies.phantomview: scope actor '{actor}' does not exist")
++                for ident in granted:
++                    if ident not in scopes:
++                        problems.append(f"policies.phantomview: granted scope '{ident}' does not exist")
++                    elif scopes[ident].kind == "project" and ident not in view.project_grants.get(actor, []):
++                        problems.append(f"policies.phantomview: scope actor '{actor}' requires project grant '{ident}'")
++            human_ids = {human.id for human in spec.humans}
++            for human, grants in view.human_action_grants.items():
++                if human not in human_ids:
++                    problems.append(f"policies.phantomview: action human '{human}' does not exist")
++                for granted in grants.values():
++                    for ident in granted:
++                        if ident not in scopes:
++                            problems.append(f"policies.phantomview: action scope '{ident}' does not exist")
 +        zero = spec.policies.security_categories.get("category-0")
 +        if zero is None:
 +            problems.append("policies.phantomview: category-0 must be declared")
@@ -462,7 +864,7 @@
  
 --- /dev/null
 +++ b/phantomorg/tests/test_human_access.py
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,203 @@
 +"""Explicit human bindings are source metadata, never channel authentication."""
 +
 +import copy
@@ -530,7 +932,10 @@
 +    assert model.humans[2].telegram_user_id is None
 +    assert model.humans[2].email == "chris@example.org"
 +    assert asdict(model.policies.phantomview) == {
-+        "project_grants": {"lucia": ["greenroot"]}
++        "project_grants": {"lucia": ["greenroot"]},
++        "scope_definitions": None,
++        "persona_scope_grants": {},
++        "human_action_grants": {},
 +    }
 +    assert "counterpart_persona" in render_humans(model)
 +    assert "`diego`" in render_humans(model)
@@ -663,3 +1068,103 @@
 +    for value in (None, "", False):
 +        org["organization"]["display_name"] = value
 +        assert_shape_agrees(org, False)
+--- /dev/null
++++ b/phantomorg/tests/test_view_access.py
+@@ -0,0 +1,97 @@
++"""Private scope metadata agrees across schema, shape, model and references."""
++import copy
++import json
++from pathlib import Path
++
++from jsonschema import Draft7Validator
++import pytest
++import yaml
++
++from phantomorg.spec.model import OrgSpec
++from phantomorg.spec.shape_validator import ShapeError, validate_shape
++from phantomorg.validator.refs import check_references
++
++ROOT = Path(__file__).parent.parent
++SCHEMA = json.loads((ROOT / 'phantomorg/spec/schema.json').read_text(encoding='utf-8'))
++
++
++@pytest.fixture
++def org():
++    data = yaml.safe_load((ROOT / 'organizations/verdant-aquaponics/org.yaml').read_text(encoding='utf-8'))
++    data['humans'] = [{'id': 'alice', 'counterpart_persona': 'marco', 'telegram_user_id': 101}]
++    data['policies']['security_categories']['category-0']['owner'] = 'alice'
++    data['policies']['phantomview'] = {
++        'project_grants': {'marco': ['river-project']},
++        'scope_definitions': {
++            data['organization']['id']: {'kind': 'organization', 'label': 'Example Organization'},
++            data['departments'][0]['id']: {'kind': 'department', 'label': 'Example Department'},
++            'river-project': {'kind': 'project', 'label': 'River Project'},
++        },
++        'persona_scope_grants': {'marco': [data['organization']['id'], 'river-project']},
++        'human_action_grants': {'alice': {'view.personal.edit': ['river-project']}},
++    }
++    return data
++
++
++def test_scope_model_preserves_explicit_fields(org):
++    assert Draft7Validator(SCHEMA).is_valid(org)
++    validate_shape(org)
++    model = OrgSpec.from_dict(org)
++    assert check_references(model) == []
++    view = model.policies.phantomview
++    assert view.scope_definitions['river-project'].kind == 'project'
++    assert view.scope_definitions['river-project'].label == 'River Project'
++    assert view.persona_scope_grants['marco'][-1] == 'river-project'
++    assert view.human_action_grants['alice'] == {'view.personal.edit': ['river-project']}
++    assert 'view.shared.edit' not in view.human_action_grants['alice']
++
++
++@pytest.mark.parametrize('field,value', [
++    ('scope_definitions', None), ('scope_definitions', {}),
++    ('scope_definitions', {'river-project': {'kind': 'unknown'}}),
++    ('scope_definitions', {'river-project': {'kind': ['project']}}),
++    ('scope_definitions', {'river-project': {'kind': 'project', 'label': '  '}}),
++    ('scope_definitions', {'river-project': {'kind': 'project', 'unexpected': True}}),
++    ('scope_definitions', {'con': {'kind': 'project'}}),
++    ('persona_scope_grants', {'marco': ['river-project', 'river-project']}),
++    ('persona_scope_grants', {'marco': '../river-project'}),
++    ('human_action_grants', {'alice': {'execute': ['river-project']}}),
++    ('human_action_grants', {'alice': {'view.shared.edit': None}}),
++    ('human_action_grants', {'alice': {'view.shared.edit': ['river-project', 'river-project']}}),
++])
++def test_shape_and_schema_reject_same_invalid_fields(org, field, value):
++    org['policies']['phantomview'][field] = value
++    assert not Draft7Validator(SCHEMA).is_valid(org)
++    with pytest.raises(ShapeError):
++        validate_shape(org)
++
++
++@pytest.mark.parametrize('field', ['persona_scope_grants', 'human_action_grants'])
++def test_grants_require_scope_definitions_even_when_empty(org, field):
++    org['policies']['phantomview'] = {field: {}}
++    assert not Draft7Validator(SCHEMA).is_valid(org)
++    with pytest.raises(ShapeError):
++        validate_shape(org)
++
++
++@pytest.mark.parametrize('mutation,expected', [
++    (lambda view: view['scope_definitions'].update(unknown={'kind': 'department'}), 'department scope'),
++    (lambda view: view['scope_definitions'].update(other={'kind': 'organization'}), 'organization scope'),
++    (lambda view: view['persona_scope_grants'].update(stranger=['river-project']), 'scope actor'),
++    (lambda view: view['persona_scope_grants'].update(marco=['unknown']), 'granted scope'),
++    (lambda view: view['project_grants'].update(marco=[]), 'requires project grant'),
++    (lambda view: view['project_grants'].update(marco=['unknown']), 'requires a project scope'),
++    (lambda view: view['human_action_grants'].update(stranger={'view.shared.edit': ['river-project']}), 'action human'),
++    (lambda view: view['human_action_grants'].update(alice={'view.shared.edit': ['unknown']}), 'action scope'),
++])
++def test_reference_validation_rejects_unknown_or_implicit_grants(org, mutation, expected):
++    mutation(org['policies']['phantomview'])
++    validate_shape(org)
++    assert any(expected in problem for problem in check_references(OrgSpec.from_dict(org)))
++
++
++def test_legacy_project_grants_do_not_require_new_scope_mode(org):
++    original = copy.deepcopy(org)
++    original['policies']['phantomview'] = {'project_grants': {'marco': ['legacy-project']}}
++    validate_shape(original)
++    assert check_references(OrgSpec.from_dict(original)) == []

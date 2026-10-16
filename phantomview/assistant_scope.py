@@ -6,11 +6,13 @@ Categories are exact labels, never a numeric ordering or inherited project right
 import hashlib
 import json
 
+from view_permissions import ACTIONS, FIELDS, validate_view_access
+
 
 class Scope:
     def __init__(self, policy):
         if (not isinstance(policy, dict) or not {"organization", "humans", "personas"} <= set(policy)
-                or set(policy) - {"organization", "humans", "personas", "category_zero"}):
+                or set(policy) - {"organization", "humans", "personas", "category_zero", "view_access"}):
             raise ValueError("Explicit assistant policy required")
         if not isinstance(policy["organization"], str) or not policy["organization"]:
             raise ValueError("Explicit organization required")
@@ -43,7 +45,14 @@ class Scope:
         counterparts = [h["counterpart_persona"] for h in policy["humans"].values() if "counterpart_persona" in h]
         if len(set(counterparts)) != len(counterparts):
             raise ValueError("Ambiguous human counterpart")
+        normalized_view = None
+        if 'view_access' in policy:
+            normalized_view = validate_view_access(
+                policy['view_access'], policy['organization'], policy['personas'], policy['humans'],
+                projects={key: value['projects'] for key, value in policy['personas'].items()})
         self.policy = json.loads(json.dumps(policy))
+        if normalized_view is not None:
+            self.policy['view_access'] = normalized_view
         self.revision = hashlib.sha256(json.dumps(self.policy, sort_keys=True).encode()).hexdigest()
 
     @classmethod
@@ -65,7 +74,10 @@ class Scope:
         policies = org.get("policies", {})
         levels = policies.get("access_levels", {})
         declared = policies.get("security_categories", {})
-        projects = policies.get("phantomview", {}).get("project_grants", {})
+        view = policies.get('phantomview', {})
+        if not isinstance(view, dict) or set(view) - (FIELDS | {'project_grants'}):
+            raise ValueError('Invalid private PhantomView policy')
+        projects = view.get("project_grants", {})
         if not all(isinstance(x, dict) for x in (levels, declared, projects)):
             raise ValueError("Invalid organization access policy")
         if "category-0" not in declared:
@@ -88,6 +100,11 @@ class Scope:
                 normalized.append(label)
             personas[ident] = {"categories": sorted(set(normalized)), "projects": projects.get(ident, [])}
         policy = {"organization": org["organization"]["id"], "humans": bindings, "personas": personas}
+        if FIELDS & set(view):
+            policy['view_access'] = validate_view_access(
+                {key: value for key, value in view.items() if key in FIELDS},
+                policy['organization'], actors, humans,
+                departments={row['id'] for row in org.get('departments', [])}, projects=projects)
         if "category-0" in declared:
             definition = declared["category-0"]
             if not isinstance(definition, dict):
@@ -121,7 +138,9 @@ class Scope:
             return {"categories": list(self.policy["category_zero"]["categories"]), "projects": [], "all_projects": True}
         if "counterpart_persona" not in row:
             return None
-        return json.loads(json.dumps(self.policy["personas"][row["counterpart_persona"]]))
+        grants = json.loads(json.dumps(self.policy["personas"][row["counterpart_persona"]]))
+        grants['categories'] = [category for category in grants['categories'] if category != 'category-0']
+        return grants
 
     def can_issue(self, human, persona):
         """Policy eligibility only; verified sender authentication is still required."""
@@ -137,15 +156,21 @@ class Scope:
             return False
         if resource.get("secret") is not False:
             return False
+        if 'view_access' in self.policy:
+            scope = resource.get('scope')
+            if (not isinstance(scope, dict) or set(scope) != {'kind', 'id'}
+                    or not isinstance(scope.get('id'), str)
+                    or self.policy['view_access']['scope_definitions'].get(scope['id'], {}).get('kind') != scope['kind']
+                    or not self.can_enter(human, persona, scope['id'])
+                    or (scope['kind'] == 'project' and resource.get('project') != scope['id'])):
+                return False
         category = resource.get("category")
-        if not isinstance(category, str):
+        if not isinstance(category, str) or category == 'category-0':
             return False
         absolute = self.is_absolute(human)
         principals = [self.human_grants(human), self.policy["personas"].get(persona)]
         required = principals[:1] if absolute else principals
         if any(p is None or category not in p["categories"] for p in required):
-            return False
-        if category == "category-0" and not absolute:
             return False
         project = resource.get("project")
         if category.startswith("category-4") and (not isinstance(project, str) or not project):
@@ -153,4 +178,30 @@ class Scope:
         if project is not None and (not isinstance(project, str) or
                                     not project or (not absolute and any(project not in p["projects"] for p in principals))):
             return False
+        return True
+
+    def can_enter(self, human, persona, scope_id=None):
+        """Read-scope eligibility only, after verified identity resolution."""
+        if not self.can_issue(human, persona):
+            return False
+        view = self.policy.get('view_access')
+        if view is None:
+            return scope_id is None
+        if not isinstance(scope_id, str) or scope_id not in view['scope_definitions']:
+            return False
+        return self.is_absolute(human) or scope_id in view['persona_scope_grants'].get(persona, [])
+
+    def allows_action(self, human, persona, action, scope_id, *, resource=None, owner=None):
+        """Explicit capabilities do not follow from category zero or read access."""
+        view = self.policy.get('view_access')
+        if not isinstance(action, str) or action not in ACTIONS or view is None or not self.can_enter(human, persona, scope_id):
+            return False
+        if scope_id not in view['human_action_grants'].get(human, {}).get(action, []):
+            return False
+        if action == 'view.personal.edit':
+            return owner == human
+        if action in {'resource.edit', 'resource.classify'}:
+            return (isinstance(resource, dict) and isinstance(resource.get('scope'), dict)
+                    and resource['scope'].get('id') == scope_id
+                    and self.permits(human, persona, resource))
         return True

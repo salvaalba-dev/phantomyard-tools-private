@@ -35,6 +35,12 @@ sender hex; this module does not verify a Nostr envelope or signature itself.
 It rejects groups, relay/open-bot contexts, email-only claims, unknown humans,
 ambiguous channel identities and ordinary humans using another counterpart.
 Category zero remains an independent human information grant.
+When explicit scope mode is configured, the verified adapter must also bind a
+permitted `scope_id`. Project/department recipients stay inside that scope;
+organization sessions still require explicit grants for other scopes. The private
+[scope/action model](SCOPE_ACCESS.md) separates information access from modification
+capabilities. Its source definitions and grants participate in recipient revision
+checks. No browser-selected human or capability becomes authoritative.
 
 `identified_access.py` provides a separate, inactive `IdentifiedGate`:
 

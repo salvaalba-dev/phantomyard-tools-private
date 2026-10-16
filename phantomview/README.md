@@ -8,6 +8,8 @@ See the [scope-aware execution plan](EXECUTION_PLAN.md) for identified access,
 resource authorization, organization/project views and persistent personalization.
 It also records future requirement F01 for organization-wide ingestion ACL metadata;
 that requirement is deferred and does not change current ingestion behavior.
+The private [scope and action model](SCOPE_ACCESS.md) defines explicit session
+boundaries and separate modification capabilities; it is not enabled on the live reader.
 
 ## Install and run
 

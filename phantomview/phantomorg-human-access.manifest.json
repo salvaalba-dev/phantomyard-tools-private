@@ -3,23 +3,23 @@
   "files": {
     "phantomorg/README.md": {
       "base_sha256_lf": "0c440c7980beeadf0d221a6469c17c6ed2995e24b2c4fbb5af36b27a83037b44",
-      "result_sha256_lf": "7d2ad67628372dc44cb5813a4371a4478b5d270c3d134037ce67c3167d6b0252"
+      "result_sha256_lf": "e9cbcccd5493f100929e3916e9436086f38521d5dfa744dd6e47c483ad4cac17"
     },
     "phantomorg/phantomorg/spec/model.py": {
       "base_sha256_lf": "10ad381b33eee3e3cccc0eaf866e45f3851d9694feced28160599ccc78d56d89",
-      "result_sha256_lf": "6627eb26545f462cd23f6d529c5e037cee13375f5a26643a3e11205e66af035e"
+      "result_sha256_lf": "2e571e2b5487ccccc4c851ab169b4f9abd9cf9c27b2a4d3cb9a4ea32d88198d7"
     },
     "phantomorg/phantomorg/spec/schema.json": {
       "base_sha256_lf": "b82ca9f0aa3004c6c3135cafbcfb29ff701269b9fe41a03a7401f0a231b251e4",
-      "result_sha256_lf": "5624d043d6e46d738fb537cf36458f190f066f37ef7bbab9724960e86884b385"
+      "result_sha256_lf": "530da0d1d4c9d31c16e1ef40a94b4ed2cfcbea2b17eb5ab0ce3f4240c2509bdc"
     },
     "phantomorg/phantomorg/spec/shape_validator.py": {
       "base_sha256_lf": "25b6683608d1403295003d727b6b32c66e6c328c8ccc9b05946189d984e5589e",
-      "result_sha256_lf": "c8cd908e146ad3e2df95e6311dfb60cab1743cd7a106b18d3dc723b1abec81d3"
+      "result_sha256_lf": "f235cfbaf48c9e73962dfa165095d54f172adc7c5745ed5d217cdfe92c154ce9"
     },
     "phantomorg/phantomorg/validator/refs.py": {
       "base_sha256_lf": "a96ec599e831a9a8bac93c6ace8b9fd871bcc927d431c610e02664242a04ba50",
-      "result_sha256_lf": "589dd4c86aa52141b3c58c2ed3be9eeca4ee87ca0310c519cdc99f1c00280ab9"
+      "result_sha256_lf": "b45db5a0b368c95b32b1261a54785fbfcd1d7d0f7cf063b32b928b820c8d16b8"
     },
     "phantomorg/phantomorg/compiler/humans.py": {
       "base_sha256_lf": "4152e4b9291344c0979a4d0a1a5895608e51b68152246a81887c7b6be3d6cb16",
@@ -27,7 +27,11 @@
     },
     "phantomorg/tests/test_human_access.py": {
       "base_sha256_lf": null,
-      "result_sha256_lf": "bea85376d8e4b3d78075541c802aa78d2300d9c8218ff4cbcbc5d4c2eefabfba"
+      "result_sha256_lf": "6880181c37e62fa2a12b0c7a7e3ecd29dea6765052899febdc080f3e02bc988a"
+    },
+    "phantomorg/tests/test_view_access.py": {
+      "base_sha256_lf": null,
+      "result_sha256_lf": "1f0679a91bf1626c2322304a79bc300225cda5bf5ccc97e9be0a5ebfe4f8c5aa"
     }
   }
 }

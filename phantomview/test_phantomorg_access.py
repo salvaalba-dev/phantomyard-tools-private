@@ -9,9 +9,9 @@ from channel_identity import HumanDirectory
 from test_channel_identity import context, organization
 
 try:
-    from phantomorg.spec.model import Human
+    from phantomorg.spec.model import Human, PhantomViewPolicy
     from phantomorg.validator import validate_org
-    COMPATIBLE = hasattr(Human, "counterpart_persona")
+    COMPATIBLE = hasattr(Human, "counterpart_persona") and 'scope_definitions' in PhantomViewPolicy.__dataclass_fields__
 except ImportError:
     COMPATIBLE = False
 
@@ -62,6 +62,28 @@ class PhantomOrgAccessTests(unittest.TestCase):
             self.assertTrue(any("already assigned" in error for error in result.errors))
         with self.assertRaises(ValueError):
             HumanDirectory(org)
+
+    def test_scopes_and_actions_survive_model_validation_and_runtime_checks(self):
+        org = self.source()
+        org['policies']['phantomview'] = {
+            'scope_definitions': {'example': {'kind': 'organization'},
+                                  'river-project': {'kind': 'project', 'label': 'River Project'}},
+            'project_grants': {'administrator': ['river-project']},
+            'persona_scope_grants': {'administrator': ['river-project']},
+            'human_action_grants': {'secretary': {'view.personal.edit': ['river-project']}},
+        }
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'org.yaml'
+            path.write_text(yaml.safe_dump(org), encoding='utf-8')
+            model, result = validate_org(path)
+            self.assertTrue(result.ok, result.errors)
+        self.assertEqual(model.policies.phantomview.scope_definitions['river-project'].kind, 'project')
+        directory = HumanDirectory(org)
+        recipient = directory.resolve(**context('102', 'administrator'), scope_id='river-project')
+        self.assertTrue(directory.allows_action(recipient, 'view.personal.edit', 'river-project', owner='secretary'))
+        self.assertFalse(directory.allows_action(recipient, 'view.shared.edit', 'river-project'))
+        with self.assertRaises(ValueError):
+            directory.resolve(**context('102', 'administrator'), scope_id='example')
 
 
 if __name__ == "__main__":

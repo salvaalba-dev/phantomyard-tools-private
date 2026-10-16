@@ -14,6 +14,11 @@ Do not apply it blindly to a different release or to a production checkout.
   assignments and duplicate human channel identities are rejected.
 - Optional `policies.phantomview.project_grants` records exact actor/project
   identifiers without granting implicit project access from a category number.
+- Optional `scope_definitions`, `persona_scope_grants` and `human_action_grants`
+  under the same block define explicit scopes and independent modification
+  capabilities. See [scope/action semantics](SCOPE_ACCESS.md). Schema, shape,
+  model and reference validation are extended together. Legacy documents without
+  these fields retain their prior policy mode.
 - The shape validator, JSON schema, typed model and cross-reference validator
   agree on the new fields. `HUMANS.md` displays counterparts when declared; its
   old format is preserved for organizations without the new field.
@@ -46,9 +51,11 @@ treated as authenticated channel identity. Brigitte's ordinary categories derive
 from Pepa's role/level/exceptions. Category zero is not inherited by other humans
 merely because an actor or role carries that exception.
 
-The live exported KB currently has 290 note copies with no structured category
-field; the inspected frontmatter also has no direct category/access/project field.
-PhantomDocs has 65 registered nodes with declared categories. Those declarations
+The initial KB inspection found cached note copies without structured category
+metadata; the inspected frontmatter also lacked direct access/project fields.
+The later AU folder proposal and fingerprinted resource draft use the selected
+current snapshot rather than treating every cached payload as active knowledge.
+The inspected PhantomDocs manifest had 65 registered nodes with declared categories. Those declarations
 do not automatically classify arbitrary KB copies; an authoritative mapping or
 verified content association is needed before reusing their grants.
 The assistant must not infer authoritative classification from a note title.
@@ -79,5 +86,7 @@ Windows suite also assumes POSIX `HOME` behavior in deployment tests and was
 stopped; it is not reported as passing. PhantomView's 99 Python tests passed,
 including the real-signature and patched-PhantomOrg integration suites. Changed
 Python files pass Ruff E4/E7/E9/F checks and compile successfully. The generated
-patch was checked, applied to a clean scratch copy and compared with all seven
-reviewed result files.
+patch was checked, applied to a clean scratch copy and compared with the reviewed
+result files. The scope/action increment additionally passes 158 targeted
+PhantomOrg tests locally with two existing symlink tests deselected on Windows.
+Its complete Linux suite is checked by the dedicated private CI workflow.

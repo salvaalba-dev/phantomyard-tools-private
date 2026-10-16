@@ -101,16 +101,32 @@ class SignedRecipientTests(unittest.TestCase):
             return raw
         cookie = self.gate.redeem(self.issue())
         headers = {"Cookie": "phantomview=" + cookie}
-        self.assertEqual(len(retrieve(self.gate, headers, lambda: catalog, load, 'almaponia')['notes']), 1)
+        self.assertEqual(len(retrieve(self.gate, headers, lambda: catalog, load, 'organization')['notes']), 1)
         loaded.clear()
         self.gate.logout(headers)
         with self.assertRaises(ValueError):
-            retrieve(self.gate, headers, lambda: catalog, load, 'almaponia')
+            retrieve(self.gate, headers, lambda: catalog, load, 'organization')
         self.assertEqual(loaded, [])
         legacy = self.gate.redeem(self.issue(identified=False))
         with self.assertRaises(ValueError):
-            retrieve(self.gate, {"Cookie": "phantomview=" + legacy}, lambda: catalog, load, 'almaponia')
+            retrieve(self.gate, {"Cookie": "phantomview=" + legacy}, lambda: catalog, load, 'organization')
         self.assertEqual(loaded, [])
+
+    def test_real_signed_link_binds_scope_without_changing_signed_payload(self):
+        from test_view_permissions import project_resource, scoped_organization
+        self.org = scoped_organization()
+        link = self.gate.issue_identified(self.authorization(self.signed()), self.gate.origin,
+                                         **context(), scope_id='river-project')
+        self.assertNotIn('river-project', link)
+        cookie = self.gate.redeem(link.split('#c=')[1])
+        headers = {'Cookie': 'phantomview=' + cookie}
+        recipient, directory = self.gate.identified_scope(headers)
+        self.assertEqual(recipient.scope_id, 'river-project')
+        self.assertTrue(directory.permits(recipient, project_resource(category='category-3')))
+        self.assertFalse(directory.permits(recipient, project_resource('other-project')))
+        self.org['policies']['phantomview']['human_action_grants'] = {}
+        with self.assertRaises(ValueError):
+            self.gate.identified_scope(headers)
 
     def test_policy_change_denies_before_session_creation_without_consuming_grant(self):
         code = self.issue()

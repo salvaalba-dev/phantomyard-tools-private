@@ -19,6 +19,7 @@ class Recipient:
     persona: str
     policy_revision: str
     directory_revision: str
+    scope_id: str | None = None
 
     def metadata(self):
         """Exclude raw channel IDs, cookies and link credentials."""
@@ -50,7 +51,7 @@ class HumanDirectory:
         encoded = json.dumps({"scope": self.scope.revision, "senders": self.senders}, sort_keys=True).encode()
         self.revision = hashlib.sha256(encoded).hexdigest()
 
-    def resolve(self, *, channel, sender, persona, direct, principal_authenticated):
+    def resolve(self, *, channel, sender, persona, direct, principal_authenticated, scope_id=None):
         """Resolve adapter-owned data AFTER its explicit allowlist check.
 
         Empty allowlists, relay tiers, group chats and email From do not qualify.
@@ -62,20 +63,37 @@ class HumanDirectory:
         if not isinstance(channel, str) or channel not in self.senders or not isinstance(sender, str):
             raise ValueError("Unsupported verified channel identity")
         human = self.senders[channel].get(sender)
-        if human is None or not self.scope.can_issue(human, persona):
+        if human is None or not self.scope.can_enter(human, persona, scope_id):
             raise ValueError("Human is not eligible for this persona")
         return Recipient(self.scope.policy["organization"], human, persona,
-                         self.scope.revision, self.revision)
+                         self.scope.revision, self.revision, scope_id)
 
     def validate(self, recipient):
         if (not isinstance(recipient, Recipient)
                 or recipient.organization != self.scope.policy["organization"]
                 or recipient.policy_revision != self.scope.revision
                 or recipient.directory_revision != self.revision
-                or not self.scope.can_issue(recipient.human, recipient.persona)):
+                or not self.scope.can_enter(recipient.human, recipient.persona, recipient.scope_id)):
             raise ValueError("Recipient policy changed; request a new access link")
         return recipient
 
     def permits(self, recipient, resource):
         self.validate(recipient)
-        return self.scope.permits(recipient.human, recipient.persona, resource)
+        if not self.scope.permits(recipient.human, recipient.persona, resource):
+            return False
+        if recipient.scope_id is not None:
+            view = self.scope.policy['view_access']
+            if (view['scope_definitions'][recipient.scope_id]['kind'] != 'organization'
+                    and resource['scope']['id'] != recipient.scope_id):
+                return False
+        return True
+
+    def allows_action(self, recipient, action, scope_id, *, resource=None, owner=None):
+        self.validate(recipient)
+        if recipient.scope_id is not None:
+            view = self.scope.policy['view_access']
+            if (view['scope_definitions'][recipient.scope_id]['kind'] != 'organization'
+                    and scope_id != recipient.scope_id):
+                return False
+        return self.scope.allows_action(recipient.human, recipient.persona, action, scope_id,
+                                        resource=resource, owner=owner)

@@ -57,6 +57,9 @@ Commit: `docs: define scope-aware PhantomView architecture`
 
 ### 2 PhantomOrg access model
 
+Implementation status: private source patch and runtime primitives prepared;
+not deployed. See [scope and action permissions](SCOPE_ACCESS.md).
+
 Complete coordinated schema, model, shape and reference validation for explicit
 counterparts and scope grants. Define read, resource-edit, personal-view-edit and
 shared-view-edit permissions independently. Preserve existing category meanings;
