@@ -656,3 +656,9 @@ projection evidence and revalidates access before inference and answer delivery.
 Its tests use synthetic executors. A production adapter preserving native JEV,
 isolating persona memory and enforcing transport budgets remains required.
 
+The inactive [dedicated native adapter](NATIVE_SCOPED_EXECUTOR.md) adds a pinned
+build variant with an ephemeral neutral persona, in-memory database and isolated
+working directory. Native screening/JEV remains active. A fixed Linux executor
+rejects legacy artifacts and requires protected reviewed build provenance.
+Real deployment, channel isolation and transport budgets remain pending.
+

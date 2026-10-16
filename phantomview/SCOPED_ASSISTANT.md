@@ -65,7 +65,9 @@ redactor is not a replacement for ACL, JEV or secret review.
 ## Required native adapter work
 
 The supplied callables in unit tests are synthetic executor doubles, not evidence
-that a live model has passed JEV. No production adapter is supplied by this change.
+that a live model has passed JEV. The separate
+[dedicated native executor](NATIVE_SCOPED_EXECUTOR.md) now supplies an inactive
+adapter and pinned build variant; it has not been deployed.
 Before supplying one, verify all of the following against the installed runtime:
 
 - Exact persona and organization routing with independently protected credentials.
