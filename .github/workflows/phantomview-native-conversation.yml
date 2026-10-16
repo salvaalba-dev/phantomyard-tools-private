@@ -1,6 +1,7 @@
 name: PhantomView native conversation worker
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'phantomview/native_conversation*'
