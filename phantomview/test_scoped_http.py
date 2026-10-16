@@ -52,6 +52,9 @@ class ScopedHTTPTests(ProjectionFixture):
         self.assertEqual(resource['id'], self.project)
         status, result = self.request('POST', '/api/search', {'query': 'river'})
         self.assertEqual(status, 200)
+        self.assertEqual(result['scope_id'], 'example')
+        self.assertEqual(result['organization'], 'example')
+        self.assertEqual(len(result['view_revision']), 64)
         self.assertEqual([row['id'] for row in result['results']], [self.project])
         for ident in (self.hidden, self.other, 'f' * 64):
             status, result = self.request('GET', '/api/resource/' + ident)
@@ -87,3 +90,22 @@ class ScopedHTTPTests(ProjectionFixture):
         self.assertEqual(self.request('POST', '/api/logout', {})[0], 200)
         self.assertEqual(self.request('GET', '/api/state')[0], 401)
         self.assertEqual(self.loaded, [])
+
+    def test_scoped_static_page_never_bootstraps_the_legacy_client(self):
+        def get(path):
+            connection = HTTPConnection('127.0.0.1', self.server.server_port, timeout=3)
+            try:
+                connection.request('GET', path)
+                response = connection.getresponse()
+                return response.status, response.read().decode()
+            finally:
+                connection.close()
+        status, page = get('/')
+        self.assertEqual(status, 200)
+        self.assertIn('/scoped-ui.js', page)
+        self.assertNotIn('/app.js', page)
+        for asset in ('/scoped-ui.js', '/scoped-ui.css'):
+            self.assertEqual(get(asset)[0], 200)
+        self.assertEqual(self.loaded, [])
+        self.server.scoped_backend = None
+        self.assertIn('/app.js', get('/')[1])

@@ -1,10 +1,11 @@
 # Scoped resource projection and HTTP boundary
 
 Status: opt-in generic backend and HTTP dispatch implemented; not enabled on AU.
-The current interface still uses its legacy snapshot contract. Collector adapters,
-review tooling for non-KB records, scope-specific UI definitions and scoped worker
-assistance remain implementation work. Do not enable this mode for production
-users as a substitute for those remaining pieces.
+Scoped mode now uses the separate [generic workspace](SCOPED_WORKSPACE.md).
+Selected-source adapters and offline approval tooling are available, but actual
+source review/publication, authenticated review writes, personalized UI definitions,
+native channel isolation and scoped assistance remain deployment prerequisites.
+The default reader still uses its legacy snapshot contract.
 
 ## Authoritative catalog
 
@@ -134,7 +135,7 @@ approval and atomic metadata publication with current-source loaders. It does no
 approve or publish AU data automatically.
 
 Remaining work includes reviewing and publishing actual selected-source drafts,
-setup/refresh integration, frontend resource/view
+approval workflow integration, personalized resource/view
 definitions, scoped history/exports, native channel isolation, queued assistance,
 JEV and audit integration. Organization-wide ingestion enforcement remains the
 separate deferred requirement F01. AU's default reader and live data are unchanged.

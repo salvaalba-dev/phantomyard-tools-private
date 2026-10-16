@@ -603,8 +603,8 @@ The opt-in [scoped resource backend](SCOPED_BACKEND.md) adds authorization befor
 record loading, relationship construction, counts and global search. Its closed
 HTTP dispatch prevents fallback to unfiltered legacy APIs. It requires a separate
 reviewed projection catalog and the same identified gate as redemption; no CLI
-activation or automatic legacy-export conversion is supplied. The existing UI
-still needs adaptation to its generic resource schema before deployment.
+activation or automatic legacy-export conversion is supplied. Scoped mode uses
+the separate generic workspace described below.
 
 The inactive [selected source adapters](SOURCE_ADAPTERS.md) prepare bounded,
 source-fingerprinted metadata drafts for explicit classification review. Derived
@@ -614,15 +614,20 @@ does not publish approved catalogs or run automatically during setup or refresh.
 The inactive [projection review library](PROJECTION_REVIEW.md) adds explicit
 versioned approval, immutable generations and atomic publication with a revision
 lease. Protected loaders invalidate publications when sources or authority change.
-Approval workflow wiring and the scoped frontend remain pending.
+Authenticated approval workflow wiring remains pending.
 
 An opt-in [operator review queue](REVIEW_QUEUE.md) now prepares drafts during
 setup and collector refresh. Explicit CLI paths or trusted embedding are required;
 browser configuration cannot enable the queue. It never approves or publishes
-access. In-dashboard review and the scoped frontend remain pending.
+access. Authenticated in-dashboard review remains pending.
 
 The [private offline review interface](REVIEW_INTERFACE.md) now supports metadata
 inspection, batch classification, explicit dependency selection and fingerprinted
-decision download. It supplies no publication access or dashboard route. Scoped
-frontend integration and an authenticated in-dashboard review workflow remain pending.
+decision download. It supplies no publication access or dashboard route. An
+authenticated in-dashboard review workflow remains pending.
+
+The opt-in [generic scoped workspace](SCOPED_WORKSPACE.md) now renders visible-only
+menus, counts, cards, directed relationships and global search from the resource
+backend. The default reader remains unchanged. Authenticated review writes,
+assistant integration and live deployment remain pending.
 

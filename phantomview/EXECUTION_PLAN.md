@@ -241,6 +241,12 @@ Explicit dependency selection and complete classifications are required for
 decision export. Independent operator approval/publication still rechecks all
 inputs. No dashboard write route or live AU configuration is added.
 
+Implemented inactive increment: the [generic scoped workspace](SCOPED_WORKSPACE.md)
+now serves a separate frontend when an explicit scoped backend is configured.
+Menus, counts, cards, graph highlighting, details and global search use only the
+authorized resource response. Legacy reader defaults are unchanged. Authenticated
+review writes, assistant integration and live AU activation remain pending.
+
 Commit each coherent milestone or tested increment to the private repository.
 Record validation and remaining boundaries with the change. Keep history linear
 and leave upstream repositories untouched. Commit and verify changes before any

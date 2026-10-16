@@ -660,7 +660,12 @@ class Handler(BaseHTTPRequestHandler):
         static = {"/search.js": ("search.js", "text/javascript; charset=utf-8"), "/version-ui.js": ("version-ui.js", "text/javascript; charset=utf-8"), "/consultation-ui.js": ("consultation-ui.js", "text/javascript; charset=utf-8"), "/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"), "/logo.png": ("logo.png", "image/png"), "/installation.js": ("installation.js", "text/javascript; charset=utf-8"), "/review.js": ("review.js", "text/javascript; charset=utf-8"), "/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"), "/assistant.js": ("assistant.js", "text/javascript; charset=utf-8")}
         if path not in static:
-            return self.send(404, {"error": "No encontrado"})
+            if path in {'/scoped-ui.js', '/scoped-ui.css'}:
+                static[path] = (path.removeprefix('/'), 'text/javascript; charset=utf-8' if path.endswith('.js') else 'text/css; charset=utf-8')
+            else:
+                return self.send(404, {"error": "No encontrado"})
+        if path == '/' and getattr(self.server, 'scoped_backend', None) is not None:
+            static[path] = ('scoped-index.html', 'text/html; charset=utf-8')
         file, mime = static[path]
         return self.send(200, (HERE / file).read_bytes(), mime)
 

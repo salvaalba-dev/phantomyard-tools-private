@@ -1,0 +1,176 @@
+/* The server authorizes every resource. This client never infers ACL grants. */
+'use strict';
+const SCOPED_KINDS = {organization:'Organization',department:'Departments',role:'Roles',persona:'People',human:'Humans',
+  project:'Projects',partner:'Partners',objective:'Objectives',task:'Tasks',document:'Documents',knowledge:'Knowledge',
+  procedure:'Procedures',finding:'Findings',component:'Components',relationship:'Relationships'};
+const scopedHex = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+function scopedRecord(row) {
+  if (!row || !scopedHex(row.id) || !Object.hasOwn(SCOPED_KINDS,row.kind)
+      || !row.data || typeof row.data !== 'object' || Array.isArray(row.data)) throw Error('Invalid scoped record');
+  return row;
+}
+class ScopedModel {
+  constructor(view) {
+    if (!view || view.schema_version !== 1 || view.complete_corpus !== false
+        || typeof view.organization !== 'string' || !view.organization || typeof view.scope_id !== 'string'
+        || !scopedHex(view.policy_revision) || !scopedHex(view.view_revision)
+        || !Array.isArray(view.resources) || !Array.isArray(view.relations)
+        || view.resources.length + view.relations.length > 2000) throw Error('Current scoped data required');
+    this.view = structuredClone(view);
+    this.resources = this.view.resources.map(scopedRecord); this.relations = this.view.relations.map(scopedRecord);
+    this.byId = new Map();
+    for (const row of [...this.resources,...this.relations]) {
+      if (this.byId.has(row.id)) throw Error('Ambiguous scoped record');
+      this.byId.set(row.id,row);
+    }
+    if (this.resources.some(row => row.kind === 'relationship') || this.relations.some(row => row.kind !== 'relationship'
+        || !this.resources.some(node => node.id === row.data.source) || !this.resources.some(node => node.id === row.data.target))) {
+      throw Error('Relationship endpoints must belong to this visible projection');
+    }
+  }
+  sections() { return [...new Set(this.resources.map(row => row.kind))].sort().map(kind => ({kind,label:SCOPED_KINDS[kind]})); }
+  counts() {
+    const counts = {};
+    for (const row of this.resources) counts[row.kind] = (counts[row.kind] || 0) + 1;
+    return counts;
+  }
+  static search(result) {
+    if (!result || result.complete_corpus !== false || typeof result.partial !== 'boolean'
+        || !Array.isArray(result.results) || result.results.length > 100) throw Error('Invalid scoped search');
+    const model=new ScopedModel({schema_version:1,complete_corpus:false,organization:result.organization,
+      scope_id:result.scope_id,policy_revision:result.policy_revision,view_revision:result.view_revision,resources:[],relations:[]});
+    model.resources=structuredClone(result.results).map(scopedRecord);
+    if(new Set(model.resources.map(row=>row.id)).size!==model.resources.length)throw Error('Ambiguous search result');
+    model.byId=new Map(model.resources.map(row=>[row.id,row]));return model;
+  }
+  title(row) { return String(row.data.title || row.data.display_name || row.data.name || row.data.label || row.data.id || SCOPED_KINDS[row.kind]); }
+  organization() {
+    const row = this.resources.find(row => row.kind === 'organization');
+    return row ? this.title(row) : this.view.organization;
+  }
+  impact(id, limit=60) {
+    const allowed = new Set(this.resources.slice(0,limit).map(row => row.id));
+    const nodes = new Set(allowed.has(id) ? [id] : []), edges = new Set(), pending = [...nodes];
+    for (let index=0;index<pending.length;index++) for (const edge of this.relations) {
+      if (edge.data.source === pending[index] && allowed.has(edge.data.target)) {
+        edges.add(edge.id);
+        if (!nodes.has(edge.data.target)) {nodes.add(edge.data.target);pending.push(edge.data.target);}
+      }
+    }
+    return {nodes,edges};
+  }
+}
+
+async function startScopedWorkspace() {
+  const $ = id => document.getElementById(id);
+  const text = (tag,value,className) => {const node=document.createElement(tag);node.textContent=value;if(className)node.className=className;return node;};
+  let model=null, section='', epoch=0, controller=null, detailEpoch=0, redemption=null, closing=false;
+  function clear() {
+    model=null;section='';detailEpoch++;$('navigation').replaceChildren();$('records').replaceChildren();$('stats').replaceChildren();
+    $('graph').replaceChildren();$('graph-panel').hidden=true;$('organization').textContent='';$('scope-label').textContent='Session required';
+    $('graph-caption').textContent='';$('records-title').textContent='Records';
+    $('detail-content').textContent='';$('detail-title').textContent='Record';if($('detail').open)$('detail').close();
+    $('page-title').textContent='Your information, connected.';
+  }
+  function operation() {epoch++;if(controller)controller.abort();controller=new AbortController();clear();$('message').hidden=true;return epoch;}
+  function failure(error,ticket) {
+    if(ticket!==epoch || error.name==='AbortError')return;
+    clear();$('status').textContent='Workspace unavailable';$('message').hidden=false;
+    $('message').textContent='A current identified session and available scoped data are required. Refresh or request a new temporary link from your persona.';
+  }
+  async function api(path,body,signal) {
+    const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',signal,
+      headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+    if(!response.ok)throw Error('Scoped request unavailable');return response.json();
+  }
+  function showDetails(row) {
+    const ticket=epoch, detailTicket=++detailEpoch;
+    // Remove old contents before any new read; never show a cached fallback.
+    $('detail-content').textContent='Loading current record…';$('detail-title').textContent='Record';$('detail').showModal();
+    api('/api/resource/'+row.id,undefined,controller?.signal).then(current=>{
+      if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;scopedRecord(current);
+      if(current.id!==row.id||current.kind!==row.kind)throw Error('Record identity changed');
+      $('detail-title').textContent=model.title(current);
+      $('detail-content').textContent=JSON.stringify(current.data,null,2);
+    }).catch(error=>failure(error,ticket));
+  }
+  function renderGraph() {
+    const graph=$('graph');graph.replaceChildren();
+    const nodes=model.resources.slice(0,60), ids=new Set(nodes.map(row=>row.id));
+    const edges=model.relations.filter(row=>ids.has(row.data.source)&&ids.has(row.data.target));
+    $('graph-panel').hidden=!nodes.length;
+    $('graph-caption').textContent=`${nodes.length} visible records · ${edges.length} connections`+(model.resources.length>60?' · graph limited to 60 records':'');
+    if(!nodes.length)return;
+    const ns='http://www.w3.org/2000/svg';
+    const svg=(tag,attrs)=>{const node=document.createElementNS(ns,tag);for(const[key,value]of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
+    const height=Math.ceil(nodes.length/3)*100+40, root=svg('svg',{viewBox:`0 0 900 ${height}`,role:'group','aria-label':'Visible directed relationships'});
+    const defs=svg('defs',{}), marker=svg('marker',{id:'flow-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'});
+    marker.append(svg('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'context-stroke'}));defs.append(marker);root.append(defs);
+    const positions=new Map(nodes.map((row,index)=>[row.id,{x:45+(index%3)*300,y:30+Math.floor(index/3)*100}]));
+    const paths=new Map(), groups=new Map();
+    for(const edge of edges){const a=positions.get(edge.data.source),b=positions.get(edge.data.target);
+      const path=svg('path',{d:`M ${a.x+105} ${a.y+50} Q ${(a.x+b.x)/2+105} ${(a.y+b.y)/2+75} ${b.x+105} ${b.y+50}`,class:'edge','marker-end':'url(#flow-arrow)'});
+      const title=svg('title',{});title.textContent=String(edge.data.label||edge.data.type||'Connection');path.append(title);root.append(path);paths.set(edge.id,path);
+    }
+    const highlight=id=>{const impact=id?model.impact(id):null;for(const[key,node]of groups){node.classList.toggle('lit',!!impact?.nodes.has(key));node.classList.toggle('dim',!!impact&&!impact.nodes.has(key));}
+      for(const[key,path]of paths){path.classList.toggle('lit',!!impact?.edges.has(key));path.classList.toggle('dim',!!impact&&!impact.edges.has(key));}};
+    for(const row of nodes){const p=positions.get(row.id),g=svg('g',{class:'node',transform:`translate(${p.x},${p.y})`,tabindex:0,role:'button','aria-label':'Open '+model.title(row)});
+      g.append(svg('rect',{width:210,height:50,rx:9}));const title=svg('text',{x:12,y:22});title.textContent=model.title(row).slice(0,26);g.append(title);
+      const kind=svg('text',{x:12,y:39,class:'node-kind'});kind.textContent=SCOPED_KINDS[row.kind];g.append(kind);
+      g.addEventListener('mouseenter',()=>highlight(row.id));g.addEventListener('mouseleave',()=>highlight(null));g.addEventListener('focus',()=>highlight(row.id));g.addEventListener('blur',()=>highlight(null));
+      g.addEventListener('click',()=>showDetails(row));g.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();showDetails(row);}});
+      groups.set(row.id,g);root.append(g);
+    }
+    graph.append(root);
+  }
+  function render(search=false) {
+    $('organization').textContent=model.organization();$('scope-label').textContent=model.view.scope_id;
+    $('page-title').textContent=search?'Search your workspace':section?SCOPED_KINDS[section]:'Your information, connected.';
+    const nav=$('navigation');nav.replaceChildren();
+    for(const item of [{kind:'',label:search?'All results':'Overview'},...model.sections()]) {
+      const button=text('button',item.label);button.type='button';button.className=section===item.kind?'active':'';
+      button.setAttribute('aria-current',section===item.kind?'page':'false');button.addEventListener('click',()=>{section=item.kind;render(search);});nav.append(button);
+    }
+    const stats=$('stats');stats.replaceChildren();
+    for(const[kind,count]of Object.entries(model.counts())){const tile=text('div','', 'stat');tile.append(text('span',SCOPED_KINDS[kind]),text('strong',count));stats.append(tile);}
+    const records=$('records');records.replaceChildren();
+    for(const row of model.resources.filter(row=>!section||row.kind===section)) {
+      const card=text('button','', 'card');card.type='button';card.append(text('small',SCOPED_KINDS[row.kind]),text('h3',model.title(row)));
+      const summary=row.data.description||row.data.severity||row.data.kind;
+      if(typeof summary==='string')card.append(text('p',summary.slice(0,180)));card.addEventListener('click',()=>showDetails(row));records.append(card);
+    }
+    if(!records.childElementCount)records.append(text('p','No records are available in this view.','muted'));
+    if(search){$('graph-panel').hidden=true;$('graph').replaceChildren();}else renderGraph();
+    $('status').textContent=search?'Results cover all information available to this session.':'Showing only information available to this session.';
+    $('records-title').textContent=search?'Search results':section?SCOPED_KINDS[section]:'Available records';
+  }
+  async function load() {
+    if(closing)return;
+    const ticket=operation();$('status').textContent='Refreshing your workspace…';$('query').value='';
+    try {const view=await api('/api/state',undefined,controller.signal);if(ticket!==epoch)return;model=new ScopedModel(view);render();}
+    catch(error){failure(error,ticket);}
+  }
+  $('refresh').addEventListener('click',load);
+  $('logout').addEventListener('click',async()=>{if(closing)return;closing=true;const ticket=operation();$('query').value='';$('status').textContent='Closing your session…';
+    // Revocation must finish even if visibility changes or other reads are aborted.
+    try{if(redemption)await redemption.catch(()=>{});
+      await api('/api/logout',{});if(ticket===epoch)$('status').textContent='Logged out. Request a new temporary link to continue.';}
+    catch(error){failure(error,ticket);}finally{closing=false;}});
+  $('close-detail').addEventListener('click',()=>{$('detail').close();$('detail-content').textContent='';detailEpoch++;});
+  $('detail').addEventListener('close',()=>{$('detail-content').textContent='';detailEpoch++;});
+  $('search-form').addEventListener('submit',async event=>{event.preventDefault();if(closing)return;const query=$('query').value.trim();if(!query){await load();return;}
+    const ticket=operation();$('status').textContent='Searching all authorized information…';
+    try{const result=await api('/api/search',{query},controller.signal);if(ticket!==epoch)return;
+      model=ScopedModel.search(result);render(true);
+      if(result.partial)$('status').textContent='Showing the first 100 authorized matches. Refine your search for more.';
+    }catch(error){failure(error,ticket);}
+  });
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){operation();$('status').textContent='Workspace hidden. Refresh when you return.';}});
+  window.addEventListener('pagehide',()=>operation());window.addEventListener('pageshow',event=>{if(event.persisted)load();});
+  const fragment=new URLSearchParams(location.hash.slice(1)),code=fragment.get('c');
+  if(location.hash)history.replaceState(null,'',location.pathname);
+  if(code){const ticket=operation();try{redemption=api('/api/redeem',{code});await redemption;if(ticket!==epoch)return;}
+    catch(error){failure(error,ticket);return;}}
+  await load();
+}
+if(typeof module!=='undefined'&&module.exports)module.exports={ScopedModel};else startScopedWorkspace();

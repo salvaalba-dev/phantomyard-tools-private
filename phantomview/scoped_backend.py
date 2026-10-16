@@ -193,4 +193,5 @@ class ScopedBackend:
         found = [row for row in view['resources'] + view['relations']
                  if all(term in normalize(json.dumps(row['data'], ensure_ascii=False)) for term in terms)]
         return {'results': found[:100], 'partial': len(found) > 100,
+                **{key: view[key] for key in ('organization', 'scope_id', 'policy_revision', 'view_revision')},
                 'scope': 'current identified resource projection', 'complete_corpus': False}

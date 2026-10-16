@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PhantomView · Scoped workspace</title><link rel="icon" href="/logo.png"><link rel="stylesheet" href="/scoped-ui.css"><script src="/scoped-ui.js" defer></script></head>
+<body><aside class="sidebar"><a class="brand" href="/" aria-label="PhantomView"><img src="/logo.png" alt="PhantomBot"><span>Phantom<span class="green">View</span></span></a><p id="organization" class="muted"></p><nav id="navigation" aria-label="Workspace sections"></nav><p class="session-note">Private · Read-only session</p></aside>
+<div class="shell"><header><span id="scope-label">Session required</span><div><button id="refresh" type="button">Refresh</button><button id="logout" type="button">Log out</button></div></header>
+<main><section class="heading"><p class="eyebrow">YOUR AUTHORIZED WORKSPACE</p><h1 id="page-title">Your information, connected.</h1><p id="status" role="status">Opening your workspace…</p></section>
+<div id="message" role="alert" hidden></div><form id="search-form" role="search"><input id="query" type="search" maxlength="200" aria-label="Search all authorized information" placeholder="Search all authorized information…" autocomplete="off"><button type="submit">Search</button></form>
+<section id="stats" class="stats" aria-label="Visible resource counts"></section>
+<section id="graph-panel" class="panel" hidden><div class="panel-heading"><h2>Relationships</h2><span id="graph-caption" class="muted"></span></div><div id="graph" class="graph"></div></section>
+<section class="records-section"><h2 id="records-title">Records</h2><div id="records" class="cards"></div></section>
+<footer>PhantomView · Built with PhantomBot</footer></main></div>
+<dialog id="detail"><button id="close-detail" type="button" aria-label="Close record">×</button><h2 id="detail-title">Record</h2><pre id="detail-content"></pre></dialog></body></html>
