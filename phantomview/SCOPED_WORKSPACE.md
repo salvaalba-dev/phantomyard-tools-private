@@ -56,7 +56,9 @@ A hidden page requires refresh when returning; back/forward cache restoration
 requests fresh data. Idle visible pages are snapshots of the last successful
 request, not a promise of immediate revocation without another request.
 
-No assistant, setup, history/export or publication route is enabled.
+Setup, history/export and publication routes remain closed. The optional
+[scoped assistant widget](SCOPED_WIDGET.md) uses its own explicitly configured
+consultation routes; it never falls back to the legacy assistant.
 An optional [authenticated review service](AUTHENTICATED_REVIEW.md) now supports
 private pending category-change proposals under explicit action grants. Without
 that service, its routes remain closed and its dialog stays hidden.

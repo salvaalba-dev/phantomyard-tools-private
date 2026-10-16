@@ -6,6 +6,28 @@ AUTH_POST = {'/api/access-link', '/api/redeem', '/api/logout'}
 ASSISTANT_JOBS = '/api/scoped-assistant/jobs'
 
 
+def reject(handler, method, status, message):
+    # Closing with an unread small POST can reset the connection on Windows
+    # before the client receives its denial. Discard bounded bytes, never parse
+    # them or wait indefinitely for a body on an unavailable operation.
+    if method == 'POST':
+        try:
+            length = int(handler.headers.get('Content-Length', '0'))
+        except ValueError:
+            length = 0
+        if 0 < length <= 8192:
+            previous = handler.connection.gettimeout()
+            try:
+                handler.connection.settimeout(1)
+                handler.rfile.read(length)
+            except OSError:
+                pass
+            finally:
+                handler.connection.settimeout(previous)
+    handler.send(status, {'error': message})
+    return True
+
+
 def dispatch(handler, method):
     backend = getattr(handler.server, 'scoped_backend', None)
     parsed = urlparse(handler.path)
@@ -15,17 +37,21 @@ def dispatch(handler, method):
     if method == 'POST' and parsed.path in AUTH_POST:
         return False
     if not handler.allowed():
-        handler.send(403, {'error': 'Reader origin rejected'})
-        return True
+        return reject(handler, method, 403, 'Reader origin rejected')
     if parsed.query or parsed.fragment:
-        handler.send(400, {'error': 'Query and fragment credentials are not accepted'})
-        return True
+        return reject(handler, method, 400, 'Query and fragment credentials are not accepted')
     if method == 'GET' and parsed.path == '/api/access-info':
         handler.send(200, {'delegated': True, 'scoped': True})
         return True
     try:
         consultations = getattr(handler.server, 'scoped_consultations', None)
-        if method in {'GET', 'DELETE'} and parsed.path.startswith(ASSISTANT_JOBS + '/') and consultations:
+        if method == 'GET' and parsed.path == '/api/scoped-assistant/info' and consultations:
+            recipient = backend.gate.identified_scope(handler.headers)[0]
+            if backend.gate.audit is not consultations.assistant.audit:
+                raise ValueError('The protected consultation audit changed')
+            handler.send(200, {'available': recipient.persona in consultations.assistant.executors,
+                               'persona': recipient.persona, 'scope_id': recipient.scope_id})
+        elif method in {'GET', 'DELETE'} and parsed.path.startswith(ASSISTANT_JOBS + '/') and consultations:
             operation = consultations.get if method == 'GET' else consultations.cancel
             handler.send(*operation(handler.headers, parsed.path.removeprefix(ASSISTANT_JOBS + '/')))
         elif method == 'GET' and parsed.path == '/api/state':
@@ -38,12 +64,10 @@ def dispatch(handler, method):
         elif method == 'POST' and parsed.path in {'/api/search', '/api/sync', '/api/review', ASSISTANT_JOBS}:
             if parsed.path == ASSISTANT_JOBS:
                 if consultations is None:
-                    handler.send(403, {'error': 'Scoped consultations are not configured'})
-                    return True
+                    return reject(handler, method, 403, 'Scoped consultations are not configured')
                 backend.gate.identified_scope(handler.headers)
             if parsed.path == '/api/review' and not getattr(handler.server, 'review_service', None):
-                handler.send(403, {'error': 'Review is not configured'})
-                return True
+                return reject(handler, method, 403, 'Review is not configured')
             length = int(handler.headers.get('Content-Length', '0'))
             if (not 0 < length <= (65536 if parsed.path == '/api/review' else 8192)
                     or handler.headers.get('Content-Type', '').split(';')[0] != 'application/json'):
@@ -71,7 +95,7 @@ def dispatch(handler, method):
         else:
             # Do not fall through to unfiltered legacy metadata, KB, versions,
             # assistant jobs, setup/configuration or future API routes.
-            handler.send(403, {'error': 'Operation unavailable in the scoped reader'})
+            reject(handler, method, 403, 'Operation unavailable in the scoped reader')
     except PermissionError:
         handler.send(403, {'error': 'Explicit review authority required'})
     except KeyError:

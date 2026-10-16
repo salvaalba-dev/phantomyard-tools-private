@@ -70,6 +70,14 @@ class ScopedHTTPTests(ProjectionFixture):
             self.assertEqual(status, 403)
         self.assertEqual(self.loaded, [])
 
+    def test_rejected_small_post_bodies_return_denial_without_opening_sources(self):
+        for _ in range(12):
+            with self.subTest(attempt=_):
+                status, result = self.request('POST', '/api/future-export', {'query': 'x' * 2000})
+                self.assertEqual(status, 403)
+                self.assertEqual(result, {'error': 'Operation unavailable in the scoped reader'})
+        self.assertEqual(self.loaded, [])
+
     def test_unidentified_cookie_is_not_promoted_to_scoped_access(self):
         cookie = self.gate.create_session()
         status, _ = self.request('GET', '/api/state', cookie='phantomview=' + cookie)
@@ -104,7 +112,7 @@ class ScopedHTTPTests(ProjectionFixture):
         self.assertEqual(status, 200)
         self.assertIn('/scoped-ui.js', page)
         self.assertNotIn('/app.js', page)
-        for asset in ('/scoped-ui.js', '/scoped-ui.css'):
+        for asset in ('/scoped-ui.js', '/scoped-ui.css', '/scoped-chat.js'):
             self.assertEqual(get(asset)[0], 200)
         self.assertEqual(self.loaded, [])
         self.server.scoped_backend = None

@@ -239,6 +239,8 @@ class QueueHTTPTests(QueueFixture):
             connection.close()
 
     def test_submit_poll_and_cancel_are_scoped_and_explicit(self):
+        status, info = self.request('GET', '/api/scoped-assistant/info')
+        self.assertEqual((status, info), (200, {'available': True, 'persona': self.persona, 'scope_id': 'example'}))
         base = '/api/scoped-assistant/jobs'
         status, job = self.request('POST', base, self.body())
         self.assertEqual(status, 202)
@@ -253,10 +255,12 @@ class QueueHTTPTests(QueueFixture):
         self.assertEqual(self.request('POST', base + '?human=owner', self.body())[0], 400)
         self.assertEqual(self.request('POST', '/api/assistant/jobs', self.body())[0], 403)
         self.server.scoped_consultations = None
+        self.assertEqual(self.request('GET', '/api/scoped-assistant/info')[0], 403)
         self.assertEqual(self.request('POST', base, self.body())[0], 403)
         self.assertEqual(self.request('DELETE', base + '/' + str(uuid.uuid4()))[0], 403)
         self.server.scoped_consultations = self.service
         self.gate.logout(self.headers)
+        self.assertEqual(self.request('GET', '/api/scoped-assistant/info')[0], 401)
         self.assertEqual(self.request('POST', base, self.body())[0], 401)
         self.assertEqual(self.executor.calls, [])
 

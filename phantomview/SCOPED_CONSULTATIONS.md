@@ -66,7 +66,8 @@ rejection, queue/session/global limits, source invalidation, audit failures and
 logout/deadline/shutdown cancellation. A Linux-only test runs a disposable process
 and verifies termination through the native adapter. Model responses are simulated.
 
-The scoped browser widget still needs wiring. Provision the reviewed binary and
+The [scoped browser widget](SCOPED_WIDGET.md) now supplies explicit consultation
+controls and a private capability-information route. Provision the reviewed binary and
 manifest, isolated accounts, approved classifications and verified native channel
 integration before deployment. AU and other setups remain unchanged.
 Organization-wide ingestion ACL enforcement remains deferred F01.

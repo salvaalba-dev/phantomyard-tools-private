@@ -665,6 +665,11 @@ Real deployment, channel isolation and transport budgets remain pending.
 The opt-in [scoped consultation transport](SCOPED_CONSULTATIONS.md) now adds a
 session-owned bounded queue, exact retries, current-view response checks and
 native process cancellation. Three closed HTTP operations require explicit
-embedding with the same scoped backend. Browser widget wiring, reviewed artifact
-provisioning and live activation remain pending.
+embedding with the same scoped backend. Reviewed artifact provisioning and live
+activation remain pending.
+
+The [scoped assistant widget](SCOPED_WIDGET.md) now connects the generic workspace
+to that transport, with a compact sidebar, visible-record focus, explicit retries,
+cancellation and plain-text answers bound to the current authorized view. Browser
+verification uses synthetic data; no AU service is changed.
 

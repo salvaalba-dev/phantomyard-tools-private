@@ -64,13 +64,37 @@ class ScopedModel {
 async function startScopedWorkspace() {
   const $ = id => document.getElementById(id);
   const text = (tag,value,className) => {const node=document.createElement(tag);node.textContent=value;if(className)node.className=className;return node;};
-  let model=null, section='', epoch=0, controller=null, detailEpoch=0, redemption=null, closing=false, reviewContext=null, proposalId=null, reviewEpoch=0;
+  let model=null, section='', epoch=0, controller=null, detailEpoch=0, redemption=null, closing=false, reviewContext=null, proposalId=null, reviewEpoch=0, detailFocus=null;
+  const chat=new ScopedChat({
+    request:async(method,path,body)=>{
+      const response=await fetch(path,{method,credentials:'same-origin',cache:'no-store',keepalive:method!=='GET',
+        headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+      if(!response.ok){const error=Error('Consultation unavailable');error.status=response.status;throw error;}return response.json();
+    },
+    onInvalid:()=>failure(Error('Current scoped session required'),epoch),
+    render:state=>{
+      const labels={unavailable:'Not configured for this session.',ready:'How can I help with your workspace?',submitting:'Submitting your consultation…',
+        queued:'Queued for your persona…',running:'Your persona is reviewing the evidence…',complete:'Answer based on selected authorized evidence.',
+        held:'Screening held this request. No answer was released.',failed:'The consultation could not finish.',cancelled:'Cleared. Cancellation requested.',
+        limited:'Consultation limit reached. Retry later.',error:'Connection interrupted. Retry the same request or cancel.'};
+      $('assistant-status').textContent=labels[state.status]||labels.unavailable;
+      $('assistant-persona').textContent=state.persona;$('assistant-answer').textContent=state.text;$('assistant-answer').hidden=!state.text;
+      $('assistant-question').textContent=state.question;$('assistant-question').hidden=!state.question;
+      $('assistant-focus-title').textContent=state.focus;$('assistant-focus').hidden=!state.focus;
+      $('assistant-input').disabled=!state.available||state.busy||state.retry;$('assistant-send').disabled=!state.available||state.busy||state.retry;
+      $('assistant-cancel').hidden=!state.busy&&!state.retry&&!state.text;$('assistant-retry').hidden=!state.retry;
+      $('assistant-cancel').textContent=state.busy||state.retry?'Cancel':'Clear';
+      document.querySelector('.assistant-panel').setAttribute('data-state',state.status);
+      if(['ready','unavailable','cancelled','submitting'].includes(state.status))$('assistant-input').value='';
+    }
+  });
   function clearReview(hide=true) {
     reviewEpoch++;reviewContext=null;proposalId=null;if(hide)$('review-open').hidden=true;
     for(const id of ['review-resource','review-category','review-content','review-current','review-status'])$(id).replaceChildren();
     $('review-confirm').checked=false;if($('review-dialog').open)$('review-dialog').close();
   }
   function clear() {
+    chat.reset();detailFocus=null;$('assistant-about').hidden=true;
     model=null;section='';detailEpoch++;$('navigation').replaceChildren();$('records').replaceChildren();$('stats').replaceChildren();
     $('graph').replaceChildren();$('graph-panel').hidden=true;$('organization').textContent='';$('scope-label').textContent='Session required';
     $('graph-caption').textContent='';$('records-title').textContent='Records';
@@ -81,6 +105,7 @@ async function startScopedWorkspace() {
   function operation() {epoch++;if(controller)controller.abort();controller=new AbortController();clear();$('message').hidden=true;return epoch;}
   function failure(error,ticket) {
     if(ticket!==epoch || error.name==='AbortError')return;
+    epoch++;if(controller)controller.abort();
     clear();$('status').textContent='Workspace unavailable';$('message').hidden=false;
     $('message').textContent='A current identified session and available scoped data are required. Refresh or request a new temporary link from your persona.';
   }
@@ -92,12 +117,14 @@ async function startScopedWorkspace() {
   function showDetails(row) {
     const ticket=epoch, detailTicket=++detailEpoch;
     // Remove old contents before any new read; never show a cached fallback.
+    detailFocus=null;$('assistant-about').hidden=true;
     $('detail-content').textContent='Loading current record…';$('detail-title').textContent='Record';$('detail').showModal();
     api('/api/resource/'+row.id,undefined,controller?.signal).then(current=>{
       if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;scopedRecord(current);
       if(current.id!==row.id||current.kind!==row.kind)throw Error('Record identity changed');
       $('detail-title').textContent=model.title(current);
       $('detail-content').textContent=JSON.stringify(current.data,null,2);
+      detailFocus={id:current.id,title:model.title(current)};$('assistant-about').hidden=!chat.view;
     }).catch(error=>failure(error,ticket));
   }
   function renderGraph() {
@@ -153,11 +180,20 @@ async function startScopedWorkspace() {
   async function load() {
     if(closing)return;
     const ticket=operation();$('status').textContent='Refreshing your workspace…';$('query').value='';
-    try {const view=await api('/api/state',undefined,controller.signal);if(ticket!==epoch)return;model=new ScopedModel(view);render();
+    try {const view=await api('/api/state',undefined,controller.signal);if(ticket!==epoch)return;model=new ScopedModel(view);render();await loadAssistant(ticket);
       try{const review=await api('/api/review',undefined,controller.signal);if(ticket===epoch&&review.resources?.length)$('review-open').hidden=false;}
       catch(error){if(error.status===401)failure(error,ticket);/* Read access does not imply review authority. */}}
     catch(error){failure(error,ticket);}
   }
+  async function loadAssistant(ticket) {
+    try{const info=await api('/api/scoped-assistant/info',undefined,controller.signal);if(ticket===epoch&&model)chat.enable(info,model.view);}
+    catch(error){if(error.status===401)failure(error,ticket);}
+  }
+  $('assistant-form').addEventListener('submit',event=>{event.preventDefault();chat.send($('assistant-input').value);});
+  $('assistant-cancel').addEventListener('click',()=>chat.cancel());
+  $('assistant-retry').addEventListener('click',()=>chat.send(chat.retryBody?.question||'',true));
+  $('assistant-unfocus').addEventListener('click',()=>chat.setFocus(null));
+  $('assistant-about').addEventListener('click',()=>{if(detailFocus&&chat.view){chat.setFocus(detailFocus);$('detail').close();$('assistant-input').focus();}});
   $('refresh').addEventListener('click',load);
   $('logout').addEventListener('click',async()=>{if(closing)return;closing=true;const ticket=operation();$('query').value='';$('status').textContent='Closing your session…';
     // Revocation must finish even if visibility changes or other reads are aborted.
@@ -165,7 +201,7 @@ async function startScopedWorkspace() {
       await api('/api/logout',{});if(ticket===epoch)$('status').textContent='Logged out. Request a new temporary link to continue.';}
     catch(error){failure(error,ticket);}finally{closing=false;}});
   $('close-detail').addEventListener('click',()=>{$('detail').close();$('detail-content').textContent='';detailEpoch++;});
-  $('detail').addEventListener('close',()=>{$('detail-content').textContent='';detailEpoch++;});
+  $('detail').addEventListener('close',()=>{$('detail-content').textContent='';detailEpoch++;detailFocus=null;$('assistant-about').hidden=true;});
   function reviewSelection() {
     reviewEpoch++;proposalId=null;$('review-confirm').checked=false;$('review-submit').disabled=false;$('review-status').textContent='';
     const row=reviewContext?.resources.find(value=>value.id===$('review-resource').value);
@@ -202,7 +238,7 @@ async function startScopedWorkspace() {
   $('search-form').addEventListener('submit',async event=>{event.preventDefault();if(closing)return;const query=$('query').value.trim();if(!query){await load();return;}
     const ticket=operation();$('status').textContent='Searching all authorized information…';
     try{const result=await api('/api/search',{query},controller.signal);if(ticket!==epoch)return;
-      model=ScopedModel.search(result);render(true);
+      model=ScopedModel.search(result);render(true);await loadAssistant(ticket);
       if(result.partial)$('status').textContent='Showing the first 100 authorized matches. Refine your search for more.';
     }catch(error){failure(error,ticket);}
   });
