@@ -103,10 +103,18 @@ test("configured JEV sees authorized input with no private persona briefing", as
 });
 
 test("configured JEV hold is preserved without running the answering model", async () => {
-  const bodies = jev(10);
+  const bodies = jev(9);
   expect(await ask(harness(0, true))).toBe(0);
   expect(bodies.length).toBeGreaterThan(0);
   expect(calls).toHaveLength(0);
+  expect(output).not.toContain("Authorized evidence answer");
+  expect(errors).toContain("\nPHANTOMVIEW_HELD\n");
+});
+
+test("malformed JEV plus unreadable native fallback still holds without an answer", async () => {
+  jev(10); // Deliberately outside the native decision model's 0-9 score scale.
+  expect(await ask(harness(0, true))).toBe(0);
+  expect(calls).toHaveLength(2); // Native judge and its format retry, never the answer turn.
   expect(output).not.toContain("Authorized evidence answer");
   expect(errors).toContain("\nPHANTOMVIEW_HELD\n");
 });
