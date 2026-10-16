@@ -1,0 +1,65 @@
+name: PhantomView native conversation worker
+
+on:
+  push:
+    paths:
+      - 'phantomview/native_conversation*'
+      - 'phantomview/test_native_conversation_patch.py'
+      - 'phantomview/native_host_review.py'
+      - 'phantomview/native-host-review.json'
+      - '.github/workflows/phantomview-native-conversation.yml'
+  pull_request:
+    paths:
+      - 'phantomview/native_conversation*'
+      - 'phantomview/test_native_conversation_patch.py'
+      - 'phantomview/native_host_review.py'
+      - 'phantomview/native-host-review.json'
+      - '.github/workflows/phantomview-native-conversation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: phantomyard/phantombot
+          ref: 5af27060327ee8c53fe730dd8b98b6b305c62add
+          path: native-source
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.11'
+      - name: Verify full-source drift refusal before patching
+        working-directory: phantomview
+        env:
+          PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/native-source
+        run: python3 -m unittest test_native_conversation_patch -v
+      - name: Prepare the separate native text-worker variant
+        run: |
+          python3 phantomview/native_conversation_patch.py native-source
+          cp phantomview/native_conversation_runtime.test.ts native-source/tests/phantomview-conversation.test.ts
+      - name: Install locked native dependencies
+        working-directory: native-source
+        run: bun install --frozen-lockfile
+      - name: Verify real screening, JEV, persona history and denial paths
+        working-directory: native-source
+        run: bun test tests/phantomview-conversation.test.ts tests/memory.test.ts tests/lib-threatJudge.test.ts
+      - name: Compile the separate baseline executable
+        working-directory: native-source
+        run: bun run build:x64
+      - name: Verify compiled entry fails closed without its account binding
+        working-directory: native-source
+        run: |
+          set +e
+          env -u PHANTOMVIEW_WORKER_UID -u PHANTOMVIEW_WORKER_PERSONA ./dist/phantombot __conversation-worker </dev/null >worker.stdout 2>worker.stderr
+          result=$?
+          test "$result" -eq 2
+          test ! -s worker.stdout
+          python3 -c 'from pathlib import Path; assert Path("worker.stderr").read_text() == "Native conversation unavailable\n"'
