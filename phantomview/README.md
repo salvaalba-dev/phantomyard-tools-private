@@ -700,3 +700,9 @@ the unchanged review baseline and rejects drift. It never reports activation
 readiness; ordinary forwarding, the isolated host and live integration remain
 pending.
 
+The inactive [ordinary conversation forwarding protocol](CONVERSATION_FORWARDING.md)
+now binds text direct-conversation jobs and replies across distinct native/worker
+accounts. It rejects routing/access-operation overrides and expired or cancelled
+replies, with real kernel peer checks in isolated CI. Native ingress, execution
+lifecycle, queue/control behavior and AU activation remain pending.
+

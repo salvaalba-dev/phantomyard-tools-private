@@ -132,6 +132,9 @@ this document upgrades a service or grants access.
    one consumer. Rollback reverses ownership before restarting the old process.
    Validate normal conversation and scoped denied/allowed views before expansion.
 
-The next implementation unit is the ordinary-execution protocol and its isolated
-account tests. The current increment commits the source compatibility gate and
-this contract; it does not claim any of the five gates has been completed.
+The [ordinary-execution protocol](CONVERSATION_FORWARDING.md) now supplies a first
+text direct-conversation transport slice and its isolated account tests. It does
+not supply the model execution lifecycle or native ingress binding. The next
+implementation unit is worker cancellation and process termination, followed by
+native queue/control integration. None of the five complete cutover gates is
+claimed as completed by these libraries alone.
