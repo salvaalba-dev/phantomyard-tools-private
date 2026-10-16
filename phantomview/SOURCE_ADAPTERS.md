@@ -51,15 +51,16 @@ visible and current; classifying only the derived row cannot expose a hidden
 source. Missing or stale dependencies also prevent derived counts and search hits.
 
 The draft format is deliberately incompatible with `ProjectionCatalog`, including
-when its status is changed manually. A future versioned approval and publishing
-step must validate source revisions, authority, all classifications and dependency
+when its status is changed manually. The separate versioned approval and publishing
+library validates source revisions, authority, all classifications and dependency
 restrictions before creating an approved catalog and a current availability
 manifest. Do not bypass that step by treating this CLI as a production importer.
 
 ## Remaining integration
 
-Setup and periodic refresh do not invoke this adapter yet. Automatic collection,
-classification review, immutable approval history, atomic publication/removal,
+The inactive [projection review library](PROJECTION_REVIEW.md) now supplies explicit
+versioned metadata approval and atomic publication. Setup and periodic refresh do
+not invoke these libraries yet. Automatic collection, the classification review UI,
 frontend projections, scoped assistant delivery and native channel isolation
 remain separate integration steps. AU's live setup is unchanged. Organization-wide
 ingestion ACL enforcement remains the deferred requirement F01.

@@ -611,3 +611,8 @@ source-fingerprinted metadata drafts for explicit classification review. Derived
 records retain source dependencies enforced by the scoped backend. The adapter
 does not publish approved catalogs or run automatically during setup or refresh.
 
+The inactive [projection review library](PROJECTION_REVIEW.md) adds explicit
+versioned approval, immutable generations and atomic publication with a revision
+lease. Protected loaders invalidate publications when sources or authority change.
+Setup/refresh wiring and the scoped frontend remain pending.
+

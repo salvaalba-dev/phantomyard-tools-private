@@ -129,8 +129,12 @@ Optional `requires` resource IDs enforce source visibility before derived payloa
 reads. Missing dependencies and cycles are rejected; denied or stale sources hide
 dependent findings and procedures as well as graph relationships.
 
+The inactive [projection review library](PROJECTION_REVIEW.md) supplies versioned
+approval and atomic metadata publication with current-source loaders. It does not
+approve or publish AU data automatically.
+
 Remaining work includes reviewing and publishing actual selected-source drafts,
-versioned approval tooling for non-KB records, frontend resource/view
+setup/refresh integration, frontend resource/view
 definitions, scoped history/exports, native channel isolation, queued assistance,
 JEV and audit integration. Organization-wide ingestion enforcement remains the
 separate deferred requirement F01. AU's default reader and live data are unchanged.
