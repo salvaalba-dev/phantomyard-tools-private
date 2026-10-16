@@ -12,7 +12,7 @@ describe("private source-message provenance", () => {
   test("Telegram keeps API provenance distinct from update IDs and supplied content", () => {
     const message = { message_id: 42, date: 1000, chat: { id: 101, type: "private" },
       from: { id: 101 }, text: "/phantomview", sourceMessage: { id: "spoofed", sentAt: 9999 } };
-    const parsed = parseGetUpdatesResult({ ok: true, result: [{ update_id: 900, message }] });
+    const parsed = parseGetUpdatesResult([{ update_id: 900, message }], 0);
     expect(parsed.updates[0].sourceMessage).toEqual({ id: "42", sentAt: 1000 });
     expect(parsed.updates[0].updateId).toBe(900);
     expect(parsed.updates[0].text).toBe("/phantomview");
@@ -24,7 +24,7 @@ describe("private source-message provenance", () => {
     for (const fields of [{}, { message_id: 42 }, { date: 1000 }, { message_id: 0, date: 1000 },
       { message_id: 42, date: 1.5 }, { message_id: 42, date: "1000" }]) {
       const message = { chat: { id: 101 }, from: { id: 101 }, text: "ordinary text", ...fields };
-      const parsed = parseGetUpdatesResult({ ok: true, result: [{ update_id: 1, message }] } as never);
+      const parsed = parseGetUpdatesResult([{ update_id: 1, message }] as never, 0);
       expect(parsed.updates[0].sourceMessage).toBeUndefined();
       expect(parsed.updates[0].text).toBe("ordinary text");
     }
@@ -33,9 +33,9 @@ describe("private source-message provenance", () => {
   test("media and group provenance remains metadata, without turning a group into a DM", () => {
     for (const content of [{ text: "/phantomview" }, { voice: { file_id: "voice" } },
       { document: { file_id: "doc", file_name: "data.txt" } }]) {
-      const parsed = parseGetUpdatesResult({ ok: true, result: [{ update_id: 1, message: {
+      const parsed = parseGetUpdatesResult([{ update_id: 1, message: {
         message_id: 42, date: 1000, chat: { id: -101, type: "supergroup" }, from: { id: 101 }, ...content,
-      } }] });
+      } }], 0);
       expect(parsed.updates[0].sourceMessage).toEqual({ id: "42", sentAt: 1000 });
       expect(parsed.updates[0].chatType).toBe("supergroup");
       expect(parsed.updates[0].conversationId).toBe("-101");
