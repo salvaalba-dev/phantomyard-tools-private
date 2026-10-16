@@ -7,7 +7,7 @@ import uuid
 
 from assistant_worker import Jobs
 from native_scoped_patch import SOURCE_REVISION
-from scoped_assistant import MAX_ENVELOPE_BYTES, encode
+from scoped_assistant import ConsultationCancelled, MAX_ENVELOPE_BYTES, encode
 
 RESTRICTIONS = {'scoped-projection-only', 'ephemeral-persona', 'ephemeral-memory',
                 'ephemeral-working-directory', 'native-screening', 'daily-recall-none'}
@@ -50,6 +50,9 @@ class ScopedNativeExecutor:
             raise ValueError('Scoped native runtime verification failed') from error
 
     def __call__(self, envelope):
+        return self.run(envelope)
+
+    def run(self, envelope, *, cancelled=None):
         self.verify()
         if (not isinstance(envelope, dict) or envelope.get('kind') != 'scoped-consultation'
                 or envelope.get('trust') != 'untrusted'
@@ -61,5 +64,22 @@ class ScopedNativeExecutor:
             raise ValueError('Native consultation exceeds bounds')
         # Reuse the existing fixed argv/stdin, process deadline, bounded stdout
         # and native held-marker handling. No queue or shared conversation state.
-        return self.jobs.execute({'id': str(uuid.uuid4()), 'prompt': raw.decode('utf-8'),
-                                  'expires_at': time.time() + 120, 'status': 'running'})
+        class ExecutionRow(dict):
+            def __getitem__(self, key):
+                if key == 'status' and cancelled is not None and cancelled.is_set():
+                    return 'cancelled'
+                return super().__getitem__(key)
+
+        if cancelled is not None and cancelled.is_set():
+            raise ConsultationCancelled()
+        row = ExecutionRow(id=str(uuid.uuid4()), prompt=raw.decode('utf-8'),
+                           expires_at=time.time() + 120, status='running')
+        try:
+            answer = self.jobs.execute(row)
+        except RuntimeError:
+            if cancelled is not None and cancelled.is_set():
+                raise ConsultationCancelled() from None
+            raise
+        if cancelled is not None and cancelled.is_set():
+            raise ConsultationCancelled()
+        return answer

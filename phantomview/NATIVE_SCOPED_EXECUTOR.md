@@ -87,3 +87,9 @@ separate native-channel/model/reader accounts, register authoritative human
 identities, review classifications and add authenticated transport lifecycle,
 inference budgets and cancellation. The native channel isolation issue remains
 open. No expanded session, grants, classifications or live service is enabled.
+
+The explicit `run(envelope, cancelled=event)` entry now connects the
+[opt-in transport](SCOPED_CONSULTATIONS.md) to the native process poll loop.
+A set event prevents launch or triggers process-group termination and discards
+late output. The callable without an event remains available for protected
+synchronous embedding.

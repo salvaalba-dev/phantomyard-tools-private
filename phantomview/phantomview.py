@@ -669,6 +669,13 @@ class Handler(BaseHTTPRequestHandler):
         file, mime = static[path]
         return self.send(200, (HERE / file).read_bytes(), mime)
 
+    def do_DELETE(self):
+        if getattr(self.server, 'scoped_backend', None) is not None:
+            from scoped_http import dispatch
+            if dispatch(self, 'DELETE'):
+                return
+        self.send(403, {'error': 'Operation unavailable'})
+
     def do_POST(self):
         if getattr(self.server, 'scoped_backend', None) is not None:
             from scoped_http import dispatch
@@ -809,7 +816,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(503, {"error": "Assistant unavailable"})
 
 
-def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None, review_service=None):
+def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None, review_service=None,
+          scoped_consultations=None):
+    if scoped_consultations is not None:
+        from scoped_consultations import ScopedConsultations
+        if not isinstance(scoped_consultations, ScopedConsultations) or scoped_consultations.backend is not scoped_backend:
+            raise ValueError('Consultations require the same explicitly configured scoped backend')
     if review_service is not None:
         from authenticated_review import ReviewService
         if not isinstance(review_service, ReviewService) or review_service.backend is not scoped_backend:
@@ -826,6 +838,7 @@ def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None,
     server.gate = gate
     server.scoped_backend = scoped_backend
     server.review_service = review_service
+    server.scoped_consultations = scoped_consultations
     from global_search import KnowledgeIndex
     server.knowledge_search = KnowledgeIndex()
     server.bot_version_monitor = None
@@ -836,7 +849,7 @@ def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None,
         except (OSError, ValueError, KeyError, TypeError):
             print("PhantomBot version observer not configured", flush=True)
     server.assistant_client = None
-    if gate and os.environ.get("PHANTOMVIEW_ASSISTANT_CONFIG"):
+    if gate and scoped_backend is None and os.environ.get("PHANTOMVIEW_ASSISTANT_CONFIG"):
         from consultation import BridgeClient
         try:
             server.assistant_client = BridgeClient(read_source(Path(os.environ["PHANTOMVIEW_ASSISTANT_CONFIG"])))
@@ -886,6 +899,8 @@ def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None,
             if handoff is not None:
                 handoff.close()
         finally:
+            if scoped_consultations is not None:
+                scoped_consultations.close()
             server.server_close()
     if server.restart_requested:
         os.execv(os.sys.executable, [os.sys.executable, *os.sys.argv])

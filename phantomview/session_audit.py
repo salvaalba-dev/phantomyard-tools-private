@@ -13,7 +13,8 @@ class Ledger:
     EVENTS = {"session_created", "session_expired", "session_logout", "session_revoked",
               "assistant_requested", "assistant_response_observed", "review_requested", "review_proposed", "review_approved",
               "review_publish_requested", "review_published", "scoped_assistant_requested",
-              "scoped_assistant_dispatched", "scoped_assistant_finished"}
+              "scoped_assistant_dispatched", "scoped_assistant_finished", "scoped_assistant_queued",
+              "scoped_assistant_cancelled", "scoped_assistant_delivered"}
     FIELDS = {"request_id", "job_id", "status", "mode", "review_revision", "approval_revision"}
     STATUSES = {"queued", "running", "complete", "held", "failed", "cancelled", "rejected"}
 

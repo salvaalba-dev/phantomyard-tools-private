@@ -1,11 +1,15 @@
 """Fail-closed artifact checks and fixed executor dispatch, without a model."""
 import json
 from pathlib import Path
+import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 
 from assistant_worker import ConsultationHeld
+from scoped_assistant import ConsultationCancelled
 from native_scoped_executor import ScopedNativeExecutor
 from native_scoped_patch import patch as patch_source
 
@@ -69,6 +73,68 @@ class NativeExecutorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             patch_source(self.root)
         self.assertEqual(ask.read_text(), 'Unknown source version')
+
+    def test_cancellation_is_visible_to_the_native_process_poll_loop(self):
+        executor, cancelled = self.executor(), threading.Event()
+
+        def run(row):
+            self.assertEqual(row['status'], 'running')
+            cancelled.set()
+            self.assertEqual(row['status'], 'cancelled')
+            raise RuntimeError('Native process stopped')
+
+        with patch.object(executor, 'verify'), patch.object(executor.jobs, 'execute', side_effect=run):
+            with self.assertRaises(ConsultationCancelled):
+                executor.run(self.envelope, cancelled=cancelled)
+
+    def test_already_cancelled_request_never_starts_a_native_process(self):
+        executor, cancelled = self.executor(), threading.Event()
+        cancelled.set()
+        with patch.object(executor, 'verify'), patch.object(executor.jobs, 'execute') as run:
+            with self.assertRaises(ConsultationCancelled):
+                executor.run(self.envelope, cancelled=cancelled)
+            run.assert_not_called()
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Process-group cancellation requires Linux')
+    def test_cancellation_terminates_a_real_disposable_process(self):
+        import fcntl
+        import subprocess
+
+        executor, cancelled = self.executor(), threading.Event()
+        self.envelope['question'] = 'x' * 1800
+        self.envelope['evidence'] = [{'excerpt': 'x' * 5000}]
+        binary = Path(self.config['executable'])
+        binary.write_text('#!' + sys.executable + '\nfrom pathlib import Path\nimport time\n'
+                          'Path(__file__).with_suffix(".ready").touch()\nwhile True: time.sleep(.1)\n')
+        binary.chmod(0o700)
+        outcome = []
+
+        def run():
+            try:
+                executor.run(self.envelope, cancelled=cancelled)
+            except Exception as error:
+                outcome.append(type(error))
+
+        thread = threading.Thread(target=run, daemon=True)
+        original_popen = subprocess.Popen
+
+        def small_pipe(*args, **kwargs):
+            process = original_popen(*args, **kwargs)
+            fcntl.fcntl(process.stdin.fileno(), fcntl.F_SETPIPE_SZ, 4096)
+            return process
+
+        with patch.object(executor, 'verify'), patch('assistant_worker.subprocess.Popen', side_effect=small_pipe):
+            thread.start()
+            try:
+                deadline = time.monotonic() + 3
+                while not binary.with_suffix('.ready').exists() and time.monotonic() < deadline:
+                    threading.Event().wait(.01)
+                self.assertTrue(binary.with_suffix('.ready').exists())
+            finally:
+                cancelled.set()
+                thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(outcome, [ConsultationCancelled])
 
 
 if __name__ == '__main__':

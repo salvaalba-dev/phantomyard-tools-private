@@ -3,6 +3,7 @@ import json
 from urllib.parse import urlparse
 
 AUTH_POST = {'/api/access-link', '/api/redeem', '/api/logout'}
+ASSISTANT_JOBS = '/api/scoped-assistant/jobs'
 
 
 def dispatch(handler, method):
@@ -23,14 +24,23 @@ def dispatch(handler, method):
         handler.send(200, {'delegated': True, 'scoped': True})
         return True
     try:
-        if method == 'GET' and parsed.path == '/api/state':
+        consultations = getattr(handler.server, 'scoped_consultations', None)
+        if method in {'GET', 'DELETE'} and parsed.path.startswith(ASSISTANT_JOBS + '/') and consultations:
+            operation = consultations.get if method == 'GET' else consultations.cancel
+            handler.send(*operation(handler.headers, parsed.path.removeprefix(ASSISTANT_JOBS + '/')))
+        elif method == 'GET' and parsed.path == '/api/state':
             handler.send(200, backend.state(handler.headers))
         elif method == 'GET' and parsed.path == '/api/review' and getattr(handler.server, 'review_service', None):
             handler.send(200, handler.server.review_service.view(handler.headers))
         elif method == 'GET' and parsed.path.startswith('/api/resource/'):
             resource = backend.detail(handler.headers, parsed.path.removeprefix('/api/resource/'))
             handler.send(200 if resource else 404, resource or {'error': 'Resource unavailable'})
-        elif method == 'POST' and parsed.path in {'/api/search', '/api/sync', '/api/review'}:
+        elif method == 'POST' and parsed.path in {'/api/search', '/api/sync', '/api/review', ASSISTANT_JOBS}:
+            if parsed.path == ASSISTANT_JOBS:
+                if consultations is None:
+                    handler.send(403, {'error': 'Scoped consultations are not configured'})
+                    return True
+                backend.gate.identified_scope(handler.headers)
             if parsed.path == '/api/review' and not getattr(handler.server, 'review_service', None):
                 handler.send(403, {'error': 'Review is not configured'})
                 return True
@@ -54,6 +64,8 @@ def dispatch(handler, method):
                 handler.send(200, backend.state(handler.headers))
             elif parsed.path == '/api/review':
                 handler.send(202, handler.server.review_service.propose(handler.headers, body))
+            elif parsed.path == ASSISTANT_JOBS:
+                handler.send(*consultations.submit(handler.headers, body))
             else:
                 raise ValueError('Invalid scoped request')
         else:

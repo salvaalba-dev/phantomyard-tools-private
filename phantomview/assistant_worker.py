@@ -169,7 +169,21 @@ class Jobs:
                     os.killpg(process.pid, signal.SIGTERM); break
         reader = threading.Thread(target=read,daemon=True);reader.start()
         marker_reader = threading.Thread(target=read_marker,daemon=True);marker_reader.start()
-        process.stdin.write(row["prompt"].encode());process.stdin.close()
+        write_errors = []
+        def write():
+            try:
+                process.stdin.write(row["prompt"].encode())
+            except OSError:
+                write_errors.append(True)
+            finally:
+                try:
+                    process.stdin.close()
+                except OSError:
+                    write_errors.append(True)
+        # Keep the deadline/cancellation loop active even if a stalled child
+        # never reads stdin and the bounded prompt fills the operating-system pipe.
+        writer = threading.Thread(target=write, daemon=True)
+        writer.start()
         end = min(self.clock() + 120, row["expires_at"])
         while process.poll() is None:
             if self.clock() >= end or row["status"] == "cancelled":
@@ -180,9 +194,10 @@ class Jobs:
             time.sleep(.1)
         reader.join(timeout=3)
         marker_reader.join(timeout=3)
+        writer.join(timeout=3)
         if marker.seen:
             raise ConsultationHeld()
-        if process.returncode != 0 or sum(map(len,output)) > 64000:
+        if process.returncode != 0 or sum(map(len,output)) > 64000 or writer.is_alive() or write_errors:
             raise RuntimeError("Consultation failed")
         return b"".join(output).decode("utf8",errors="replace")
 

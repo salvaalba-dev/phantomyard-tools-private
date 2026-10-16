@@ -82,8 +82,10 @@ The existing AU worker is fixed to an analysis persona and is not silently reuse
 The native channel isolation limitation in
 [verified-channel integration](VERIFIED_CHANNEL_INTEGRATION.md) remains unresolved.
 The library itself has no queue, persistent transcript, automatic retry, request
-deduplication or rate limiter. Each explicit call is a new consultation; a future
-transport must implement those lifecycle controls before exposing it to humans.
+deduplication or rate limiter. Each direct call is a new consultation. The separate
+[opt-in transport](SCOPED_CONSULTATIONS.md) now supplies a bounded queue, session
+ownership, exact retries, quotas and cancellation. Its internal request UUID
+correlates audit events and supplies no identity or write authority.
 
 AU, its current assistant, grants and other setups remain unchanged.
 Organization-wide ingestion ACL enforcement remains deferred F01.

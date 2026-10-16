@@ -662,3 +662,9 @@ working directory. Native screening/JEV remains active. A fixed Linux executor
 rejects legacy artifacts and requires protected reviewed build provenance.
 Real deployment, channel isolation and transport budgets remain pending.
 
+The opt-in [scoped consultation transport](SCOPED_CONSULTATIONS.md) now adds a
+session-owned bounded queue, exact retries, current-view response checks and
+native process cancellation. Three closed HTTP operations require explicit
+embedding with the same scoped backend. Browser widget wiring, reviewed artifact
+provisioning and live activation remain pending.
+

@@ -17,6 +17,10 @@ MAX_ENVELOPE_BYTES = 12000
 MAX_EVIDENCE = 8
 
 
+class ConsultationCancelled(Exception):
+    """Trusted lifecycle cancellation, never generated model output."""
+
+
 def encode(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False).encode('utf-8')
 
@@ -39,7 +43,7 @@ class ScopedAssistant:
                 or self.gate.identified_scope(headers)[0] != recipient):
             raise ValueError('Session, authority or authorized evidence changed; discard the consultation')
 
-    def consult(self, headers, question, *, resource_ids=()):
+    def consult(self, headers, question, *, resource_ids=(), cancelled=None, request_id=None):
         """A fresh single turn, without tools, history, implicit retries or writes.
 
         The callable bound to the authenticated persona receives only a detached
@@ -60,6 +64,11 @@ class ScopedAssistant:
         executor = self.executors.get(recipient.persona)
         if executor is None:
             raise ValueError('No isolated executor is configured for this session persona')
+        if cancelled is not None:
+            if not callable(getattr(cancelled, 'is_set', None)) or not callable(getattr(executor, 'run', None)):
+                raise ValueError('Queued consultations require an explicitly cancellable executor')
+            if cancelled.is_set():
+                raise ConsultationCancelled()
         view = self.backend.state(headers)
         records = {row['id']: row for row in view['resources'] + view['relations']}
         if any(key not in records for key in resource_ids):
@@ -89,7 +98,9 @@ class ScopedAssistant:
                                         or any(row['excerpt_only'] for row in envelope['evidence']))
         if len(encode(envelope)) > MAX_ENVELOPE_BYTES:
             raise ValueError('Consultation envelope exceeds bounds')
-        request_id = str(uuid.uuid4())
+        request_id = str(uuid.uuid4()) if request_id is None else request_id
+        if not isinstance(request_id, str) or str(uuid.UUID(request_id)) != request_id:
+            raise ValueError('An exact consultation request UUID is required')
 
         def audit(event, status):
             self.gate.audit_event(headers, event, request_id=request_id, status=status, mode='scoped-consultation')
@@ -98,20 +109,29 @@ class ScopedAssistant:
         self._current(headers, recipient, view['view_revision'])
         audit('scoped_assistant_dispatched', 'running')
         self._current(headers, recipient, view['view_revision'])
+        if cancelled is not None and cancelled.is_set():
+            raise ConsultationCancelled()
         status, text = 'complete', ''
         try:
-            answer = executor(json.loads(encode(envelope)))
+            payload = json.loads(encode(envelope))
+            answer = executor(payload) if cancelled is None else executor.run(payload, cancelled=cancelled)
             if not isinstance(answer, str) or len(answer.encode('utf-8')) > 64000:
                 raise ValueError('Invalid bounded assistant response')
             text = redact(answer)[:20000]
         except ConsultationHeld:
             status = 'held'
+        except ConsultationCancelled:
+            status = 'cancelled'
         except Exception:
             # No provider errors, filesystem paths or partial output reach humans.
             status = 'failed'
         self._current(headers, recipient, view['view_revision'])
+        if cancelled is not None and cancelled.is_set():
+            status, text = 'cancelled', ''
         audit('scoped_assistant_finished', status)
         self._current(headers, recipient, view['view_revision'])
+        if cancelled is not None and cancelled.is_set():
+            status, text = 'cancelled', ''
         return {'request_id': request_id, 'status': status, 'text': text,
                 'persona': recipient.persona, 'scope_id': recipient.scope_id,
                 'view_revision': view['view_revision'], 'complete_corpus': False,
