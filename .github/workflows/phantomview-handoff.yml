@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - 'phantomview/handoff_client.py'
+      - 'phantomview/reader_handoff.py'
+      - 'phantomview/phantomview.py'
+      - 'phantomview/test_reader_handoff.py'
       - 'phantomview/trusted_handoff.py'
       - 'phantomview/identified_access.py'
       - 'phantomview/channel_identity.py'
@@ -14,6 +17,9 @@ on:
   pull_request:
     paths:
       - 'phantomview/handoff_client.py'
+      - 'phantomview/reader_handoff.py'
+      - 'phantomview/phantomview.py'
+      - 'phantomview/test_reader_handoff.py'
       - 'phantomview/trusted_handoff.py'
       - 'phantomview/identified_access.py'
       - 'phantomview/channel_identity.py'
