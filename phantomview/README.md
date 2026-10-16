@@ -4,6 +4,11 @@ A read-only visual observatory for Phantomyard organizations. It combines declar
 organization structure with bounded filesystem and service observations, preserving
 source evidence and distinguishing declarations from operational checks.
 
+See the [scope-aware execution plan](EXECUTION_PLAN.md) for identified access,
+resource authorization, organization/project views and persistent personalization.
+It also records future requirement F01 for organization-wide ingestion ACL metadata;
+that requirement is deferred and does not change current ingestion behavior.
+
 ## Install and run
 
 Python 3.11 or later and PyYAML are required. Use `install.sh` / `run.sh` on Linux
@@ -66,7 +71,7 @@ Procedural document metadata is shown as a reference only; no external document
 body or Drive content is fetched.
 
 KB discovery recognizes protocol/procedure/workflow/checklist/pipeline/SOP/playbook/norm
-titles and headings in English and Spanish. Ordered lists, separate sections and
+titles and headings. Ordered lists, separate sections and
 conditional bullet lists retain their source structure. Code fences and link-only
 indexes are excluded. A detected document without structured steps keeps an open-
 source link instead of inventing steps. Source ownership is distinct from step
@@ -90,7 +95,7 @@ Run `python -m unittest test_procedures test_phantomview` and
 The single language selector in the top header controls the entire interface:
 navigation, filters, dates, statuses, access screens, persona and KB reader controls,
 findings/review panels, setup forms and the installation inventory. English is the
-source language; Spanish is an explicit UI translation. The preference is remembered
+source language. The preference is remembered
 locally and migrates the earlier installation-only preference. Organization-owned
 names, descriptions, protocol conditions and document/KB content retain their source
 language. Switching language preserves current filters and the open finding review.
@@ -113,7 +118,7 @@ scope; other setups and their routes are not inspected.
 
 An explicit version-1 JSON manifest contains `components`, `relations`, optional
 `tool_bindings`, and optional `persona_bindings`. See `example-installation.json`.
-Each component has an English identifier, organization ID, name, kind, bilingual
+Each component has an English identifier, organization ID, name, kind, localized
 description, optional owner/shared/version declaration, and a bounded probe.
 
 Supported probes are:
@@ -243,8 +248,8 @@ The route model expands `*` rules to selected roles while excluding the destinat
 itself, matching the collector's cycle analysis. Search is bounded to six edges and
 2,000 visits. The visualization is an illustration, not a complete protocol validator
 or evidence that an actual conversation loop occurred. It does not edit the source,
-record a review approval, or resolve a finding. English source labels have an explicit
-Spanish interface translation.
+record a review approval, or resolve a finding. English source labels support
+interface localization.
 
 An open review is explicitly marked by an Active review banner above the map, a
 highlighted finding row, an expanded Active review control, and an In review label
