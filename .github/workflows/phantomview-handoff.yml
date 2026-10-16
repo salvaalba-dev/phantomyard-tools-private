@@ -134,6 +134,8 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: salvaalba-dev/phantomyard-tools
+          # Immutable main revision. Identical tree to the retired
+          # codex/phantomblog-link-only branch (8244ce36).
           ref: 4147924afad85b1db6752b709c29b78d6f56774c
           path: handoff-signing-source
           persist-credentials: false
