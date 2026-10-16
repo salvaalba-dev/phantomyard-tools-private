@@ -33,7 +33,7 @@ class ProjectionCatalog:
         fields = {'id', 'kind', 'category', 'scope', 'project', 'secret', 'payload_sha256'}
         seen = {}
         for row in document['resources']:
-            if (not isinstance(row, dict) or set(row) - fields - {'endpoints'} or not fields <= set(row)
+            if (not isinstance(row, dict) or set(row) - fields - {'endpoints', 'requires'} or not fields <= set(row)
                     or not isinstance(row['id'], str) or not HEX.fullmatch(row['id'])
                     or row['id'] in seen or not isinstance(row['kind'], str) or row['kind'] not in KINDS
                     or not isinstance(row['payload_sha256'], str) or not HEX.fullmatch(row['payload_sha256'])
@@ -55,13 +55,30 @@ class ProjectionCatalog:
                     raise ValueError('Relationship endpoints must be explicit resource IDs')
             elif 'endpoints' in row:
                 raise ValueError('Only relationships may declare graph endpoints')
+            required = row.get('requires', [])
+            if (not isinstance(required, list) or len(required) > 128
+                    or any(not isinstance(key, str) or not HEX.fullmatch(key) for key in required)
+                    or len(set(required)) != len(required)):
+                raise ValueError('Derived-resource dependencies must be unique opaque IDs')
             seen[row['id']] = row
         for row in seen.values():
             if row['kind'] == 'relationship' and any(
                     key not in seen or seen[key]['kind'] == 'relationship' for key in row['endpoints']):
                 raise ValueError('Relationships must reference declared nonrelationship resources')
+            if any(key not in seen or seen[key]['kind'] == 'relationship' for key in row.get('requires', [])):
+                raise ValueError('Derived resources must reference declared nonrelationship sources')
         self.document = json.loads(json.dumps(document, allow_nan=False))
         self.revision = revision(self.document)
+        pending = sorted(self.document['resources'], key=lambda row: row['id'])
+        self.ordered, ready = [], set()
+        while pending:
+            batch = [row for row in pending if all(key in ready for key in
+                     row.get('requires', []) + row.get('endpoints', []))]
+            if not batch:
+                raise ValueError('Cyclic projection dependencies are not permitted')
+            self.ordered.extend(batch)
+            ready.update(row['id'] for row in batch)
+            pending = [row for row in pending if row['id'] not in ready]
 
 
 class PrivateRecordStore:
@@ -111,11 +128,12 @@ class ScopedBackend:
         if catalog.document['authority_revision'] != directory.authority_revision:
             raise ValueError('Review projection classifications against the current authority')
         visible, raw_records, used = {}, {}, 0
-        rows = sorted(catalog.document['resources'], key=lambda row: (row['kind'] == 'relationship', row['id']))
-        for row in rows:
+        for row in catalog.ordered:
             classification = {'organization': recipient.organization,
                               **{key: row[key] for key in ('category', 'scope', 'project', 'secret')}}
             if not directory.permits(recipient, classification):
+                continue
+            if not all(key in visible for key in row.get('requires', [])):
                 continue
             if row['kind'] == 'relationship' and not all(key in visible for key in row['endpoints']):
                 continue  # Do not even load an edge touching a denied, stale or missing node.

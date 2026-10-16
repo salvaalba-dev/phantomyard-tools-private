@@ -83,7 +83,8 @@ def list_groups(lines):
             following = 'ordered' if number else 'rules'
             number = int(number) if number else None
             if group and (depth < base_indent or kind != following or (number is not None and previous is not None and number != previous + 1)):
-                groups.append((kind, group)); group = []
+                    groups.append((kind, group))
+                    group = []
             if not group:
                 base_indent = depth
             kind, previous = following, number
@@ -92,7 +93,8 @@ def list_groups(lines):
             if group and line.startswith(('  ', '\t')):
                 group[-1] = clean(group[-1] + ' ' + line.strip())
             elif group:
-                groups.append((kind, group)); group, kind, previous = [], None, None
+                groups.append((kind, group))
+                group, kind, previous = [], None, None
         # Markdown allows blank lines between list items.
     if group:
         groups.append((kind, group))
@@ -139,7 +141,8 @@ def discover(org_sources, actors, note_payloads, documents=()):
                 continue
             cost = len(content.encode())
             if scanned + cost > MAX_SCAN_BYTES or len(content) > MAX_NOTE_CHARS:
-                omitted += 1; partial = True
+                omitted += 1
+                partial = True
                 if procedural(note['title']) and len(result) < MAX_PROCEDURES:
                     result.append({'id': ident(actor['key'], note['path'], 'document'), 'org': actor['org'],
                                    'title': clean(note['title']), 'description': '', 'kind': 'document',
@@ -200,6 +203,7 @@ def discover(org_sources, actors, note_payloads, documents=()):
         result.append({'id': ident(document['org'], document.get('urn', ''), document.get('slug', '')),
                        'org': document['org'], 'title': clean(document.get('slug') or document.get('urn')),
                        'description': '', 'kind': 'document', 'origin': 'documents',
+                       'source_document': document.get('urn', ''),
                        'source': clean(document.get('location') or document.get('source')),
                        'source_note': '', 'source_owner': '', 'steps': []})
     return result[:MAX_PROCEDURES], {'automatic': True, 'partial': partial or len(result) > MAX_PROCEDURES, 'omitted_notes': omitted}

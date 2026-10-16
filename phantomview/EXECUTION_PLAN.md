@@ -218,6 +218,13 @@ coverage inventories must identify any ingress routes not yet integrated.
 
 ## Commit and deployment discipline
 
+Implemented inactive increment: selected metadata source adapters produce bounded
+drafts with source/payload fingerprints and explicit derived-resource dependencies.
+The scoped backend enforces those dependencies before reads, counts and search.
+See [source adapter coverage](SOURCE_ADAPTERS.md). Versioned non-KB approval,
+publication, setup/refresh hooks and the generic UI are still pending; this does
+not activate expanded access on AU or implement F01.
+
 Commit each coherent milestone or tested increment to the private repository.
 Record validation and remaining boundaries with the change. Keep history linear
 and leave upstream repositories untouched. Commit and verify changes before any

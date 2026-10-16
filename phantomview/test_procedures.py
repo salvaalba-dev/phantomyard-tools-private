@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import phantomview as pv
-from procedures import discover, list_groups
+from procedures import discover
 
 
 class ProcedureDiscoveryTests(unittest.TestCase):
@@ -55,6 +55,7 @@ class ProcedureDiscoveryTests(unittest.TestCase):
         self.assertEqual(rows[0]['kind'], 'rules')
         self.assertEqual(rows[0]['max_hops'], 3)
         self.assertEqual(rows[1]['kind'], 'document')
+        self.assertEqual(rows[1]['source_document'], 'urn:protocol')
         self.assertEqual(rows[1]['steps'], [])
 
     def test_budgets_are_reported_without_exceeding_the_bound(self):

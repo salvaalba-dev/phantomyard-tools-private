@@ -606,3 +606,8 @@ reviewed projection catalog and the same identified gate as redemption; no CLI
 activation or automatic legacy-export conversion is supplied. The existing UI
 still needs adaptation to its generic resource schema before deployment.
 
+The inactive [selected source adapters](SOURCE_ADAPTERS.md) prepare bounded,
+source-fingerprinted metadata drafts for explicit classification review. Derived
+records retain source dependencies enforced by the scoped backend. The adapter
+does not publish approved catalogs or run automatically during setup or refresh.
+

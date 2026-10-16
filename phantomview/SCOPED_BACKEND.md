@@ -124,8 +124,13 @@ The isolated Linux account job also connects real signed native issuance, HTTP
 redemption and project-filtered HTTP state, asserting that no out-of-project
 payload is opened through that complete test path.
 
-Remaining work includes adapters with reviewed provenance for the actual selected
-sources, versioned approval tooling for non-KB records, frontend resource/view
+An inert [metadata adapter](SOURCE_ADAPTERS.md) now prepares source-bound drafts.
+Optional `requires` resource IDs enforce source visibility before derived payload
+reads. Missing dependencies and cycles are rejected; denied or stale sources hide
+dependent findings and procedures as well as graph relationships.
+
+Remaining work includes reviewing and publishing actual selected-source drafts,
+versioned approval tooling for non-KB records, frontend resource/view
 definitions, scoped history/exports, native channel isolation, queued assistance,
 JEV and audit integration. Organization-wide ingestion enforcement remains the
 separate deferred requirement F01. AU's default reader and live data are unchanged.
