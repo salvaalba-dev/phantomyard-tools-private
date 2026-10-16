@@ -106,6 +106,7 @@ When configured, `scoped_http` owns the API surface:
 | `POST /api/search` with `query` only | Search across the current permitted view |
 | `GET /api/resource/<opaque-id>` | Permitted record, otherwise generic unavailable |
 | `GET /api/access-info` | Public scoped/delegated mode flags only |
+| Optional `GET /api/review`, `POST /api/review` | Explicitly authorized review data and pending proposals only |
 | Existing access-link, redeem and logout POST routes | Existing protocol retained |
 | All other API routes | Denied; never forwarded to legacy handlers |
 

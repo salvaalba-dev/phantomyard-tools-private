@@ -56,10 +56,13 @@ A hidden page requires refresh when returning; back/forward cache restoration
 requests fresh data. Idle visible pages are snapshots of the last successful
 request, not a promise of immediate revocation without another request.
 
-No assistant, setup, history/export or classification write route is enabled.
+No assistant, setup, history/export or publication route is enabled.
+An optional [authenticated review service](AUTHENTICATED_REVIEW.md) now supports
+private pending category-change proposals under explicit action grants. Without
+that service, its routes remain closed and its dialog stays hidden.
 The [offline review interface](REVIEW_INTERFACE.md) remains an operator workflow.
-An authenticated in-dashboard review route still requires explicit write authority,
-audit integration and independent approval/publication checks. Native channel
+Approval consumption still requires independent current authority, source review
+and publication checks. Native channel
 isolation, deployment configuration and actual AU activation remain prerequisites
 for expanded access. Organization-wide ingestion enforcement remains deferred F01.
 

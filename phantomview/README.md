@@ -619,15 +619,21 @@ Authenticated approval workflow wiring remains pending.
 An opt-in [operator review queue](REVIEW_QUEUE.md) now prepares drafts during
 setup and collector refresh. Explicit CLI paths or trusted embedding are required;
 browser configuration cannot enable the queue. It never approves or publishes
-access. Authenticated in-dashboard review remains pending.
+access. Authenticated approval and publication remain separate integration work.
 
 The [private offline review interface](REVIEW_INTERFACE.md) now supports metadata
 inspection, batch classification, explicit dependency selection and fingerprinted
 decision download. It supplies no publication access or dashboard route. An
-authenticated in-dashboard review workflow remains pending.
+authenticated approval/publication workflow remains pending.
 
 The opt-in [generic scoped workspace](SCOPED_WORKSPACE.md) now renders visible-only
 menus, counts, cards, directed relationships and global search from the resource
-backend. The default reader remains unchanged. Authenticated review writes,
+backend. The default reader remains unchanged. Approval/publication integration,
 assistant integration and live deployment remain pending.
+
+An opt-in [authenticated review service](AUTHENTICATED_REVIEW.md) now lets explicitly
+authorized humans propose category changes to already visible classified records.
+It requires independent PhantomOrg action grants and a healthy audit ledger.
+Proposals remain pending in a private spool; approval and publication are separate.
+No real grants or live AU configuration are changed.
 

@@ -809,7 +809,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(503, {"error": "Assistant unavailable"})
 
 
-def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None):
+def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None, review_service=None):
+    if review_service is not None:
+        from authenticated_review import ReviewService
+        if not isinstance(review_service, ReviewService) or review_service.backend is not scoped_backend:
+            raise ValueError('Review requires the same explicitly configured scoped backend')
     if scoped_backend is not None:
         from scoped_backend import ScopedBackend
         if not isinstance(scoped_backend, ScopedBackend) or scoped_backend.gate is not gate:
@@ -821,6 +825,7 @@ def serve(obs, port, open_browser, gate=None, handoff=None, scoped_backend=None)
     server.observatory = obs
     server.gate = gate
     server.scoped_backend = scoped_backend
+    server.review_service = review_service
     from global_search import KnowledgeIndex
     server.knowledge_search = KnowledgeIndex()
     server.bot_version_monitor = None

@@ -11,7 +11,7 @@ import uuid
 
 class Ledger:
     EVENTS = {"session_created", "session_expired", "session_logout", "session_revoked",
-              "assistant_requested", "assistant_response_observed"}
+              "assistant_requested", "assistant_response_observed", "review_requested", "review_proposed"}
     FIELDS = {"request_id", "job_id", "status", "mode"}
     STATUSES = {"queued", "running", "complete", "held", "failed", "cancelled", "rejected"}
 

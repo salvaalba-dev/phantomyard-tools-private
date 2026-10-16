@@ -64,13 +64,19 @@ class ScopedModel {
 async function startScopedWorkspace() {
   const $ = id => document.getElementById(id);
   const text = (tag,value,className) => {const node=document.createElement(tag);node.textContent=value;if(className)node.className=className;return node;};
-  let model=null, section='', epoch=0, controller=null, detailEpoch=0, redemption=null, closing=false;
+  let model=null, section='', epoch=0, controller=null, detailEpoch=0, redemption=null, closing=false, reviewContext=null, proposalId=null, reviewEpoch=0;
+  function clearReview(hide=true) {
+    reviewEpoch++;reviewContext=null;proposalId=null;if(hide)$('review-open').hidden=true;
+    for(const id of ['review-resource','review-category','review-content','review-current','review-status'])$(id).replaceChildren();
+    $('review-confirm').checked=false;if($('review-dialog').open)$('review-dialog').close();
+  }
   function clear() {
     model=null;section='';detailEpoch++;$('navigation').replaceChildren();$('records').replaceChildren();$('stats').replaceChildren();
     $('graph').replaceChildren();$('graph-panel').hidden=true;$('organization').textContent='';$('scope-label').textContent='Session required';
     $('graph-caption').textContent='';$('records-title').textContent='Records';
     $('detail-content').textContent='';$('detail-title').textContent='Record';if($('detail').open)$('detail').close();
     $('page-title').textContent='Your information, connected.';
+    clearReview();
   }
   function operation() {epoch++;if(controller)controller.abort();controller=new AbortController();clear();$('message').hidden=true;return epoch;}
   function failure(error,ticket) {
@@ -81,7 +87,7 @@ async function startScopedWorkspace() {
   async function api(path,body,signal) {
     const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',signal,
       headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
-    if(!response.ok)throw Error('Scoped request unavailable');return response.json();
+    if(!response.ok){const error=Error('Scoped request unavailable');error.status=response.status;throw error;}return response.json();
   }
   function showDetails(row) {
     const ticket=epoch, detailTicket=++detailEpoch;
@@ -147,7 +153,9 @@ async function startScopedWorkspace() {
   async function load() {
     if(closing)return;
     const ticket=operation();$('status').textContent='Refreshing your workspace…';$('query').value='';
-    try {const view=await api('/api/state',undefined,controller.signal);if(ticket!==epoch)return;model=new ScopedModel(view);render();}
+    try {const view=await api('/api/state',undefined,controller.signal);if(ticket!==epoch)return;model=new ScopedModel(view);render();
+      try{const review=await api('/api/review',undefined,controller.signal);if(ticket===epoch&&review.resources?.length)$('review-open').hidden=false;}
+      catch(error){if(error.status===401)failure(error,ticket);/* Read access does not imply review authority. */}}
     catch(error){failure(error,ticket);}
   }
   $('refresh').addEventListener('click',load);
@@ -158,6 +166,39 @@ async function startScopedWorkspace() {
     catch(error){failure(error,ticket);}finally{closing=false;}});
   $('close-detail').addEventListener('click',()=>{$('detail').close();$('detail-content').textContent='';detailEpoch++;});
   $('detail').addEventListener('close',()=>{$('detail-content').textContent='';detailEpoch++;});
+  function reviewSelection() {
+    reviewEpoch++;proposalId=null;$('review-confirm').checked=false;$('review-submit').disabled=false;$('review-status').textContent='';
+    const row=reviewContext?.resources.find(value=>value.id===$('review-resource').value);
+    $('review-category').replaceChildren(new Option('Choose a category',''));
+    if(!row)return;
+    for(const category of row.allowed_categories)$('review-category').append(new Option(category,category));
+    $('review-current').textContent=`Current: ${row.category} · ${row.scope.id}`;
+    $('review-content').textContent=JSON.stringify(row.data,null,2);
+  }
+  $('review-open').addEventListener('click',async()=>{
+    const ticket=epoch,reviewTicket=++reviewEpoch;
+    try{const review=await api('/api/review',undefined,controller.signal);if(ticket!==epoch||reviewTicket!==reviewEpoch)return;
+      if(!Array.isArray(review.resources)||!review.resources.length)throw Error('Review unavailable');
+      reviewContext=review;$('review-resource').replaceChildren();
+      for(const row of review.resources)$('review-resource').append(new Option(model.title(row),row.id));
+      reviewSelection();$('review-dialog').showModal();
+    }catch(error){if(reviewTicket===reviewEpoch)failure(error,ticket);}
+  });
+  $('review-resource').addEventListener('change',reviewSelection);
+  $('review-category').addEventListener('change',()=>{reviewEpoch++;proposalId=null;$('review-confirm').checked=false;$('review-submit').disabled=false;});
+  $('review-close').addEventListener('click',()=>clearReview(false));
+  $('review-dialog').addEventListener('close',()=>{if(!$('review-dialog').open)clearReview(false);});
+  $('review-submit').addEventListener('click',async()=>{
+    const ticket=epoch,reviewTicket=reviewEpoch,row=reviewContext?.resources.find(value=>value.id===$('review-resource').value),category=$('review-category').value;
+    if(!row||!$('review-confirm').checked||!row.allowed_categories.includes(category)){$('review-status').textContent='Choose an authorized category and confirm your review.';return;}
+    $('review-submit').disabled=true;proposalId ||= crypto.randomUUID();
+    const body={request_id:proposalId,base_revision:reviewContext.base_revision,view_revision:reviewContext.view_revision,
+      changes:[{id:row.id,payload_sha256:row.payload_sha256,category}]};
+    try{const result=await api('/api/review',body,controller.signal);if(ticket!==epoch||reviewTicket!==reviewEpoch)return;
+      if(result.status!=='pending'||result.published!==false)throw Error('Unexpected proposal response');
+      $('review-status').textContent='Proposal recorded. Publication awaits separate approval.';
+    }catch(error){if(reviewTicket===reviewEpoch)failure(error,ticket);}
+  });
   $('search-form').addEventListener('submit',async event=>{event.preventDefault();if(closing)return;const query=$('query').value.trim();if(!query){await load();return;}
     const ticket=operation();$('status').textContent='Searching all authorized information…';
     try{const result=await api('/api/search',{query},controller.signal);if(ticket!==epoch)return;

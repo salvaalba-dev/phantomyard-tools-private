@@ -247,6 +247,12 @@ Menus, counts, cards, graph highlighting, details and global search use only the
 authorized resource response. Legacy reader defaults are unchanged. Authenticated
 review writes, assistant integration and live AU activation remain pending.
 
+Implemented inactive increment: [authenticated review](AUTHENTICATED_REVIEW.md)
+adds same-scope category-change proposals for already visible classified records,
+requiring explicit human action grants and session audit. Browser confirmation
+stages a private pending artifact; it never publishes access. The operator approval
+consumer, native integration and AU activation remain pending.
+
 Commit each coherent milestone or tested increment to the private repository.
 Record validation and remaining boundaries with the change. Keep history linear
 and leave upstream repositories untouched. Commit and verify changes before any
