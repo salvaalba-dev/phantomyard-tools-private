@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'phantomview/handoff_client.py'
+      - 'phantomview/native_access_command.py'
+      - 'phantomview/test_native_access_command.py'
       - 'phantomview/reader_handoff.py'
       - 'phantomview/phantomview.py'
       - 'phantomview/test_reader_handoff.py'
@@ -55,6 +57,8 @@ on:
   pull_request:
     paths:
       - 'phantomview/handoff_client.py'
+      - 'phantomview/native_access_command.py'
+      - 'phantomview/test_native_access_command.py'
       - 'phantomview/reader_handoff.py'
       - 'phantomview/phantomview.py'
       - 'phantomview/test_reader_handoff.py'
