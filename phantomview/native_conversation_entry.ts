@@ -46,7 +46,8 @@ export async function runConversation(raw: string,
   try {
     const persona = binding();
     const job = parseConversation(raw, persona);
-    const result = await runAsk({ ...input, persona, prompt: job.text,
+    const result = await runAsk({ config: input.config, harnesses: input.harnesses,
+      out: input.out, signal: input.signal, persona, prompt: job.text,
       conversation: `${job.channel}:${job.conversation}`, history: true, stream: false,
       // A principal metadata label never disables the native untrusted-input screen.
       // Preserve only the trusted native hold marker; discard diagnostic contents.

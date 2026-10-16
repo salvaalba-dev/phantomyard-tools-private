@@ -103,6 +103,15 @@ test("native fallback judge hold never reaches the answer model", async () => {
   expect(errors).toContain("\nPHANTOMVIEW_HELD\n");
 });
 
+test("undeclared embedding settings cannot override the native screen", async () => {
+  const injected = { config, harnesses: [harness(95)], screen: async () => undefined,
+    out: { write(text: string) { output += text; return true; } },
+    err: { write(text: string) { errors += text; return true; } } };
+  expect(await runConversation(JSON.stringify(document()), injected)).toBe(0);
+  expect(calls).toHaveLength(1);
+  expect(errors).toContain("\nPHANTOMVIEW_HELD\n");
+});
+
 test("configured native JEV hold remains active for a principal", async () => {
   config.jev = { provider: "openrouter", model: "typesafe/jev-1.13", baseUrl: "https://fixture.invalid/v1",
     keyEnv: "FIXTURE_KEY", apiKey: "fixture", judge: { enabled: true, threshold: 70, timeoutMs: 1000 },
