@@ -61,7 +61,9 @@ manifest. Do not bypass that step by treating this CLI as a production importer.
 The inactive [projection review library](PROJECTION_REVIEW.md) now supplies explicit
 versioned metadata approval and atomic publication. The opt-in
 [operator review queue](REVIEW_QUEUE.md) now invokes draft preparation during setup
-and collector refresh, without approval or publication. The classification review UI,
+and collector refresh, without approval or publication. A separate
+[offline review interface](REVIEW_INTERFACE.md) now exports explicit decisions.
+In-dashboard classification review,
 frontend projections, scoped assistant delivery and native channel isolation
 remain separate integration steps. AU's live setup is unchanged. Organization-wide
 ingestion ACL enforcement remains the deferred requirement F01.

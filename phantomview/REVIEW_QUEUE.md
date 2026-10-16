@@ -54,8 +54,9 @@ garbage collection is implemented; operators must monitor private storage growth
 ## Remaining boundaries
 
 There is no review route in the browser or assistant tool for this queue. Existing
-HTTP authorization remains unchanged. The review interface, source-aware approval
-workflow wiring and generic scoped frontend still need integration. The AU
+HTTP authorization remains unchanged. A separate [offline review interface](REVIEW_INTERFACE.md)
+now exports explicit decisions. In-dashboard review, source-aware approval
+workflow wiring and the generic scoped frontend still need integration. The AU
 collector has not been configured with these flags. Expanded assistant access,
 native channel isolation and deployment remain separate steps. Organization-wide
 ingestion ACL enforcement remains deferred F01.

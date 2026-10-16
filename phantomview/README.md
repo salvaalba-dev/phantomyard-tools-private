@@ -619,5 +619,10 @@ Approval workflow wiring and the scoped frontend remain pending.
 An opt-in [operator review queue](REVIEW_QUEUE.md) now prepares drafts during
 setup and collector refresh. Explicit CLI paths or trusted embedding are required;
 browser configuration cannot enable the queue. It never approves or publishes
-access. The review interface and scoped frontend remain pending.
+access. In-dashboard review and the scoped frontend remain pending.
+
+The [private offline review interface](REVIEW_INTERFACE.md) now supports metadata
+inspection, batch classification, explicit dependency selection and fingerprinted
+decision download. It supplies no publication access or dashboard route. Scoped
+frontend integration and an authenticated in-dashboard review workflow remain pending.
 
