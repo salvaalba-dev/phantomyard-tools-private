@@ -637,3 +637,9 @@ It requires independent PhantomOrg action grants and a healthy audit ledger.
 Proposals remain pending in a private spool; approval and publication are separate.
 No real grants or live AU configuration are changed.
 
+The [protected approval consumer](REVIEW_CONSUMER.md) now validates acknowledged
+proposals against current proposer/reviewer write rights and complete explicit
+catalog decisions. It produces a normal approved revision for separate operator
+publication and records correlated audit evidence. No HTTP publishing capability
+or automatic consumer is enabled.
+

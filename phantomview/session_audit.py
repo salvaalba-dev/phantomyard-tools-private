@@ -11,8 +11,8 @@ import uuid
 
 class Ledger:
     EVENTS = {"session_created", "session_expired", "session_logout", "session_revoked",
-              "assistant_requested", "assistant_response_observed", "review_requested", "review_proposed"}
-    FIELDS = {"request_id", "job_id", "status", "mode"}
+              "assistant_requested", "assistant_response_observed", "review_requested", "review_proposed", "review_approved"}
+    FIELDS = {"request_id", "job_id", "status", "mode", "review_revision", "approval_revision"}
     STATUSES = {"queued", "running", "complete", "held", "failed", "cancelled", "rejected"}
 
     def __init__(self, path, retention_days=30, clock=time.time):
@@ -54,6 +54,9 @@ class Ledger:
                 raise ValueError("Invalid audit status")
             elif key == "mode" and value != "dashboard-analysis":
                 raise ValueError("Unverified assistant mode")
+            elif key in {"review_revision", "approval_revision"}:
+                if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value):
+                    raise ValueError("Invalid review correlation fingerprint")
         encoded = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
         now = self.clock()
         with self.lock, self._connect() as db:

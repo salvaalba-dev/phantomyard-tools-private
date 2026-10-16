@@ -98,5 +98,6 @@ class ReviewService:
         current, checked, current_catalog = self._context(headers)
         if current != recipient or checked != view or current_catalog != catalog_revision:
             raise ValueError('Review changed while recording the proposal')
-        self.gate.audit_event(headers, 'review_proposed', request_id=body['request_id'], status='queued')
+        self.gate.audit_event(headers, 'review_proposed', request_id=body['request_id'],
+                              review_revision=proposal['revision'], status='queued')
         return {'request_id': body['request_id'], 'status': 'pending', 'published': False}

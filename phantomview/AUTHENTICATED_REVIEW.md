@@ -81,7 +81,8 @@ the browser.
 
 The service records `review_requested` before staging and `review_proposed` after
 fresh session, policy, catalog, data and action checks. Audit records contain the
-existing random session audit ID, request UUID and queued status. They contain no
+existing random session audit ID, request UUID, queued status and proposal
+fingerprint. They contain no
 record bodies, categories, channel identities or credentials. The private proposal
 contains the identified human/persona/scope metadata, old and proposed
 classifications, payload fingerprints and catalog/view revisions, but no resource
@@ -105,9 +106,10 @@ catalog and must never be fed directly to a publisher.
 
 ## Remaining integration
 
-The authenticated proposal UI and HTTP boundary are implemented. The operator
-consumer that reconciles proposals into a freshly reviewed source draft and
-publishes an approved revision remains pending. There is no `/api/review/approve`
+The authenticated proposal UI and HTTP boundary are implemented. The protected
+[approval consumer](REVIEW_CONSUMER.md) now checks acknowledged proposals against
+explicit complete decisions and current evidence, producing an approved revision
+for separate operator publication. There is no `/api/review/approve`
 or `/api/review/publish` route. Native channel isolation, JEV/assistant integration,
 operator deployment configuration and actual AU activation remain separate work.
 No real human grants or other setups are changed by this increment.

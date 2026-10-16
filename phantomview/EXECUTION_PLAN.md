@@ -253,6 +253,12 @@ requiring explicit human action grants and session audit. Browser confirmation
 stages a private pending artifact; it never publishes access. The operator approval
 consumer, native integration and AU activation remain pending.
 
+Implemented inactive increment: the [protected approval consumer](REVIEW_CONSUMER.md)
+requires fingerprinted audit receipts, current proposer/reviewer classification
+authority and explicit complete decisions. It produces versioned approval artifacts
+for the existing publisher without adding an HTTP executor or changing live AU.
+Operator orchestration, native integration and deployment remain pending.
+
 Commit each coherent milestone or tested increment to the private repository.
 Record validation and remaining boundaries with the change. Keep history linear
 and leave upstream repositories untouched. Commit and verify changes before any
