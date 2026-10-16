@@ -1,4 +1,5 @@
 """Disposable root Linux CI only: real issuer/worker/model peer credentials."""
+import hashlib
 import os
 from pathlib import Path
 import select
@@ -7,6 +8,7 @@ import tempfile
 import unittest
 
 from conversation_forwarding import AccountPolicy, Forwarder, Route, WorkerInbox, _send
+from conversation_execution import ConversationProcess
 from test_conversation_forwarding import frame, request
 from test_handoff_accounts import ENABLED, ISSUER, MODEL, READER, finish, spawn
 from trusted_handoff import bind_listener
@@ -123,6 +125,68 @@ class ConversationAccountTests(unittest.TestCase):
         server_result = finish(server)
         self.assertEqual(client_result, {'ok': True, 'value': {'denied': True}})
         self.assertEqual(server_result, {'ok': True, 'value': {'no_bytes': True}})
+
+    def process_fixture(self, source):
+        artifact = tempfile.TemporaryDirectory(prefix='phantomview-executable-', dir='/run')
+        self.addCleanup(artifact.cleanup)
+        os.chmod(artifact.name, 0o755)
+        binary = Path(artifact.name) / 'fixture'
+        binary.write_text('#!/usr/bin/python3\n' + source, encoding='utf-8')
+        binary.chmod(0o755)
+        return str(binary), hashlib.sha256(binary.read_bytes()).hexdigest()
+
+    def execution_worker(self, binary, digest):
+        inbox = WorkerInbox(persona='guide', policy=POLICY)
+        executor = ConversationProcess(inbox=inbox, executable=binary, sha256=digest,
+                                       working_dir=self.folder.name, environment={})
+        with bind_listener(self.path, ISSUER) as listener:
+            os.write(self.ready_write, b'1')
+            listener.settimeout(6)
+            connection, _ = listener.accept()
+            return executor.serve_connection(connection)
+
+    def test_isolated_worker_process_receives_full_metadata_and_returns_bound_reply(self):
+        binary, digest = self.process_fixture('import json,sys\njob=json.load(sys.stdin)\n'
+            'assert job["tier"] == "principal" and job["audience"] == "private"\n'
+            'assert job["persona"] == "guide" and job["text"] == "Question"\n'
+            'print("Synthetic project summary")\n')
+        server = spawn(MODEL, lambda: self.execution_worker(binary, digest))
+        self.wait_ready()
+
+        def issuer():
+            client = Forwarder(persona='guide', socket_path=self.path, policy=POLICY)
+            route = Route('telegram', '101', '101', 'principal', 'private')
+            result = client.forward(route, 'Question', seconds=5)
+            return result.route == route and result.text.strip() == 'Synthetic project summary'
+
+        self.assertEqual(finish(spawn(ISSUER, issuer)), {'ok': True, 'value': True})
+        self.assertEqual(finish(server), {'ok': True, 'value': 'complete'})
+
+    def test_disconnect_terminates_real_worker_child_under_its_separate_uid(self):
+        binary, digest = self.process_fixture('import json,os,signal,sys,time\njson.load(sys.stdin)\n'
+            'signal.signal(signal.SIGTERM,signal.SIG_IGN)\n'
+            'open("running.pid","w").write(str(os.getpid()))\ntime.sleep(20)\n')
+        server = spawn(MODEL, lambda: self.execution_worker(binary, digest))
+        self.wait_ready()
+        ready = Path(self.folder.name) / 'running.pid'
+
+        def issuer():
+            class CancelWhenRunning:
+                def is_set(self):
+                    return ready.exists()
+
+            client = Forwarder(persona='guide', socket_path=self.path, policy=POLICY)
+            try:
+                client.forward(Route('telegram', '101', '101', 'principal', 'private'),
+                               'Question', seconds=5, cancelled=CancelWhenRunning())
+            except ValueError:
+                return True
+            return False
+
+        self.assertEqual(finish(spawn(ISSUER, issuer)), {'ok': True, 'value': True})
+        self.assertEqual(finish(server), {'ok': True, 'value': 'unavailable'})
+        pid = int(ready.read_text())
+        self.assertFalse(Path(f'/proc/{pid}').exists(), 'Direct worker child must be reaped')
 
 
 if __name__ == '__main__':

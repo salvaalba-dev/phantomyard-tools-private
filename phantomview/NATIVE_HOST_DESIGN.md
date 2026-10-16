@@ -133,8 +133,9 @@ this document upgrades a service or grants access.
    Validate normal conversation and scoped denied/allowed views before expansion.
 
 The [ordinary-execution protocol](CONVERSATION_FORWARDING.md) now supplies a first
-text direct-conversation transport slice and its isolated account tests. It does
-not supply the model execution lifecycle or native ingress binding. The next
-implementation unit is worker cancellation and process termination, followed by
-native queue/control integration. None of the five complete cutover gates is
-claimed as completed by these libraries alone.
+text direct-conversation transport slice and its isolated account tests.
+The [worker lifecycle](CONVERSATION_EXECUTION.md) adds
+disconnect cancellation and process-group cleanup, tested with protected synthetic
+executables. A compatible native JSON entry point and native queue/control
+integration remain pending. None of the five complete cutover gates is claimed
+as completed by these libraries alone.

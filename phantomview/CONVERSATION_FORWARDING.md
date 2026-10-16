@@ -89,8 +89,10 @@ The tests send no real Telegram/PhantomChat messages and perform no model infere
 They do not establish native source integration or AU configuration. Run the root
 account tests only on the explicitly enabled ephemeral runner, never on the VPS.
 
-Next: implement the worker lifecycle with bounded cancellation/process termination,
-then the native ingress binding and ordinary queue/control integration. Media,
+The [worker lifecycle](CONVERSATION_EXECUTION.md) now supplies disconnect/deadline
+cancellation and bounded process-group cleanup with synthetic executable coverage.
+Next: implement the compatible native JSON entry point, native ingress binding
+and ordinary queue/control integration. Media,
 groups, reactions, streaming, memory extraction, recovery and every fallback
 must be preserved by the complete host split before live cutover. Native JEV
 screening remains required; it is neither implemented nor bypassed by this wire

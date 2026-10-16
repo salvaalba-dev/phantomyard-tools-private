@@ -8,11 +8,12 @@ import json
 import os
 from pathlib import Path
 import re
-import signal
 import subprocess
 import threading
 import time
 import uuid
+
+from bounded_process import run as run_bounded_process
 
 
 def redact(text):
@@ -150,56 +151,19 @@ class Jobs:
     def execute(self, row):
         # Fixed argv, stdin input, no shell, no history and no user-selectable target.
         command = [self.config["executable"], "ask", "--persona", self.config["persona"], "--conversation", "phantomview:" + row["id"], "--", "-"]
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   start_new_session=True, cwd=self.config["working_dir"])
-        output = []
         marker = HeldMarker()
-        def read_marker():
-            while True:
-                data = process.stderr.read(4096)
-                if not data: break
-                # Discard all stderr content; retain only the fixed trusted marker.
-                marker.feed(data)
-        def read():
-            while True:
-                data = process.stdout.read(4096)
-                if not data: break
-                output.append(data)
-                if sum(map(len,output)) > 64000:
-                    os.killpg(process.pid, signal.SIGTERM); break
-        reader = threading.Thread(target=read,daemon=True);reader.start()
-        marker_reader = threading.Thread(target=read_marker,daemon=True);marker_reader.start()
-        write_errors = []
-        def write():
-            try:
-                process.stdin.write(row["prompt"].encode())
-            except OSError:
-                write_errors.append(True)
-            finally:
-                try:
-                    process.stdin.close()
-                except OSError:
-                    write_errors.append(True)
-        # Keep the deadline/cancellation loop active even if a stalled child
-        # never reads stdin and the bounded prompt fills the operating-system pipe.
-        writer = threading.Thread(target=write, daemon=True)
-        writer.start()
-        end = min(self.clock() + 120, row["expires_at"])
-        while process.poll() is None:
-            if self.clock() >= end or row["status"] == "cancelled":
-                os.killpg(process.pid, signal.SIGTERM)
-                try: process.wait(timeout=3)
-                except subprocess.TimeoutExpired: os.killpg(process.pid, signal.SIGKILL);process.wait()
-                raise RuntimeError("Consultation stopped")
-            time.sleep(.1)
-        reader.join(timeout=3)
-        marker_reader.join(timeout=3)
-        writer.join(timeout=3)
+        deadline = time.monotonic() + max(0, min(120, row["expires_at"] - self.clock()))
+        try:
+            raw = run_bounded_process(command, row["prompt"].encode(), cwd=self.config["working_dir"],
+                                      deadline=deadline, cancelled=lambda: row["status"] == "cancelled",
+                                      stderr_sink=marker.feed, popen=subprocess.Popen)
+        except RuntimeError:
+            if marker.seen:
+                raise ConsultationHeld() from None
+            raise
         if marker.seen:
             raise ConsultationHeld()
-        if process.returncode != 0 or sum(map(len,output)) > 64000 or writer.is_alive() or write_errors:
-            raise RuntimeError("Consultation failed")
-        return b"".join(output).decode("utf8",errors="replace")
+        return raw.decode("utf8", errors="replace")
 
 
 class WorkerHandler(BaseHTTPRequestHandler):

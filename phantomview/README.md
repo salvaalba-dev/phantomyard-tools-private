@@ -706,3 +706,10 @@ accounts. It rejects routing/access-operation overrides and expired or cancelled
 replies, with real kernel peer checks in isolated CI. Native ingress, execution
 lifecycle, queue/control behavior and AU activation remain pending.
 
+The inactive [ordinary worker lifecycle](CONVERSATION_EXECUTION.md) now connects
+authenticated text jobs to a fixed protected process contract, preserves the
+complete routing/trust metadata and cancels on disconnect or deadline. The shared
+restricted runner also gains deterministic pipe cleanup and process-group
+termination. A compatible native JSON entry point, containment for tool-capable
+execution and live ingress integration remain required before activation.
+

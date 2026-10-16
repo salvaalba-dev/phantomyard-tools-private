@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 BASE=Path('/opt/phantomview-au')
 STATE=Path('/var/lib/phantomview-au')
 FILES=['access_gate.py','phantomview.py','index.html','style.css','assistant.js','review.js',
-       'consultation.py','consultation-ui.js','bridge_assistant.cjs','assistant_worker.py']
+       'consultation.py','consultation-ui.js','bridge_assistant.cjs','assistant_worker.py','bounded_process.py']
 
 
 def deploy(staging):
