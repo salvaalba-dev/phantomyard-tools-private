@@ -650,3 +650,9 @@ immediately before activation and exact completed-retry reconciliation. Final
 audit or cleanup failure is reported separately from a committed pointer. It is
 an operator library only; no HTTP publisher or live AU activation is enabled.
 
+The inactive [scoped consultation boundary](SCOPED_ASSISTANT.md) now selects an
+explicit executor for the authenticated persona, supplies bounded authorized
+projection evidence and revalidates access before inference and answer delivery.
+Its tests use synthetic executors. A production adapter preserving native JEV,
+isolating persona memory and enforcing transport budgets remains required.
+

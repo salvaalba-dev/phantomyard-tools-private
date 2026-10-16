@@ -153,6 +153,13 @@ be enabled. Human category zero currently names Salvador explicitly.
 
 ## Remaining activation work
 
+The inactive [scoped consultation library](SCOPED_ASSISTANT.md) now supplies
+persona-bound evidence dispatch, current-view revalidation and metadata audit
+checks around a synchronous trusted executor. Synthetic tests cover held/failed
+results and revocation during inference. No production native executor is wired;
+native memory isolation, genuine JEV integration, queue/budget controls and all
+deployment prerequisites below still apply.
+
 - Implement and test the opt-in native channel hook against the installed release;
   keep it before inference and deliver links only to that verified direct sender.
 - Support the explicit counterpart/project extensions consistently in PhantomOrg,

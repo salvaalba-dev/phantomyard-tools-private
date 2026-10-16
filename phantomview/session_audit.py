@@ -12,7 +12,8 @@ import uuid
 class Ledger:
     EVENTS = {"session_created", "session_expired", "session_logout", "session_revoked",
               "assistant_requested", "assistant_response_observed", "review_requested", "review_proposed", "review_approved",
-              "review_publish_requested", "review_published"}
+              "review_publish_requested", "review_published", "scoped_assistant_requested",
+              "scoped_assistant_dispatched", "scoped_assistant_finished"}
     FIELDS = {"request_id", "job_id", "status", "mode", "review_revision", "approval_revision"}
     STATUSES = {"queued", "running", "complete", "held", "failed", "cancelled", "rejected"}
 
@@ -53,7 +54,7 @@ class Ledger:
                     raise ValueError("Invalid correlation identifier")
             elif key == "status" and value not in self.STATUSES:
                 raise ValueError("Invalid audit status")
-            elif key == "mode" and value != "dashboard-analysis":
+            elif key == "mode" and value not in {"dashboard-analysis", "scoped-consultation"}:
                 raise ValueError("Unverified assistant mode")
             elif key in {"review_revision", "approval_revision"}:
                 if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value):
