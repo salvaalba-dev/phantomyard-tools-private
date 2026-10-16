@@ -3,6 +3,11 @@
 Status: private, tested primitives; **not enabled on the AU reader or daemon**.
 The current assistant remains the bounded, tool-less PhantomView analysis pilot.
 
+The inactive [native command seam](NATIVE_ACCESS_COMMAND.md) now supplies reserved
+command consumption, fixed binding, bounded duplicate/attempt handling and
+direct-only delivery through the existing handoff client. It does not supply the
+isolated native channel host or change the shared PhantomBot dispatcher.
+
 ## Source inspection
 
 The inspected PhantomBot source is commit

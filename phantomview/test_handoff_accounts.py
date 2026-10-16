@@ -15,9 +15,11 @@ import struct
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 from handoff_client import ReaderPolicy, request_access
+from native_access_command import DirectMessage, NativeAccessCommand, Outcome
 from reader_handoff import ReaderHandoff
 from scoped_backend import ScopedBackend
 from scoped_http import dispatch as scoped_dispatch
@@ -102,6 +104,23 @@ class CrossAccountTests(unittest.TestCase):
                               {'channel': 'telegram', 'sender': '101', 'direct': True,
                                'principal_authenticated': True, 'scope_id': 'river-project'})
 
+    def native_command(self):
+        delivered = []
+
+        def deliver(channel, sender, link):
+            delivered.append((channel, sender, link))
+            return True
+
+        handler = NativeAccessCommand(channel='telegram', scope_id='river-project', socket_path=self.path,
+                                      policy=ReaderPolicy(READER, frozenset({MODEL})),
+                                      origin=self.fixture.gate.origin,
+                                      sign_authorization=lambda: self.authorization, deliver_direct=deliver)
+        message = DirectMessage('101', '42', int(time.time()), '/phantomview', True, True)
+        first, repeated = handler.handle(message), handler.handle(message)
+        return {'delivered': first is Outcome.DELIVERED, 'duplicate': repeated is Outcome.DUPLICATE,
+                'same_sender': len(delivered) == 1 and delivered[0][:2] == ('telegram', '101'),
+                'fragment_only': len(delivered) == 1 and '/#c=' in delivered[0][2]}
+
     def test_isolated_native_account_receives_real_signed_scoped_single_use_link(self):
         def reader():
             gate = self.fixture.gate
@@ -163,10 +182,11 @@ class CrossAccountTests(unittest.TestCase):
                     'scoped_counts': scoped_counts}
 
         server = self.start(reader)
-        native = finish(spawn(ISSUER, lambda: {'fragment_only': '/#c=' in self.native()}))
+        native = finish(spawn(ISSUER, self.native_command))
         os.write(self.done_write, b'1')
         result = finish(server)
-        self.assertEqual(native, {'ok': True, 'value': {'fragment_only': True}})
+        self.assertEqual(native, {'ok': True, 'value': {'delivered': True, 'duplicate': True,
+                                                     'same_sender': True, 'fragment_only': True}})
         self.assertEqual(result, {'ok': True, 'value': {'accepted': True, 'human': 'owner',
                                                      'scope': 'river-project', 'replay_rejected': True,
                                                      'socket_removed': True,

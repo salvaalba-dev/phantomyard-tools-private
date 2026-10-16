@@ -676,3 +676,9 @@ verification uses synthetic data; no AU service is changed.
 The [AU readiness inspection](AU_PILOT_READINESS.md) records the observed runtime,
 account and policy gaps and the required migration order before scoped activation.
 
+The inactive [native access command seam](NATIVE_ACCESS_COMMAND.md) now consumes
+fixed-scope direct requests before model dispatch, bounds duplicate/issuance
+attempts and delivers fragment links only to the verified sender. It reuses the
+existing peer-authenticated client and signing protocol. The isolated native host
+and installed-release hook remain required; this is not AU activation.
+
