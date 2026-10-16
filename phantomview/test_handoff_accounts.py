@@ -20,6 +20,7 @@ import unittest
 from handoff_client import ReaderPolicy, request_access
 from reader_handoff import ReaderHandoff
 from scoped_backend import ScopedBackend
+from scoped_http import dispatch as scoped_dispatch
 from test_scoped_backend import ProjectionFixture
 import phantomview as pv
 import test_signed_recipient as signatures
@@ -70,6 +71,9 @@ def finish(child):
 class CrossAccountTests(unittest.TestCase):
     def setUp(self):
         self.assertIsNotNone(signatures.PrivateKey, 'Install PhantomBlog access dependencies; never skip this job')
+        # The runner checkout may be private to its owner. Preload this lazy HTTP
+        # dependency before permanent UID drops; never widen checkout permissions.
+        self.assertTrue(callable(scoped_dispatch))
         self.folder = tempfile.TemporaryDirectory(prefix='phantomview-handoff-')
         self.addCleanup(self.folder.cleanup)
         os.chown(self.folder.name, READER, ISSUER)
