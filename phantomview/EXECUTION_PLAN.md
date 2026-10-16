@@ -95,8 +95,10 @@ Commit: `feat: add versioned organizational resource classification`
 Implementation status: recipient-bound signed sessions, a Linux peer-credential
 handoff boundary and a receiver-verifying native client are prepared, with a
 dedicated disposable cross-account CI job. See [private handoff](TRUSTED_HANDOFF.md). Native
-pre-model delivery, provisioned account isolation and live reader wiring remain
-work; no expanded session access is enabled.
+pre-model delivery and provisioned account isolation remain work. The opt-in
+reader listener lifecycle is implemented; its default CLI and AU deployment are
+unchanged. The native shared-daemon isolation design remains an activation issue;
+no expanded session access is enabled.
 
 Implement the native pre-model channel integration and a genuinely trusted
 recipient handoff. Preserve the existing single-use signed access-link protocol.

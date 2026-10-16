@@ -79,6 +79,19 @@ HTTPS fragment-link validation and no automatic retry. The dedicated isolated
 handoff CI job tests real signing and separate kernel accounts on a disposable
 runner. This does not install or authenticate the missing native message hook.
 
+`reader_handoff.py` connects that boundary to the reader lifecycle through an
+explicit embedding argument. It requires the same `IdentifiedGate` object as HTTP
+redemption, closes the HTTP socket on startup failure and cleans up its own socket
+on shutdown. The isolated test redeems the native-issued grant through the real
+HTTP handler and checks its human/scope and single-use behavior. The default CLI
+does not construct this runtime and the AU reader is unchanged.
+
+The inspected daemon still hosts channel listeners and model turns together.
+Its contributor guidance rejects a new per-persona supervisor; a shell tool in
+that same account cannot supply isolated native authority. The native ingress or
+model-execution isolation design remains unresolved and must be reviewed before
+activation, without introducing a competing channel listener.
+
 `scoped_knowledge.py` adds the inactive retrieval boundary over an identified
 session. It calls `identified_scope` before retrieval, checks each resource with
 the private directory before opening or searching its payload, and rejects draft

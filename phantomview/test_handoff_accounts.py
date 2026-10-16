@@ -4,6 +4,8 @@ Run only in an ephemeral CI runner as root with PHANTOMVIEW_ACCOUNT_TESTS=1.
 No users, groups, services or production configuration are created or changed.
 """
 import json
+from http.client import HTTPConnection
+from http.cookies import SimpleCookie
 import os
 from pathlib import Path
 import select
@@ -12,9 +14,12 @@ import socket
 import struct
 import sys
 import tempfile
+import threading
 import unittest
 
 from handoff_client import ReaderPolicy, request_access
+from reader_handoff import ReaderHandoff
+import phantomview as pv
 import test_signed_recipient as signatures
 from test_view_permissions import scoped_organization
 from trusted_handoff import PeerPolicy, bind_listener, serve_connection
@@ -75,6 +80,9 @@ class CrossAccountTests(unittest.TestCase):
         self.fixture.setUp()
         self.fixture.org = scoped_organization()
         self.authorization = self.fixture.authorization(self.fixture.signed())
+        self.done_read, self.done_write = os.pipe()
+        self.addCleanup(os.close, self.done_read)
+        self.addCleanup(os.close, self.done_write)
 
     def start(self, operation, uid=READER):
         child = spawn(uid, operation)
@@ -100,28 +108,50 @@ class CrossAccountTests(unittest.TestCase):
                 return link
 
             gate.issue_identified = issue
-            with bind_listener(self.path, ISSUER) as listener:
-                listener.settimeout(6)
-                os.write(self.ready_write, b'1')
-                connection, _ = listener.accept()
-                accepted = serve_connection(connection, gate, PeerPolicy(ISSUER, frozenset({MODEL})))
-            code = captured[0].split('#c=')[1]
-            cookie = gate.redeem(code)
-            recipient, _ = gate.identified_scope({'Cookie': 'phantomview=' + cookie})
-            replay_rejected = False
-            try:
-                gate.redeem(code)
-            except signatures.access.core.Invalid:
-                replay_rejected = True
+            runtime = ReaderHandoff(self.path, ISSUER, PeerPolicy(ISSUER, frozenset({MODEL})), gate)
+            with pv.ThreadingHTTPServer(('127.0.0.1', 0), pv.Handler) as http:
+                http.gate, http.access_errors = gate, (ValueError, gate.access.core.Invalid)
+                thread = threading.Thread(target=http.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    runtime.start(http)
+                    os.write(self.ready_write, b'1')
+                    if not select.select([self.done_read], [], [], 8)[0]:
+                        raise AssertionError('Native client did not complete')
+                    os.read(self.done_read, 1)
+                    accepted = runtime.healthy and bool(captured)
+                    code = captured[0].split('#c=')[1]
+                    connection = HTTPConnection('127.0.0.1', http.server_port, timeout=3)
+                    try:
+                        body = json.dumps({'code': code})
+                        connection.request('POST', '/api/redeem', body, {'Content-Type': 'application/json'})
+                        response = connection.getresponse()
+                        if response.status != 200:
+                            raise AssertionError('HTTP reader rejected native handoff grant')
+                        cookie = SimpleCookie(response.getheader('Set-Cookie'))['phantomview'].value
+                        response.read()
+                        recipient, _ = gate.identified_scope({'Cookie': 'phantomview=' + cookie})
+                        connection.request('POST', '/api/redeem', body, {'Content-Type': 'application/json'})
+                        response = connection.getresponse()
+                        replay_rejected = response.status == 401
+                        response.read()
+                    finally:
+                        connection.close()
+                finally:
+                    runtime.close()
+                    http.shutdown()
+                    thread.join(timeout=3)
             return {'accepted': accepted, 'human': recipient.human, 'scope': recipient.scope_id,
-                    'replay_rejected': replay_rejected}
+                    'replay_rejected': replay_rejected, 'socket_removed': not Path(self.path).exists()}
 
         server = self.start(reader)
         native = finish(spawn(ISSUER, lambda: {'fragment_only': '/#c=' in self.native()}))
+        os.write(self.done_write, b'1')
         result = finish(server)
         self.assertEqual(native, {'ok': True, 'value': {'fragment_only': True}})
         self.assertEqual(result, {'ok': True, 'value': {'accepted': True, 'human': 'owner',
-                                                     'scope': 'river-project', 'replay_rejected': True}})
+                                                     'scope': 'river-project', 'replay_rejected': True,
+                                                     'socket_removed': True}})
 
     def test_model_account_cannot_use_socket_even_with_valid_signing_event(self):
         def reader():

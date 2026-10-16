@@ -52,6 +52,25 @@ web session/redeem handler. Starting an independent broker with another gate wou
 not share the in-memory single-use grants or recipient bindings. No persistence or
 cross-process session transfer is provided here.
 
+`reader_handoff.ReaderHandoff` supplies the opt-in listener lifecycle. An embedding
+application constructs it with the fixed socket path, group, `PeerPolicy` and
+`IdentifiedGate`, then passes it as `handoff=` to `phantomview.serve`. Startup checks
+that HTTP redemption and native issuance share that exact gate object. A mismatch
+or listener startup failure closes the HTTP socket before serving requests.
+
+The runtime processes one connection at a time, exposes a `healthy` observation,
+interrupts pending socket I/O during shutdown and joins its listener thread.
+Cleanup removes only a socket whose device, inode and owner still match the one
+created by this runtime. It preserves an operator's replacement file. A stopped
+runtime cannot be reused. Unexpected listener errors do not log request data and
+make its health observation false; no legacy issuance fallback is selected.
+
+There is no new CLI or environment activation setting. The default reader still
+creates its existing analysis-only gate and no private listener. This embedding
+seam does not implement per-resource HTTP filtering: do not enable identified
+sessions for ordinary users until backend filtering and the remaining activation
+checks are complete.
+
 ## Native client
 
 `handoff_client.request_access` is an inactive library function for the isolated
@@ -133,8 +152,12 @@ socket ownership/mode behavior. The dedicated `PhantomView isolated handoff` job
 uses the exact reviewed PhantomBlog fork revision and real access dependencies.
 It runs the complete suite, then starts disposable reader, issuer and model
 processes with separate numeric UIDs on its ephemeral runner. It checks positive
-signed scoped issuance and single-use redemption, model rejection despite a valid
+signed scoped issuance through the managed listener and redemption through the
+actual HTTP reader handler, model rejection despite a valid
 signed event, and reader-UID rejection before sender-context transmission.
+
+The reader integration test also checks the resulting human/scope, rejects HTTP
+redemption replay and verifies that listener shutdown removes its own socket.
 
 The account test driver requires Linux, root and the explicit
 `PHANTOMVIEW_ACCOUNT_TESTS=1` flag. Its child processes permanently drop their UIDs;
@@ -149,3 +172,14 @@ the native pre-model handler and reader listener; test verified direct delivery;
 migrate validated PhantomOrg scopes/counterparts; approve reviewed resources; and
 enforce backend, worker and response-time access checks with JEV and audit. This
 increment creates no new live access and requests no second human signature/login.
+
+## Native PhantomBot source boundary
+
+The inspected source keeps Telegram and PhantomChat listeners and model turns in
+one `phantombot run` process. Its contributor guidance rejects a new per-persona
+supervisor. Adding a shell command or an optional callback inside that existing
+shared model account would not establish the dedicated issuer-account boundary.
+No native patch is claimed or enabled by the reader integration. A compatible
+native ingress/execution isolation design must be reviewed against the installed
+release before its command handler can call the client. Do not start a competing
+Telegram poller, disable existing personas or split services implicitly.

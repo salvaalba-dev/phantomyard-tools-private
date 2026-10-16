@@ -784,7 +784,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(503, {"error": "Assistant unavailable"})
 
 
-def serve(obs, port, open_browser, gate=None):
+def serve(obs, port, open_browser, gate=None, handoff=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.token = os.environ.get("PHANTOMVIEW_TOKEN") or secrets.token_urlsafe(32)
     os.environ["PHANTOMVIEW_TOKEN"] = server.token
@@ -810,6 +810,12 @@ def serve(obs, port, open_browser, gate=None):
     if gate:
         server.access_errors = (ValueError, gate.access.core.Invalid)
     obs.refresh()
+    if handoff is not None:
+        try:
+            handoff.start(server)
+        except BaseException:
+            server.server_close()
+            raise
     stop = threading.Event()
     def loop():
         last_sync, last_update = time.monotonic(), time.monotonic()
@@ -841,7 +847,11 @@ def serve(obs, port, open_browser, gate=None):
         pass
     finally:
         stop.set()
-        server.server_close()
+        try:
+            if handoff is not None:
+                handoff.close()
+        finally:
+            server.server_close()
     if server.restart_requested:
         os.execv(os.sys.executable, [os.sys.executable, *os.sys.argv])
 

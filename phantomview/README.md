@@ -594,4 +594,8 @@ Its native-side client verifies the reader's kernel UID before sending context
 and accepts only the configured HTTPS fragment-link response. A dedicated Linux
 CI job tests signed issuance and rejection under separate disposable process
 accounts; it does not provision accounts or enable the native hook on AU.
+An explicit `handoff=` embedding argument connects the managed listener lifecycle
+to the same gate as HTTP redemption. Default CLI behavior is unchanged. See the
+private handoff guide for lifecycle checks, native isolation constraints and the
+backend-filtering prerequisite before any expanded session access.
 
