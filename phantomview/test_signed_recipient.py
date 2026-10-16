@@ -9,7 +9,9 @@ import uuid
 
 from channel_identity import HumanDirectory
 from identified_access import IdentifiedGate
+from scoped_knowledge import retrieve
 from test_channel_identity import context, organization
+from test_scoped_knowledge import note_fixture
 
 try:
     from coincurve import PrivateKey
@@ -90,6 +92,25 @@ class SignedRecipientTests(unittest.TestCase):
         cookie = self.gate.redeem(self.issue(identified=False))
         with self.assertRaises(ValueError):
             self.gate.identified_scope({"Cookie": "phantomview=" + cookie})
+
+    def test_real_signed_session_precedes_knowledge_reads_and_logout_denies(self):
+        raw, catalog = note_fixture()
+        loaded = []
+        def load(ident):
+            loaded.append(ident)
+            return raw
+        cookie = self.gate.redeem(self.issue())
+        headers = {"Cookie": "phantomview=" + cookie}
+        self.assertEqual(len(retrieve(self.gate, headers, lambda: catalog, load, 'almaponia')['notes']), 1)
+        loaded.clear()
+        self.gate.logout(headers)
+        with self.assertRaises(ValueError):
+            retrieve(self.gate, headers, lambda: catalog, load, 'almaponia')
+        self.assertEqual(loaded, [])
+        legacy = self.gate.redeem(self.issue(identified=False))
+        with self.assertRaises(ValueError):
+            retrieve(self.gate, {"Cookie": "phantomview=" + legacy}, lambda: catalog, load, 'almaponia')
+        self.assertEqual(loaded, [])
 
     def test_policy_change_denies_before_session_creation_without_consuming_grant(self):
         code = self.issue()

@@ -59,6 +59,34 @@ An authenticated IPC implementation must keep the channel's authority away from
 model-controlled tool processes; a shared secret that those processes can read
 would not establish that separation.
 
+`scoped_knowledge.py` adds the inactive retrieval boundary over an identified
+session. It calls `identified_scope` before retrieval, checks each resource with
+the private directory before opening or searching its payload, and rejects draft
+catalogs. Approved entries bind the exact organization, actor, relative KB path,
+category, optional project and full exported payload digest. Category 0 is never
+a resource classification. Explicit secrets remain excluded for every human.
+
+The fixed private store retains collector exclusions and requires each opaque
+note ID to remain present and searchable in the current selected snapshot.
+Changed, removed, truncated, mismatched or unavailable payloads cannot supply
+evidence. The retriever rechecks the identified session, catalog revision and
+selected payloads before returning bounded, explicitly untrusted excerpts. It
+never forwards raw channel identifiers or describes denied documents. Empty
+results do not claim that the whole organizational corpus was searched.
+
+`prepare_review` automates fingerprint collection for existing exact-folder
+suggestions. It produces only a draft, with every resource's secret review unset.
+Changing the top-level status alone cannot make this an approved catalog.
+Fingerprints detect changes, not confidentiality or administrator approval.
+Review decisions and their catalog must come from a protected operator source,
+never model output, note frontmatter or browser request fields.
+
+No live reader/worker imports this module. Before enabling it, the integration
+must enforce trusted loaders and a read-only private store, invalidate policy
+changes again at worker dispatch and before releasing a response, and retain the
+native untrusted-input screen (JEV). Retrieval tests are not evidence that those
+transport, queue or worker boundaries have already been implemented.
+
 `preview_human_access.py` produces a read-only matrix without printing raw channel
 IDs. `--counterpart HUMAN=PERSONA` proposes a binding in memory only. It never
 edits a source, adds an allowlist entry, issues a link or enables the assistant.
@@ -90,8 +118,9 @@ be enabled. Human category zero currently names Salvador explicitly.
   then validate the reviewed AU matrix and register missing channel identities.
 - Transport the recipient association through a genuine trusted boundary to the
   reader. No publicly submitted identity field or model-readable signing secret.
-- Wire scoped retrieval before inference; current dashboard KB exports do not
-  establish per-resource category/project labels sufficient for expanded access.
+- Review the fingerprinted classification catalog, then wire the prepared scoped
+  retrieval before inference; dashboard KB exports alone do not establish
+  per-resource category/project labels sufficient for expanded access.
 - Connect recipient-aware metadata audit events and worker terminal events. The
   prepared generic audit remains optional and inactive; it is not a protected
   remote archive or full conversation history.

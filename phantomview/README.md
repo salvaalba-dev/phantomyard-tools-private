@@ -541,3 +541,33 @@ and apply authorization before retrieval or model inference. Keep installation
 inventories and review artifacts outside the repository; commit only generic code
 and synthetic fixtures.
 
+### Scoped knowledge retrieval (inactive)
+
+`scoped_knowledge.retrieve` prepares bounded evidence only for an identified
+session and a private approved catalog. It authorizes each resource before any
+payload read or search. Category, exact project grants and explicit secret
+exclusions use the same `HumanDirectory`/`Scope` policy. Category 0 remains an
+independent human privilege and cannot classify a document. Ordinary signed
+analysis links cannot invoke this primitive as identified sessions.
+
+`PrivateKBStore` receives a fixed private KB path and trusted current-snapshot
+loader. Notes must remain searchable in that snapshot; orphan cached payloads
+and collector-excluded notes cannot reappear through classification. The catalog
+binds the complete exported JSON payload by SHA-256, including its title, actor,
+relative path and body. Payload changes require renewed review. Returned excerpts
+remain untrusted evidence for the native screen and do not constitute a complete
+corpus search or grant tools to the assistant.
+
+`prepare_review(proposal, snapshot, note_loader)` creates per-resource fingerprints
+from current exact-folder suggestions without copying note bodies into the
+review artifact. It leaves `status: draft` and `secret: null`; the approved catalog
+validator rejects this output even if only its top-level status is changed. An
+operator must review confidentiality/exclusions before producing an approved
+catalog. A digest is a change detector, not a signature or proof of approval.
+
+There is no HTTP route or CLI activation for these primitives. Trusted loaders,
+catalog integrity, native channel identity, policy validation at worker dispatch
+and response delivery, audit integration and JEV remain activation prerequisites.
+The live assistant is still the bounded analysis pilot. See
+[integration status](VERIFIED_CHANNEL_INTEGRATION.md) for the remaining work.
+
