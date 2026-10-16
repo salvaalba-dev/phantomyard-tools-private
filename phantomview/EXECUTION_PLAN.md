@@ -229,6 +229,12 @@ guarded by an expected active revision. Trusted readers reject changed sources o
 authority. Setup/refresh hooks, the review UI and actual AU activation remain
 pending. These increments do not activate expanded access or implement F01.
 
+Implemented inactive increment: the [operator review queue](REVIEW_QUEUE.md)
+integrates automatic draft preparation with setup and collector refresh, using
+explicit operator CLI paths or trusted embedding. No approval is inferred and no
+publication is modified. The review interface, generic scoped frontend and actual
+AU collector configuration remain pending.
+
 Commit each coherent milestone or tested increment to the private repository.
 Record validation and remaining boundaries with the change. Keep history linear
 and leave upstream repositories untouched. Commit and verify changes before any

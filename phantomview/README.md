@@ -614,5 +614,10 @@ does not publish approved catalogs or run automatically during setup or refresh.
 The inactive [projection review library](PROJECTION_REVIEW.md) adds explicit
 versioned approval, immutable generations and atomic publication with a revision
 lease. Protected loaders invalidate publications when sources or authority change.
-Setup/refresh wiring and the scoped frontend remain pending.
+Approval workflow wiring and the scoped frontend remain pending.
+
+An opt-in [operator review queue](REVIEW_QUEUE.md) now prepares drafts during
+setup and collector refresh. Explicit CLI paths or trusted embedding are required;
+browser configuration cannot enable the queue. It never approves or publishes
+access. The review interface and scoped frontend remain pending.
 

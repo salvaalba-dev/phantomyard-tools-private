@@ -30,6 +30,18 @@ def eligible(row):
             and row.get('visibility') not in ('private', 'secret', 'restricted', 'confidential'))
 
 
+def source_revision(collection, source):
+    """Exclude only collector observation clocks, preserving substantive evidence."""
+    if collection == 'actors' and isinstance(source.get('diagnostics'), dict):
+        diagnostics = dict(source['diagnostics'])
+        diagnostics.pop('checked_at', None)
+        if isinstance(diagnostics.get('checks'), list):
+            diagnostics['checks'] = [{key: value for key, value in check.items() if key != 'age_minutes'}
+                                     if isinstance(check, dict) else check for check in diagnostics['checks']]
+        source = source | {'diagnostics': diagnostics}
+    return revision(source)
+
+
 def clean(row, fields):
     output = {}
     for field in fields:
@@ -76,13 +88,13 @@ def prepare(snapshot, directory):
         records[ident] = record
         row = {'id': ident, 'kind': kind, 'category': None, 'scope': None, 'project': None,
                'secret': None, 'payload_sha256': digest(raw),
-               'provenance': {'collection': collection, 'identity': identity, 'source_sha256': revision(source)}}
+               'provenance': {'collection': collection, 'identity': identity, 'source_sha256': source_revision(collection, source)}}
         if requires:
             row['requires'] = sorted(set(requires))
         if endpoints is not None:
             row['endpoints'] = endpoints
         review[ident] = row
-        selected.append([collection, identity, revision(source)])
+        selected.append([collection, identity, source_revision(collection, source)])
         return ident
 
     for collection, (kind, fields) in SECTIONS.items():

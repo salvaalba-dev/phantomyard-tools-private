@@ -136,7 +136,12 @@ def default_config():
 
 
 class Observatory:
-    def __init__(self, config_path):
+    def __init__(self, config_path, *, review_queue=None):
+        if review_queue is not None:
+            from projection_queue import ReviewQueue
+            if not isinstance(review_queue, ReviewQueue):
+                raise ValueError("A trusted operator review queue is required")
+        self.review_queue = review_queue
         self.path = Path(config_path).resolve()
         self.lock = threading.RLock()
         self.config = read_source(self.path) if self.path.exists() else default_config()
@@ -465,6 +470,8 @@ class Observatory:
             self.last_attempt = now()
             try:
                 candidate = self.collect()
+                if self.review_queue is not None:
+                    self.review_queue.refresh(candidate)
                 # Volatile observation times do not count as organizational changes.
                 def stable_actor(actor):
                     actor = dict(actor)
@@ -499,6 +506,11 @@ class Observatory:
                 self.last_error = None
                 atomic_json(self.state_path, {"snapshot": candidate, "history": self.history})
             except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError, RecursionError):
+                if self.review_queue is not None:
+                    try:
+                        self.review_queue.unavailable()
+                    except (OSError, ValueError):
+                        pass  # Preserve the collection error; never fall back to approval.
                 # Never include parser excerpts: source files may contain private material.
                 self.last_error = "No se pudo leer o validar una fuente. Se conserva la última lectura válida; revisa las rutas y el formato."
             return self.data()
@@ -891,6 +903,9 @@ def main():
     setup.add_argument("--installation", default="", help="Explicit installation inventory manifest")
     sync = sub.add_parser("sync")
     sync.add_argument("--export", help="Exporta el índice de consulta sin conceder acceso a fuentes")
+    for command in (setup, sync):
+        command.add_argument("--review-root", help="Existing private operator directory for automatic review drafts")
+        command.add_argument("--review-org", help="Trusted PhantomOrg source with explicit scopes for draft review")
     update = sub.add_parser("update")
     update.add_argument("--tag", required=True)
     update.add_argument("--check", action="store_true")
@@ -927,13 +942,23 @@ def main():
     else:
         if args.command == "serve" and (args.public_origin or args.reader_index):
             parser.error("Un origen remoto requiere acceso delegado")
-        obs = Observatory(args.config)
+        queue = None
+        if args.command in ("setup", "sync"):
+            if bool(args.review_root) != bool(args.review_org):
+                parser.error("Draft review requires both --review-root and --review-org")
+            if args.review_root:
+                from projection_queue import ReviewQueue
+                review_org = Path(args.review_org).resolve()
+                queue = ReviewQueue(args.review_root, lambda: read_source(review_org))
+        obs = Observatory(args.config, review_queue=queue)
     if args.command == "setup":
         cfg = default_config() if args.mode == "demo" else {"mode": args.mode, "org_files": args.org,
               "personas_dir": args.personas, "docs_manifests": args.docs, "procedures_file": args.procedures,
               "doctor_file": "", "installation_file": args.installation, "sync_interval": args.interval, "software_tag": "", "software_interval": 0}
         state = obs.configure(cfg)
         print("Configuración guardada" if not state["error"] else state["error"])
+        if state["error"]:
+            raise SystemExit(1)
     elif args.command == "sync":
         state = obs.refresh()
         if args.export:

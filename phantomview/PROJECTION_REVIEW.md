@@ -69,7 +69,8 @@ change, removal or exclusion invalidates the entire publication until reviewed
 again. Backend final revalidation rejects mixed-publication responses.
 
 This strict initial approach favors consistent reviews over partial stale results.
-Automatic reuse of unchanged classifications, setup/refresh hooks, review UI,
+The opt-in [review queue](REVIEW_QUEUE.md) now prepares drafts during setup and
+collector refresh. Automatic reuse of unchanged classifications, approval workflow wiring, review UI,
 scoped frontend, native channel isolation, assistant/JEV integration and actual
 deployment remain pending. The AU reader and default CLI are unchanged.
 Organization-wide ingestion ACL enforcement remains deferred F01.

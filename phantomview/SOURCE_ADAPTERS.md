@@ -59,8 +59,9 @@ manifest. Do not bypass that step by treating this CLI as a production importer.
 ## Remaining integration
 
 The inactive [projection review library](PROJECTION_REVIEW.md) now supplies explicit
-versioned metadata approval and atomic publication. Setup and periodic refresh do
-not invoke these libraries yet. Automatic collection, the classification review UI,
+versioned metadata approval and atomic publication. The opt-in
+[operator review queue](REVIEW_QUEUE.md) now invokes draft preparation during setup
+and collector refresh, without approval or publication. The classification review UI,
 frontend projections, scoped assistant delivery and native channel isolation
 remain separate integration steps. AU's live setup is unchanged. Organization-wide
 ingestion ACL enforcement remains the deferred requirement F01.
