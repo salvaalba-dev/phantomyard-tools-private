@@ -614,17 +614,18 @@ does not publish approved catalogs or run automatically during setup or refresh.
 The inactive [projection review library](PROJECTION_REVIEW.md) adds explicit
 versioned approval, immutable generations and atomic publication with a revision
 lease. Protected loaders invalidate publications when sources or authority change.
-Authenticated approval workflow wiring remains pending.
+The protected approval and publication libraries described below supply the
+operator workflow; deployment remains opt-in.
 
 An opt-in [operator review queue](REVIEW_QUEUE.md) now prepares drafts during
 setup and collector refresh. Explicit CLI paths or trusted embedding are required;
 browser configuration cannot enable the queue. It never approves or publishes
-access. Authenticated approval and publication remain separate integration work.
+access. Approval and publication require the separate explicit operator workflow.
 
 The [private offline review interface](REVIEW_INTERFACE.md) now supports metadata
 inspection, batch classification, explicit dependency selection and fingerprinted
 decision download. It supplies no publication access or dashboard route. An
-authenticated approval/publication workflow remains pending.
+authenticated operator workflow is available through the libraries below.
 
 The opt-in [generic scoped workspace](SCOPED_WORKSPACE.md) now renders visible-only
 menus, counts, cards, directed relationships and global search from the resource
@@ -642,4 +643,10 @@ proposals against current proposer/reviewer write rights and complete explicit
 catalog decisions. It produces a normal approved revision for separate operator
 publication and records correlated audit evidence. No HTTP publishing capability
 or automatic consumer is enabled.
+
+The [protected publication coordinator](REVIEW_PUBLICATION.md) now connects the
+consumer to atomic publication with a persisted intent, current authorization
+immediately before activation and exact completed-retry reconciliation. Final
+audit or cleanup failure is reported separately from a committed pointer. It is
+an operator library only; no HTTP publisher or live AU activation is enabled.
 

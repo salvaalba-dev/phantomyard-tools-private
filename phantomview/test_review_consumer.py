@@ -22,7 +22,7 @@ from test_source_adapter import snapshot
 from test_view_permissions import scoped_organization
 
 
-class ApprovalConsumerTests(unittest.TestCase):
+class ConsumerFixture(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -76,6 +76,8 @@ class ApprovalConsumerTests(unittest.TestCase):
         next(row for row in decisions['resources'] if row['id'] == self.changed['id'])['category'] = 'category-3'
         return decisions
 
+
+class ApprovalConsumerTests(ConsumerFixture):
     def test_complete_roundtrip_preserves_unrelated_rows_and_defers_publication(self):
         decisions = self.propose()
         result = self.consumer.prepare(self.headers, self.request_id, decisions)

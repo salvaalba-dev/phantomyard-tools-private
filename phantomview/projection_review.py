@@ -175,7 +175,7 @@ class PublishedProjection:
             {'id': row['id'], 'available': True, 'searchable': True} for row in bundle['catalog']['resources']]}
         return PrivateRecordStore(generation, lambda: manifest, manifest['organization'])(ident)
 
-    def publish(self, bundle, draft, *, expected_revision):
+    def publish(self, bundle, draft, *, expected_revision, authorize=None):
         """CAS publication with an exclusive writer lock; never overwrite history.
 
         A crash can leave an inactive generation or lock. Recovery is an explicit
@@ -183,6 +183,10 @@ class PublishedProjection:
         """
         bundle = validate(bundle)
         root_path(self.root)
+        if authorize is not None:
+            if not callable(authorize):
+                raise ValueError('Publication authorization must be a trusted callable')
+            authorize()
         if expected_revision is not None and (not isinstance(expected_revision, str) or not HEX.fullmatch(expected_revision)):
             raise ValueError('Expected publication revision must be an exact fingerprint')
         lock = self.root / 'publish.lock'
@@ -231,6 +235,8 @@ class PublishedProjection:
                 raise ValueError('Sources changed while staging publication')
             staged = self.root / 'active.next.json'
             write_new(staged, {'revision': bundle['revision']})
+            if authorize is not None:
+                authorize()
             os.replace(staged, pointer)
         finally:
             os.close(fd)

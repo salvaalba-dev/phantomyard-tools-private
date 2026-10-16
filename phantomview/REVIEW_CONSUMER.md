@@ -67,7 +67,9 @@ Logout prevents new preparation but does not erase an already completed, audited
 historical approval; publisher checks still apply.
 
 There is no new HTTP approval/publish route, CLI command, service or automatic
-polling. Actual operator orchestration, native channel isolation, assistant/JEV
+polling. The separate [operator publication coordinator](REVIEW_PUBLICATION.md)
+now supplies intent auditing, last-moment authorization and completed retries.
+Native channel isolation, assistant/JEV
 integration and AU deployment remain pending. Organization-wide ingestion
 enforcement remains deferred F01.
 

@@ -51,6 +51,12 @@ Later calls supply the current approval fingerprint. Each generation contains
 After a final source and authority check, new files are fsynced and `active.json`
 is atomically replaced with the new fingerprint.
 
+The optional trusted `authorize` callback runs at publisher entry and after
+staging the next pointer, immediately before replacement. The protected
+[publication coordinator](REVIEW_PUBLICATION.md) uses it to revalidate the
+identified reviewer and complete current approval evidence. Offline callers that
+omit the callback retain the existing explicit operator trust boundary.
+
 A crash may leave an inactive generation, `active.next.json` or `publish.lock`.
 Recovery requires an operator to confirm no writer is running and inspect the
 active pointer before removing incomplete staging artifacts. Do not automatically
@@ -70,7 +76,9 @@ again. Backend final revalidation rejects mixed-publication responses.
 
 This strict initial approach favors consistent reviews over partial stale results.
 The opt-in [review queue](REVIEW_QUEUE.md) now prepares drafts during setup and
-collector refresh. Automatic reuse of unchanged classifications, approval workflow wiring, review UI,
-scoped frontend, native channel isolation, assistant/JEV integration and actual
-deployment remain pending. The AU reader and default CLI are unchanged.
+collector refresh. Offline review, scoped frontend and protected operator
+approval/publication libraries are available through their separate guides.
+Automatic reuse of unchanged classifications, native channel isolation,
+assistant/JEV integration and actual deployment remain pending. The AU reader
+and default CLI are unchanged.
 Organization-wide ingestion ACL enforcement remains deferred F01.

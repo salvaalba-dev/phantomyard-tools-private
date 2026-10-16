@@ -56,13 +56,23 @@ class ApprovalConsumer:
         catalog. Neither a proposal nor category zero supplies implicit write rights.
         Returned artifacts are private, not browser credentials or signed authority.
         """
+        return self._prepare(headers, request_id, decisions)
+
+    def _prepare(self, headers, request_id, decisions, *, previous=None, active=None):
+        """Internal reconciliation also supports an audited publication retry."""
         reviewer, directory = self.gate.identified_scope(headers)
         raw = encode(decisions)
         if len(raw) > MAX_SCAN_BYTES:
             raise ValueError('Approval decisions exceed bounds')
         decisions = json.loads(raw)  # Detach caller-owned mutable assignments before authorization.
         proposal = self._proposal(request_id)
-        _, previous = self.publisher.active()
+        current_publication = self.publisher.active()[1]
+        if previous is None:
+            previous = current_publication
+        if active is None:
+            active = previous
+        if current_publication != active:
+            raise ValueError('Active publication changed during reconciliation')
         org = self.publisher.org_loader()
         if directory.revision != HumanDirectory(org).revision:
             raise ValueError('Reader and publication authority differ')
@@ -110,7 +120,7 @@ class ApprovalConsumer:
         draft = prepare(self.publisher.snapshot_loader(), HumanDirectory(org))
         approval = approve(draft, decisions, org, self.publisher.snapshot_loader, reviewer=reviewer.human, previous=previous)
         current, _ = self.gate.identified_scope(headers)
-        if (current != reviewer or self.publisher.active()[1] != previous or self._proposal(request_id) != proposal):
+        if (current != reviewer or self.publisher.active()[1] != active or self._proposal(request_id) != proposal):
             raise ValueError('Session, source publication or proposal changed during approval')
         self.gate.audit_event(headers, 'review_approved', request_id=request_id,
                               review_revision=proposal['revision'], approval_revision=approval['revision'], status='complete')
