@@ -1,5 +1,9 @@
 # AU organization counterpart compatibility review
 
+The subsequent [source-binding readiness review](AU_SOURCE_BINDING_READINESS.md)
+rechecks the live declarations, selected reader and current knowledge metadata.
+It records the remaining source bindings without changing AU or exposing live IDs.
+
 Observed on 2026-10-17 through the authorized VPS administrator session.
 Mode: read-only, limited to the selected AU organization, projection script,
 viewer entry point and known launchers. No deployment, link issuance, persona

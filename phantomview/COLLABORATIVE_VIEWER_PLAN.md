@@ -297,6 +297,12 @@ without duplicate records, changed grants or extra persona state.
 
 ### P7. Run a reversible single-installation pilot
 
+Current [AU source-binding evidence](AU_SOURCE_BINDING_READINESS.md) confirms that
+counterparts, explicit viewer scopes, a stable absolute-owner reference and bound
+approved knowledge reviews are still missing. The live legacy viewer has not
+been switched to the tested identified workspace. Resolve these source inputs in
+a detached proposal before presenting a per-human preview as authoritative.
+
 After P1-P4 are concrete and validated, stage one selected organization. Record
 versions, exact owned files, configuration changes, baseline service state and
 rollback. Check verified links, each eligible human, category zero, issuer routing,
