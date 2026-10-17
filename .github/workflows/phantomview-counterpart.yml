@@ -50,4 +50,5 @@ jobs:
         run: |
           python -m unittest discover -s phantomview -p 'test_phantomorg_counterpart*.py' -v
           python -m unittest discover -s phantomview -p 'test_channel_identity.py'
+          python -m unittest discover -s phantomview -p 'test_role_briefing.py' -v
           python -m compileall -q phantomview counterpart-source/phantomorg/phantomorg
