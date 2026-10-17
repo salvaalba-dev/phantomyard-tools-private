@@ -45,6 +45,9 @@ class ScopedHTTPTests(ProjectionFixture):
             self.assertEqual(view['counts'], {'persona': 1, 'partner': 1, 'relationship': 1})
             self.assertNotIn(self.hidden, json.dumps(view))
             self.assertNotIn('config', view)
+            self.assertEqual({row['kind'] for row in view['navigation']['core']}, {'persona', 'partner'})
+            self.assertEqual(view['navigation']['view_revision'], view['view_revision'])
+            self.assertFalse(view['navigation']['assistant']['eligible'])
 
     def test_resource_reads_and_global_search_share_the_same_permissions(self):
         status, resource = self.request('GET', '/api/resource/' + self.project)

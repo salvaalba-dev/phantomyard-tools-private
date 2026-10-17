@@ -27,8 +27,45 @@ class ScopedModel {
         || !this.resources.some(node => node.id === row.data.source) || !this.resources.some(node => node.id === row.data.target))) {
       throw Error('Relationship endpoints must belong to this visible projection');
     }
+    this.navigation = this.view.navigation ? this.validateNavigation(this.view.navigation) : null;
   }
-  sections() { return [...new Set(this.resources.map(row => row.kind))].sort().map(kind => ({kind,label:SCOPED_KINDS[kind]})); }
+  validateNavigation(nav) {
+    if(nav.schema_version!==1||nav.api_version!==1||nav.organization!==this.view.organization
+        ||nav.scope_id!==this.view.scope_id||nav.policy_revision!==this.view.policy_revision
+        ||nav.view_revision!==this.view.view_revision||!Array.isArray(nav.core)||!Array.isArray(nav.modules)
+        ||nav.modules.length>24)throw Error('Current navigation required');
+    const route=value=>{
+      if(!value||typeof value.eligible!=='boolean'||!['runtime-default','module'].includes(value.source)
+          ||(value.eligible?(typeof value.persona!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(value.persona)):value.persona!==null))
+        throw Error('Invalid assistant route');
+    };
+    route(nav.assistant);
+    const ids=new Set(),counts=this.counts(),label=value=>typeof value==='string'&&value.trim()&&value.length<=80&&!/[<>\x00-\x1f]/.test(value);
+    const sections=(rows,prefix)=>{
+      if(!Array.isArray(rows)||rows.length>14)throw Error('Invalid navigation sections');
+      for(const row of rows){if(!row||typeof row.id!=='string'||!row.id.startsWith(prefix+':')
+          ||!/^[a-z][a-z0-9-]{0,47}$/.test(row.id.slice(prefix.length+1))||ids.has(row.id)
+          ||!label(row.label)||!Object.hasOwn(SCOPED_KINDS,row.kind)||row.kind==='relationship'
+          ||!['table','cards','graph','document'].includes(row.view)||!counts[row.kind]||row.count!==counts[row.kind])
+        throw Error('Invalid visible section');ids.add(row.id);}
+    };
+    sections(nav.core,'core');const modules=new Set();
+    for(const item of nav.modules){if(!item||typeof item.id!=='string'||!/^[a-z][a-z0-9-]{0,47}$/.test(item.id)
+        ||item.id==='core'||modules.has(item.id)||!label(item.label))throw Error('Invalid module');
+      modules.add(item.id);sections(item.sections,item.id);route(item.assistant);}
+    return nav;
+  }
+  sections() {
+    if(this.navigation)return [...this.navigation.core,...this.navigation.modules.flatMap(item=>item.sections.map(row=>({...row,module:item.label,assistant:item.assistant})))];
+    return [...new Set(this.resources.map(row => row.kind))].sort().map(kind => ({id:kind,kind,label:SCOPED_KINDS[kind],view:'cards'}));
+  }
+  selection(id) { return this.sections().find(row=>row.id===id); }
+  assistant(id) { return this.selection(id)?.assistant||this.navigation?.assistant||null; }
+  acceptsAssistant(info,id) {
+    const route=this.assistant(id);
+    return info?.available===true&&info.scope_id===this.view.scope_id
+      &&(!route||(route.eligible&&route.persona===info.persona));
+  }
   counts() {
     const counts = {};
     for (const row of this.resources) counts[row.kind] = (counts[row.kind] || 0) + 1;
@@ -48,8 +85,8 @@ class ScopedModel {
     const row = this.resources.find(row => row.kind === 'organization');
     return row ? this.title(row) : this.view.organization;
   }
-  impact(id, limit=60) {
-    const allowed = new Set(this.resources.slice(0,limit).map(row => row.id));
+  impact(id, limit=60, kind=null) {
+    const allowed = new Set(this.resources.filter(row=>!kind||row.kind===kind).slice(0,limit).map(row => row.id));
     const nodes = new Set(allowed.has(id) ? [id] : []), edges = new Set(), pending = [...nodes];
     for (let index=0;index<pending.length;index++) for (const edge of this.relations) {
       if (edge.data.source === pending[index] && allowed.has(edge.data.target)) {
@@ -129,7 +166,8 @@ async function startScopedWorkspace() {
   }
   function renderGraph() {
     const graph=$('graph');graph.replaceChildren();
-    const nodes=model.resources.slice(0,60), ids=new Set(nodes.map(row=>row.id));
+    const selected=model.selection(section);
+    const nodes=model.resources.filter(row=>!selected||row.kind===selected.kind).slice(0,60), ids=new Set(nodes.map(row=>row.id));
     const edges=model.relations.filter(row=>ids.has(row.data.source)&&ids.has(row.data.target));
     $('graph-panel').hidden=!nodes.length;
     $('graph-caption').textContent=`${nodes.length} visible records · ${edges.length} connections`+(model.resources.length>60?' · graph limited to 60 records':'');
@@ -145,7 +183,7 @@ async function startScopedWorkspace() {
       const path=svg('path',{d:`M ${a.x+105} ${a.y+50} Q ${(a.x+b.x)/2+105} ${(a.y+b.y)/2+75} ${b.x+105} ${b.y+50}`,class:'edge','marker-end':'url(#flow-arrow)'});
       const title=svg('title',{});title.textContent=String(edge.data.label||edge.data.type||'Connection');path.append(title);root.append(path);paths.set(edge.id,path);
     }
-    const highlight=id=>{const impact=id?model.impact(id):null;for(const[key,node]of groups){node.classList.toggle('lit',!!impact?.nodes.has(key));node.classList.toggle('dim',!!impact&&!impact.nodes.has(key));}
+    const highlight=id=>{const impact=id?model.impact(id,60,selected?.kind):null;for(const[key,node]of groups){node.classList.toggle('lit',!!impact?.nodes.has(key));node.classList.toggle('dim',!!impact&&!impact.nodes.has(key));}
       for(const[key,path]of paths){path.classList.toggle('lit',!!impact?.edges.has(key));path.classList.toggle('dim',!!impact&&!impact.edges.has(key));}};
     for(const row of nodes){const p=positions.get(row.id),g=svg('g',{class:'node',transform:`translate(${p.x},${p.y})`,tabindex:0,role:'button','aria-label':'Open '+model.title(row)});
       g.append(svg('rect',{width:210,height:50,rx:9}));const title=svg('text',{x:12,y:22});title.textContent=model.title(row).slice(0,26);g.append(title);
@@ -157,25 +195,32 @@ async function startScopedWorkspace() {
     graph.append(root);
   }
   function render(search=false) {
+    const selected=model.selection(section);
     $('organization').textContent=model.organization();$('scope-label').textContent=model.view.scope_id;
-    $('page-title').textContent=search?'Search your workspace':section?SCOPED_KINDS[section]:'Your information, connected.';
+    $('page-title').textContent=search?'Search your workspace':selected?selected.label:'Your information, connected.';
     const nav=$('navigation');nav.replaceChildren();
-    for(const item of [{kind:'',label:search?'All results':'Overview'},...model.sections()]) {
-      const button=text('button',item.label);button.type='button';button.className=section===item.kind?'active':'';
-      button.setAttribute('aria-current',section===item.kind?'page':'false');button.addEventListener('click',()=>{section=item.kind;render(search);});nav.append(button);
+    let group='';
+    for(const item of [{id:'',label:search?'All results':'Overview'},...model.sections()]) {
+      if(item.module&&item.module!==group){group=item.module;nav.append(text('span',group,'module-label'));}
+      const button=text('button',item.label);button.type='button';button.className=section===item.id?'active':'';
+      button.setAttribute('aria-current',section===item.id?'page':'false');button.addEventListener('click',()=>{
+        section=item.id;chat.reset();render(search);loadAssistant(epoch);
+      });nav.append(button);
     }
     const stats=$('stats');stats.replaceChildren();
     for(const[kind,count]of Object.entries(model.counts())){const tile=text('div','', 'stat');tile.append(text('span',SCOPED_KINDS[kind]),text('strong',count));stats.append(tile);}
     const records=$('records');records.replaceChildren();
-    for(const row of model.resources.filter(row=>!section||row.kind===section)) {
+    records.className=selected?.view==='table'?'record-table':'cards';
+    for(const row of model.resources.filter(row=>!selected||row.kind===selected.kind)) {
       const card=text('button','', 'card');card.type='button';card.append(text('small',SCOPED_KINDS[row.kind]),text('h3',model.title(row)));
       const summary=row.data.description||row.data.severity||row.data.kind;
       if(typeof summary==='string')card.append(text('p',summary.slice(0,180)));card.addEventListener('click',()=>showDetails(row));records.append(card);
+      if(selected?.view==='document')card.append(text('pre',JSON.stringify(row.data,null,2),'record-preview'));
     }
     if(!records.childElementCount)records.append(text('p','No records are available in this view.','muted'));
     if(search){$('graph-panel').hidden=true;$('graph').replaceChildren();}else renderGraph();
     $('status').textContent=search?'Results cover all information available to this session.':'Showing only information available to this session.';
-    $('records-title').textContent=search?'Search results':section?SCOPED_KINDS[section]:'Available records';
+    $('records-title').textContent=search?'Search results':selected?selected.label:'Available records';
   }
   async function load() {
     if(closing)return;
@@ -186,7 +231,12 @@ async function startScopedWorkspace() {
     catch(error){failure(error,ticket);}
   }
   async function loadAssistant(ticket) {
-    try{const info=await api('/api/scoped-assistant/info',undefined,controller.signal);if(ticket===epoch&&model)chat.enable(info,model.view);}
+    const selectedSection=section,route=model?.assistant(section);
+    if(route){$('assistant-persona').textContent=route.persona||'';
+      $('assistant-status').textContent=route.eligible?'Selected persona is not connected for this view.':'No authorized assistant is available for this view.';}
+    if(route&&!route.eligible)return;
+    try{const info=await api('/api/scoped-assistant/info',undefined,controller.signal);
+      if(ticket===epoch&&model&&section===selectedSection&&model.acceptsAssistant(info,section))chat.enable(info,model.view);}
     catch(error){if(error.status===401)failure(error,ticket);}
   }
   $('assistant-form').addEventListener('submit',event=>{event.preventDefault();chat.send($('assistant-input').value);});

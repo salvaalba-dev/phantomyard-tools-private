@@ -43,7 +43,7 @@ accepts a bounded ID, version, plain-text label, applicable PhantomOrg scope kin
 sections using existing record kinds/renderers and an optional assistant persona.
 Unknown fields, scripts, commands, source URLs, embedded permissions, conflicting
 IDs and unsupported versions fail. `example-project-module.json` is synthetic.
-This increment has no package installer, dynamic code loader or browser endpoint.
+There is no package installer, dynamic code loader or browser installation endpoint.
 
 The registry compiles navigation from a current **server-owned, already authorized**
 projection and a validated existing session. It is not a replacement ACL filter.
@@ -84,7 +84,28 @@ their tests and history for traceability; do not deploy or continue extending th
 as a replacement for existing persona conversation. Existing live AU behavior has
 not been changed by this direction or the declarative registry.
 
-Next integration work: verify the smallest existing read/conversation adapters,
-connect registry navigation to the viewer shell, add explicit module lifecycle
-support, and validate allowed/denied organization and project views end to end.
-Resource synchronization should reuse the existing collection/refresh mechanisms.
+## Scoped shell integration
+
+The existing opt-in scoped backend now exposes `workspace(headers)` through its
+state and sync HTTP routes. It compiles standard navigation and installed module
+sections over the same authorized projection. Internal `state(headers)` remains
+unchanged for search, review and consultation evidence. No raw catalog is exposed.
+Construct the backend with operator-owned `modules` manifests and an optional
+`default_report_loader` callable that reads the existing runtime observation.
+Missing or unavailable observations disable assistant selection without hiding
+authorized records. The ordinary live reader is unchanged.
+
+The scoped shell validates navigation against the current scope and revisions,
+renders namespaced standard/module menus, and supports compact rows, cards,
+document previews and filtered relationship graphs. Search remains global over
+authorized information rather than being restricted to the selected module.
+Switching sections clears pending chat state. The existing consultation endpoint
+is enabled only when its actual persona matches the eligible selected route.
+An unsupported alternate persona stays unavailable; no persona-switch request,
+new executor or native conversation transport is introduced by this integration.
+
+Next work: verify the smallest existing read/conversation adapters, add explicit
+module lifecycle support, and validate allowed/denied organization and project
+views against native runtime sources. Resource synchronization should reuse the
+existing collection/refresh mechanisms. This change is source-only and has not
+been deployed to AU.

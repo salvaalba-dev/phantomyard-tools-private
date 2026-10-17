@@ -115,10 +115,30 @@ class PrivateRecordStore:
 
 
 class ScopedBackend:
-    def __init__(self, gate, catalog_loader, record_loader):
+    def __init__(self, gate, catalog_loader, record_loader, *, modules=(), default_report_loader=None):
         if not isinstance(gate, IdentifiedGate) or not callable(catalog_loader) or not callable(record_loader):
             raise ValueError('An identified gate and protected projection loaders are required')
         self.gate, self.catalog_loader, self.record_loader = gate, catalog_loader, record_loader
+        from viewer_modules import ModuleRegistry
+        self.modules = ModuleRegistry(modules)
+        if default_report_loader is not None and not callable(default_report_loader):
+            raise ValueError('A server-owned runtime default reader is required')
+        self.default_report_loader = default_report_loader
+
+    def workspace(self, headers):
+        """Compile menus over one current authorized projection, never raw records."""
+        recipient, directory = self.gate.identified_scope(headers)
+        view = self.state(headers)
+        try:
+            report = self.default_report_loader() if self.default_report_loader else {}
+        except (OSError, ValueError):
+            report = {}  # Runtime observation failure disables chat, not the viewer.
+        navigation = self.modules.navigation(directory=directory, recipient=recipient,
+                                             projection=view, default_report=report)
+        current, _ = self.gate.identified_scope(headers)
+        if current != recipient:
+            raise ValueError('Session changed while compiling navigation')
+        return dict(view, navigation=navigation)
 
     def state(self, headers):
         recipient, directory = self.gate.identified_scope(headers)

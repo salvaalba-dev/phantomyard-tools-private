@@ -11,3 +11,4 @@ header,header>div{flex-wrap:wrap}
 .assistant-panel{padding:12px}.sidebar nav{max-height:24vh}#assistant-question{max-height:18px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}#assistant-input{height:54px;min-height:54px}@media(max-width:800px){.sidebar nav{max-height:none}}
 
 .assistant-panel{min-height:350px}
+.module-label{padding:12px 11px 3px;color:var(--muted);font-size:11px}.record-table{display:grid;gap:6px}.record-table .card{display:flex;align-items:center;gap:16px;text-align:left}.record-table .card small{min-width:85px}.record-table .card h3{min-width:160px}.record-preview{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;text-align:left}.sidebar{overflow-y:auto}

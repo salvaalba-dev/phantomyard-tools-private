@@ -12,6 +12,45 @@ test('project menus contain only visible kinds and visible counts ignore global 
   const model=new ScopedModel(fixture());assert.deepEqual(model.sections().map(row=>row.kind),['objective','partner','task']);
   assert.deepEqual(model.counts(),{partner:1,task:1,objective:1});assert.equal(model.organization(),'example');
 });
+
+function navigation(data){return {schema_version:1,api_version:1,organization:data.organization,scope_id:data.scope_id,
+  policy_revision:data.policy_revision,view_revision:data.view_revision,
+  assistant:{persona:null,eligible:false,source:'runtime-default'},
+  core:[{id:'core:partner',kind:'partner',label:'Partners',view:'table',count:1}],
+  modules:[{id:'project-management',label:'Project management',assistant:{persona:'project-guide',eligible:true,source:'module'},
+    sections:[{id:'project-management:partners',kind:'partner',label:'Project partners',view:'cards',count:1}]}]};}
+
+test('server navigation preserves core and module sections with distinct local assistant routes',()=>{
+  const data=fixture();data.navigation=navigation(data);const model=new ScopedModel(data);
+  assert.deepEqual(model.sections().map(row=>row.id),['core:partner','project-management:partners']);
+  assert.equal(model.selection('project-management:partners').view,'cards');
+  assert.equal(model.assistant('project-management:partners').persona,'project-guide');
+  assert.equal(model.assistant('core:partner').eligible,false);
+  data.navigation.modules[0].label='Changed';assert.equal(model.sections()[1].module,'Project management');
+});
+
+test('stale, hidden-kind, duplicate and executable navigation cannot be rendered',()=>{
+  for(const mutate of [nav=>nav.view_revision='f'.repeat(64),nav=>nav.core[0].kind='human',
+    nav=>nav.core[0].count=9000,nav=>nav.modules.push(nav.modules[0]),nav=>nav.core[0].view='script',
+    nav=>nav.core[0].label='<script>',nav=>nav.modules[0].assistant.eligible='true']){
+    const data=fixture();data.navigation=navigation(data);mutate(data.navigation);assert.throws(()=>new ScopedModel(data));
+  }
+});
+
+test('module graph impact does not traverse records outside the selected section',()=>{
+  const model=new ScopedModel(fixture());assert.deepEqual([...model.impact(a,60,'partner').nodes],[a]);
+  assert.equal(model.impact(a,60,'partner').edges.size,0);
+});
+
+test('eligible module metadata never enables the wrong persona transport',()=>{
+  const data=fixture();data.navigation=navigation(data);const model=new ScopedModel(data);
+  const info={available:true,persona:'project-guide',scope_id:data.scope_id};
+  assert.equal(model.acceptsAssistant(info,'project-management:partners'),true);
+  assert.equal(model.acceptsAssistant({...info,persona:'administrator'},'project-management:partners'),false);
+  assert.equal(model.acceptsAssistant({...info,scope_id:'other-project'},'project-management:partners'),false);
+  assert.equal(model.acceptsAssistant({...info,available:false},'project-management:partners'),false);
+  assert.equal(model.acceptsAssistant(info,'core:partner'),false);
+});
 test('legacy snapshot envelopes and malformed endpoint projections fail closed',()=>{
   assert.throws(()=>new ScopedModel({snapshot:fixture()}));const data=fixture();data.relations[0].data.target='f'.repeat(64);
   assert.throws(()=>new ScopedModel(data));data.relations=[];data.resources.push(data.resources[0]);assert.throws(()=>new ScopedModel(data));

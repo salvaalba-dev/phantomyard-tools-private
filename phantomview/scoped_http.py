@@ -55,7 +55,7 @@ def dispatch(handler, method):
             operation = consultations.get if method == 'GET' else consultations.cancel
             handler.send(*operation(handler.headers, parsed.path.removeprefix(ASSISTANT_JOBS + '/')))
         elif method == 'GET' and parsed.path == '/api/state':
-            handler.send(200, backend.state(handler.headers))
+            handler.send(200, backend.workspace(handler.headers))
         elif method == 'GET' and parsed.path == '/api/review' and getattr(handler.server, 'review_service', None):
             handler.send(200, handler.server.review_service.view(handler.headers))
         elif method == 'GET' and parsed.path.startswith('/api/resource/'):
@@ -85,7 +85,7 @@ def dispatch(handler, method):
             if parsed.path == '/api/search' and set(body) == {'query'}:
                 handler.send(200, backend.search(handler.headers, body['query']))
             elif parsed.path == '/api/sync' and body == {}:
-                handler.send(200, backend.state(handler.headers))
+                handler.send(200, backend.workspace(handler.headers))
             elif parsed.path == '/api/review':
                 handler.send(202, handler.server.review_service.propose(handler.headers, body))
             elif parsed.path == ASSISTANT_JOBS:
