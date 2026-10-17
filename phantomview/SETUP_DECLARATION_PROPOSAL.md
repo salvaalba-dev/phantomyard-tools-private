@@ -123,3 +123,37 @@ source documents and review artifacts are intentionally absent from this reposit
 This result completes draft preparation only. It does not establish live
 authentication, approved knowledge classifications, native assistant connectivity
 or readiness for scoped activation.
+
+## Source declaration review follow-up
+
+A fresh read-only check on 2026-10-17 found the live selected source unchanged from
+the detached proposal's parsed-input fingerprint. Its raw-file fingerprint also
+matched the selected local source copy. The source still contains no counterpart
+bindings or viewer policy; the proposal has not been applied.
+
+The private review verified that removing only the three proposed counterpart
+fields, restoring the existing category-zero owner field and removing the new
+viewer policy recovers the original document exactly. The proposed document
+passed the existing source validator, YAML serialization round trip and human
+directory construction. Existing role categories, exceptions, channel identities
+and all unrelated fields were preserved. These checks establish source-shape
+compatibility, not installed channel or assistant behavior.
+
+The private review receipt records the exact source/proposal fingerprints,
+counterpart changes, independent owner and proposed organization-only scopes.
+It remains outside the repository with the other private setup artifacts.
+No project grants or human action grants are proposed. The email-only counterpart
+remains channel-ineligible; no identity is invented to complete that binding.
+
+Content review remains a separate decision: 53 eligible notes have category-1
+hints, 111 have category-3 hints and 70 remain unresolved. These correspond to
+19, 24 and 18 exact folders respectively. All 234 notes remain unapproved; metadata
+and folder names are not evidence that their bodies satisfy a category. None of
+these hints should become a grant as a side effect of accepting source declarations.
+
+Validation: `python -m unittest discover -s phantomview -p 'test_setup*.py' -q`
+passed 16 tests. The private source checks above were performed separately without
+reading note bodies or changing the live organization. Any source write still
+requires a fresh expected-source check, a protected recoverable backup, a minimal
+reviewed diff and verification before downstream publication. Do not activate the
+identified reader or assistant merely because declaration validation succeeds.
