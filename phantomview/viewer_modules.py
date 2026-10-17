@@ -8,7 +8,6 @@ import re
 
 from assistant import safe_default
 from channel_identity import HumanDirectory
-from scoped_backend import KINDS
 
 LABELS = {'organization': 'Organization', 'department': 'Departments', 'role': 'Roles',
           'persona': 'People', 'human': 'Humans', 'project': 'Projects', 'partner': 'Partners',
@@ -93,7 +92,7 @@ class ModuleRegistry:
         counts, seen = {}, set()
         for row in projection['resources']:
             if (not isinstance(row, dict) or not isinstance(row.get('id'), str) or not HEX.fullmatch(row['id'])
-                    or row['id'] in seen or not isinstance(row.get('kind'), str) or row['kind'] not in KINDS
+                    or row['id'] in seen or not isinstance(row.get('kind'), str) or row['kind'] not in LABELS
                     or row['kind'] == 'relationship'):
                 raise ValueError('Invalid projected viewer resource')
             seen.add(row['id'])

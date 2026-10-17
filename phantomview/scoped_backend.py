@@ -12,6 +12,7 @@ import stat
 from identified_access import IdentifiedGate
 from resource_review import revision
 from scoped_knowledge import HEX, IDENTIFIER, digest, normalize
+from viewer_modules import ModuleRegistry
 
 KINDS = {'organization', 'department', 'role', 'persona', 'human', 'project', 'partner',
          'objective', 'task', 'document', 'knowledge', 'procedure', 'finding', 'component', 'relationship'}
@@ -119,7 +120,6 @@ class ScopedBackend:
         if not isinstance(gate, IdentifiedGate) or not callable(catalog_loader) or not callable(record_loader):
             raise ValueError('An identified gate and protected projection loaders are required')
         self.gate, self.catalog_loader, self.record_loader = gate, catalog_loader, record_loader
-        from viewer_modules import ModuleRegistry
         self.modules = ModuleRegistry(modules)
         if default_report_loader is not None and not callable(default_report_loader):
             raise ValueError('A server-owned runtime default reader is required')
