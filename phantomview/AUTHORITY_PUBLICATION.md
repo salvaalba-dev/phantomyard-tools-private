@@ -100,9 +100,14 @@ Channel context remains a synthetic trusted input, not a live verified handoff.
 
 AU's current reader cannot read either original/published organization source.
 This prepares the missing transport without opening administrator directories.
-It is **not installed or activated in AU**. Collector cadence, target/account access,
-approved declarations/classifications and native assistant integration still need
-deployment review. No private AU inputs or artifacts are committed.
+It is **not installed or activated in AU**. Read-only verification found an existing
+root collector running every five minutes and a private `root:aunited` reader tree.
+The proposed sibling authority directory does not exist. A ten-minute lease and
+reuse of that group are proposals, not applied settings; the group is shared with
+other processes and is not an isolated assistant boundary. See the
+[AU deployment review](AU_AUTHORITY_PUBLICATION_READINESS.md) for observed modes,
+the bounded change and remaining source/account/native-handoff prerequisites.
+No private AU inputs or artifacts are committed.
 
 See [raw-source authority](ORGANIZATION_AUTHORITY.md),
 [the collaborative plan](COLLABORATIVE_VIEWER_PLAN.md) and
