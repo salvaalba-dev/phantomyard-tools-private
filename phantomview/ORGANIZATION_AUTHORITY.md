@@ -92,8 +92,9 @@ copy. The next integration should prepare an explicit private authority export
 through the existing collector/publication lifecycle, owned by the trusted producer
 and readable only by the intended reader. It must preserve current source binding,
 report publication failure/drift, support atomic refresh and never enter the public
-index or static browser routes. This producer integration is **not implemented or
-activated by this loader**; its exact target and access require deployment review.
+index or static browser routes. The optional [private publication extension](AUTHORITY_PUBLICATION.md)
+now prepares that producer/reader contract through the existing collector. It is
+not activated in AU; target, cadence and account access still require deployment review.
 No separate scheduler, resident organization service or independently editable
 policy store is needed. Configure exactly one reviewed current raw-source path.
 

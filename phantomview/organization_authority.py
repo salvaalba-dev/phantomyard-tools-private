@@ -55,6 +55,30 @@ def _stamp(info):
             info.st_ctime_ns if os.name == 'posix' else None)
 
 
+def _read(path):
+    """Bounded stable read shared by raw authority and private publication inputs."""
+    for component in (path, *path.parents):
+        info = component.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+            raise ValueError('Linked authority path')
+    before = path.lstat()
+    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+            or before.st_size > MAX_BYTES
+            or os.name == 'posix' and before.st_mode & 0o022):
+        raise ValueError('Unprotected organization source')
+    fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
+                 | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
+    with os.fdopen(fd, 'rb') as stream:
+        if _stamp(os.fstat(stream.fileno())) != _stamp(before):
+            raise ValueError('Organization changed while opening')
+        raw = stream.read(MAX_BYTES + 1)
+        if (_stamp(os.fstat(stream.fileno())) != _stamp(before)
+                or _stamp(path.lstat()) != _stamp(before)
+                or len(raw) != before.st_size or len(raw) > MAX_BYTES):
+            raise ValueError('Organization changed while reading')
+    return raw
+
+
 class OrganizationAuthority:
     """Bind an operator-selected absolute source to exactly one organization.
 
@@ -72,26 +96,7 @@ class OrganizationAuthority:
     def read(self):
         """Return a fresh validated document; never fall back to an older copy."""
         try:
-            for path in (self.path, *self.path.parents):
-                info = path.lstat()
-                if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
-                    raise ValueError('Linked authority path')
-            before = self.path.lstat()
-            if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
-                    or before.st_size > MAX_BYTES
-                    or os.name == 'posix' and before.st_mode & 0o022):
-                raise ValueError('Unprotected organization source')
-            fd = os.open(self.path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
-                         | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0))
-            with os.fdopen(fd, 'rb') as stream:
-                if _stamp(os.fstat(stream.fileno())) != _stamp(before):
-                    raise ValueError('Organization changed while opening')
-                raw = stream.read(MAX_BYTES + 1)
-                if (_stamp(os.fstat(stream.fileno())) != _stamp(before)
-                        or _stamp(self.path.lstat()) != _stamp(before)
-                        or len(raw) != before.st_size or len(raw) > MAX_BYTES):
-                    raise ValueError('Organization changed while reading')
-            org = _parse(raw, self.path.suffix)
+            org = _parse(_read(self.path), self.path.suffix)
             if not isinstance(org, dict) or org.get('organization', {}).get('id') != self.organization:
                 raise ValueError('Organization source mismatch')
             if HumanDirectory(org).scope.policy.get('view_access') is None:

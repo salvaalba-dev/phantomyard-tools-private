@@ -214,6 +214,13 @@ and denial after source/permission changes. They use synthetic trusted channel
 contexts, not an installed native callback. AU source permissions, declaration
 approval, protected handoff and live activation remain pending.
 
+An opt-in [private authority publication](AUTHORITY_PUBLICATION.md) now shares the
+existing collector export lifecycle. Its bounded lease, exact source/presentation
+binding and unavailable markers let an identified reader consume current private
+authority without original-source traversal. No data is added to the web index.
+Native verified-channel integration and actual AU target/access/cadence review
+remain pending; no service or permission has been changed.
+
 Reuse approved source classifications and folder-rule drafts for viewer resources.
 Unknown/private sources are not guessed public. Copies, summaries and linked
 resources retain applicable restrictions. Approval remains separate from discovery.

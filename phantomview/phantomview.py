@@ -32,12 +32,15 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def atomic_json(path, data):
+def atomic_json(path, data, *, private_group=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".pv-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
+            if private_group is not None and os.name == 'posix':
+                os.fchown(f.fileno(), -1, private_group)
+                os.fchmod(f.fileno(), 0o640)
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.flush()
             os.fsync(f.fileno())
@@ -148,6 +151,7 @@ class Observatory:
         self.validate_config(self.config)
         self.snapshot = None
         self.note_payloads = {}
+        self.organization_inputs = {}
         self.last_attempt = None
         self.last_error = None
         self.history = []
@@ -226,6 +230,7 @@ class Observatory:
 
     def collect(self):
         config = self.config
+        self.organization_inputs = {}
         procedure_orgs = []
         result = {"organizations": [], "departments": [], "roles": [], "actors": [],
                   "humans": [], "edges": [], "documents": [], "procedures": [], "findings": [], "sources": []}
@@ -241,6 +246,8 @@ class Observatory:
             if any(x["id"] == oid for x in result["organizations"]):
                 raise ValueError("Duplicate organization across sources")
             source = str(Path(filename).resolve())
+            # Private producer memory only; never part of data(), snapshot or index.
+            self.organization_inputs[source] = copy.deepcopy(org)
             procedure_orgs.append((org, source))
             result["sources"].append({"kind": "org", "path": source, "checked_at": now()})
             result["organizations"].append({"id": oid, "name": text(org["organization"].get("name")) or oid,
@@ -529,8 +536,23 @@ class Observatory:
                 raise ValueError("Note is outside the selected index")
             return copy.deepcopy(self.note_payloads[ident])
 
-    def export(self, path, state):
+    def export(self, path, state, *, authority=None):
         path = Path(path)
+        private_group = None
+        if authority is not None:
+            from authority_publication import AuthorityPublication, private_directory
+            if not isinstance(authority, AuthorityPublication):
+                raise ValueError('An explicit private authority publication is required')
+            if not path.is_absolute() or '..' in path.parts:
+                raise ValueError('Private publication requires an explicit absolute index path')
+            if authority.directory == path.parent or authority.directory.is_relative_to(path.parent / 'kb'):
+                raise ValueError('Use a separate private authority directory')
+            parent = private_directory(path.parent)
+            target = private_directory(authority.directory)
+            if os.name == 'posix' and parent.st_gid != target.st_gid:
+                raise ValueError('Index and authority directories must use the same intended reader group')
+            private_group = parent.st_gid
+            authority.publish(self, state)
         if state["error"]:
             return
         folder = path.parent / "kb"
@@ -543,7 +565,10 @@ class Observatory:
                     if not target.exists():
                         atomic_json(target, self.note_payloads[note["id"]])
                         os.chmod(target, 0o640)
-        atomic_json(path, state)
+        if authority is None:
+            atomic_json(path, state)
+        else:
+            atomic_json(path, state, private_group=private_group)
 
 
 def git(*args, cwd=None):
@@ -928,6 +953,8 @@ def main():
     setup.add_argument("--installation", default="", help="Explicit installation inventory manifest")
     sync = sub.add_parser("sync")
     sync.add_argument("--export", help="Export the read-only index without granting source access")
+    sync.add_argument("--authority-dir", help="Existing producer-owned private authority directory")
+    sync.add_argument("--authority-org", help="Exact organization ID for the private publication")
     for command in (setup, sync):
         command.add_argument("--review-root", help="Existing private operator directory for automatic review drafts")
         command.add_argument("--review-org", help="Trusted PhantomOrg source with explicit scopes for draft review")
@@ -985,9 +1012,15 @@ def main():
         if state["error"]:
             raise SystemExit(1)
     elif args.command == "sync":
+        if bool(args.authority_dir) != bool(args.authority_org) or args.authority_dir and not args.export:
+            parser.error('Private authority requires --export, --authority-dir and --authority-org')
+        authority = None
+        if args.authority_dir:
+            from authority_publication import AuthorityPublication
+            authority = AuthorityPublication(args.authority_dir, args.authority_org)
         state = obs.refresh()
         if args.export:
-            obs.export(args.export, state)
+            obs.export(args.export, state, authority=authority)
         print("Information updated" if not state["error"] else state["error"])
         if state["error"]:
             raise SystemExit(1)

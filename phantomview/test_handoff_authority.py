@@ -198,6 +198,46 @@ class FileBoundSignedTests(projection.ProjectionFixture):
             self.backend.search(headers, 'River')
         self.assertEqual(self.loaded, [])
 
+    def test_signed_session_uses_fresh_publication_and_denies_expiry_or_changed_policy(self):
+        from authority_publication import AuthorityPublication, PublishedAuthority
+        import phantomview as pv
+        self.org['version'] = 1
+        self.write()
+        root = self.path.parent
+        private = root / 'authority'
+        private.mkdir(mode=0o700)
+        index = root / 'reader' / 'index.json'
+        index.parent.mkdir(mode=0o750)
+        observer = pv.Observatory(root / 'config.json')
+        observer.config = {'mode': 'existing', 'org_files': [str(self.path)],
+                           'personas_dir': '', 'docs_manifests': [], 'auto_procedures': False}
+        ticks = [100]
+        publication = AuthorityPublication(private, 'example', clock=lambda: ticks[0])
+
+        def refresh():
+            observer.export(index, observer.refresh(), authority=publication)
+
+        refresh()
+        self.gate.directory_loader = PublishedAuthority(private, index, 'example', str(self.path),
+                                                       max_age=30, clock=lambda: ticks[0])
+        headers = self.login()
+        self.backend.workspace(headers)
+        self.loaded.clear()
+        ticks[0] = 130
+        with self.assertRaises(ValueError):
+            self.backend.workspace(headers)
+        self.assertEqual(self.loaded, [])
+        ticks[0] = 140
+        refresh()
+        self.backend.workspace(headers)
+        self.loaded.clear()
+        self.org['roles'][0]['security_exceptions'] = ['category-3']
+        self.write()
+        refresh()
+        with self.assertRaises(ValueError):
+            self.backend.workspace(headers)
+        self.assertEqual(self.loaded, [])
+
 
 if __name__ == '__main__':
     unittest.main()
