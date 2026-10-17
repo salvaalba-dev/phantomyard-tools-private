@@ -1,0 +1,23 @@
+{
+  "activates_identified_reader": false,
+  "code_baseline": "cac4a3b1015a3facd6aa42f815e126bb0c5d64fa",
+  "contains_live_data": false,
+  "entrypoint": "phantomview.py",
+  "files": {
+    "assistant.py": "1407ccbe1fd308535763b18a4b6a0202915822f60a48e0ea9bd602a4872dc71a",
+    "assistant_scope.py": "f48278ed006bae43d206c99c244b69b50912122b6d2da7178d5c4d926f44c95b",
+    "authority_publication.py": "cd6568a81952723ee6b0681decbb56c332ba891b560693de5e239c86a3f6f0d9",
+    "channel_identity.py": "71c763597d54931a9346a8b4fb5737c0fd756998d4ead132d62139e776f9c067",
+    "diagnostics.py": "f613fd831e5677cee8c63057f0cd91543b28bd1eb8d671b394104aadbb0bc2a1",
+    "installation.py": "15f9fe266e6a2e1f2a6e5dc037ee6dc53251bde6d071729319ab2a5267c668ba",
+    "organization_authority.py": "04418f008b2fa255077c050416ed4fbcf8a399615ccbe1fa59ab637b1ba161fa",
+    "phantomview.py": "bf3373bd3e56960a7b6b4913bfc1b671e139bd3d13124b44edd38d1bdbd014aa",
+    "procedures.py": "fb9203e69ec7494ef91d595076ef63040df4adfdf9681d3145a6e18d08e5ab39",
+    "view_permissions.py": "4fd7c31703921b572d6804bc723e7a3b58e577947ec810a294b139a59dade765"
+  },
+  "installs_services": false,
+  "provenance_note": "Baseline is the reviewed source revision; per-file hashes identify the packaged local bytes.",
+  "purpose": "existing-collector-private-publication",
+  "required_external_package": "PyYAML",
+  "schema_version": 1
+}
