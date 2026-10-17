@@ -119,6 +119,11 @@ been deployed to AU.
 
 ## Native assistant transport decision
 
+The [verified native integration review](NATIVE_ASSISTANT_REVIEW.md) records the
+exact upstream revision, source evidence, remaining authorization gap and native
+activation criteria. The ordinary native conversation route is not yet eligible
+for restricted viewer sessions; default-persona observation is independent.
+
 The public [`phantombot ask` command](https://github.com/phantomyard/phantombot/blob/main/src/cli/ask.ts)
 is the next integration candidate. It already loads the selected persona's
 effective configuration and harness chain, accepts the message through stdin,
