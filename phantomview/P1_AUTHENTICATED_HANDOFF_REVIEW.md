@@ -64,3 +64,38 @@ P1 remains incomplete until an identified link is demonstrated end to end. Nativ
 assistant activation and deployment remain later milestones. No application tests
 were run for this documentation-only inspection report; service status and CLI
 help checks must not be reported as application test coverage.
+
+## Subsequent component verification
+
+The original inspection above remains read-only evidence of the installation.
+A later source-only regression suite, `test_identified_viewer_flow.py`, now composes
+the existing real PhantomBlog verifier, `IdentifiedGate`, `HumanDirectory`,
+`ScopedBackend` and issuer-bound navigation. Thirteen tests cover:
+
+- Three counterpart flows with a separate fixed-issuer gate per persona.
+- Telegram and canonical registered PhantomChat sender contexts supplied by fixtures.
+- Unknown, email-only, mismatched counterpart and unauthenticated/group contexts.
+- Wrong signer or issuer claims, signed-event replay and concurrent single redemption.
+- Channel rebinding and counterpart removal before redemption.
+- Policy changes, logout and operator revocation before further record reads.
+- An independently assigned category-zero owner without a counterpart, retaining
+  the actual issuer and receiving no implicit write capability.
+- Legacy unidentified links and expired grants denied identified viewer access.
+
+Run from the `phantomview` directory with PhantomBlog and its access extra installed:
+
+```bash
+python -m unittest test_identified_viewer_flow -v
+```
+
+Without coincurve/PhantomBlog the tests are explicitly skipped; skips are not
+signature verification evidence. The existing handoff CI job installs the pinned
+PhantomBlog access dependency and discovers all Python tests. No new workflow or
+runtime service is needed.
+
+These fixtures supply trusted channel context directly. They do not authenticate
+an actual sender or demonstrate production channel reception. Each fixed-issuer
+gate has its own state; the tests do not claim a shared multi-issuer endpoint.
+P1 native handoff acceptance, compatible live PhantomOrg declarations and native
+assistant activation remain pending. No runtime or protocol implementation changes
+are made by this verification increment.

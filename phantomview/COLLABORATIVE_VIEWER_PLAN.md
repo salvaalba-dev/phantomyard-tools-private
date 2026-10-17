@@ -134,6 +134,14 @@ does not reach that reader through the inspected helper. CLI help compatibility
 is confirmed, but identified-link acceptance and native conversation remain
 pending. Next: authoritative counterpart mapping and the minimal trusted handoff.
 
+Component evidence: `test_identified_viewer_flow.py` now exercises real signed
+issuance through recipient redemption, current policy filtering and issuer-bound
+navigation. It covers synthetic Telegram/PhantomChat contexts, independent category
+zero, replay, concurrent redemption, expiry, revocation and stale identity/policy.
+The existing real-signature CI job discovers this suite. Native authentication is
+an explicit external precondition in these fixtures; these tests do not establish
+an installed channel hook, conversation transport or multi-issuer reader.
+
 Read the selected installation's actual versions, public command surface, existing
 link issuer and channel integration. Document how proven sender context reaches
 the reader. The existing shared slash dispatcher was not found to expose a general
