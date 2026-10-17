@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'phantomview/authenticated_command*'
+      - 'phantomview/native_link*'
       - 'phantomview/test_authenticated_command*'
       - 'phantomview/native_ingress_patch.py'
       - 'phantomview/native_channel_patch.py'
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - 'phantomview/authenticated_command*'
+      - 'phantomview/native_link*'
       - 'phantomview/test_authenticated_command*'
       - 'phantomview/native_ingress_patch.py'
       - 'phantomview/native_channel_patch.py'
@@ -45,13 +47,14 @@ jobs:
         run: |
           python3 phantomview/authenticated_command_patch.py native-source
           cp phantomview/authenticated_command_runtime.test.ts native-source/tests/phantomview-authenticated-command.test.ts
+          cp phantomview/native_link_callback.test.ts native-source/tests/phantomview-native-link.test.ts
           cp phantomview/native_ingress_runtime.test.ts native-source/tests/phantomview-ingress.test.ts
       - name: Install locked native dependencies
         working-directory: native-source
         run: bun install --frozen-lockfile
       - name: Verify actual native dispatch, gift-wrap authentication and unchanged channel behavior
         working-directory: native-source
-        run: bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
+        run: bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-native-link.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
       - name: Compile the reviewed source proposal
         working-directory: native-source
         run: bun run build:x64

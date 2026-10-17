@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'phantomview/handoff_client.py'
+      - 'phantomview/native_link_client.py'
+      - 'phantomview/test_native_link_client.py'
       - 'phantomview/native_access_command.py'
       - 'phantomview/conversation_forwarding.py'
       - 'phantomview/conversation_execution.py'
@@ -69,6 +71,8 @@ on:
   pull_request:
     paths:
       - 'phantomview/handoff_client.py'
+      - 'phantomview/native_link_client.py'
+      - 'phantomview/test_native_link_client.py'
       - 'phantomview/native_access_command.py'
       - 'phantomview/conversation_forwarding.py'
       - 'phantomview/conversation_execution.py'
