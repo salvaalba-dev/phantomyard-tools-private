@@ -251,6 +251,12 @@ of a separately sandboxed native knowledge subset is made.
 
 ### P5. Add explicit optional module lifecycle
 
+Implemented foundation: the [optional role briefing adapter](ROLE_BRIEFING_ADAPTER.md)
+prepares deterministic private structured previews using PhantomOrg validation
+and access resolution. It retains both role/actor exception origins and scoped
+supplemental references. KB writing, authorized viewer publication, legacy-sidecar
+migration and live AU compatibility remain separate pending increments.
+
 The [AU role projection review](AU_PROJECTION_ADAPTER_REVIEW.md) identifies a
 possible reusable briefing adapter with installation-owned supplemental metadata.
 Preserve its useful local behavior. Treat source mapping, optional KB publication
