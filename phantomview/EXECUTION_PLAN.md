@@ -1,4 +1,9 @@
-# PhantomView scope aware execution plan
+# Historical PhantomView scope aware execution plan
+
+Superseded on 2026-10-17 by the [collaborative viewer plan](COLLABORATIVE_VIEWER_PLAN.md).
+This file preserves earlier research and implementation history. Its requirements
+for view-bound native inference, isolated replacement workers or new native ACL
+plumbing are not prerequisites of the standard collaborative viewer.
 
 The [standard viewer/module architecture](VIEWER_ARCHITECTURE.md) is the current
 direction and takes precedence over earlier ordinary-worker replacement and

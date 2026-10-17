@@ -1,4 +1,9 @@
-# Standard viewer core and optional modules
+# Historical standard viewer core and optional modules
+
+The [collaborative viewer plan](COLLABORATIVE_VIEWER_PLAN.md) is authoritative as
+of 2026-10-17. This document records earlier design stages. In particular, the
+identified issuer takes precedence over the runtime default, and a selected visual
+section does not impose a new native conversation knowledge sandbox.
 
 This is the current product direction and supersedes earlier plans for replacing
 ordinary PhantomBot conversation execution or requiring a separate persona memory.

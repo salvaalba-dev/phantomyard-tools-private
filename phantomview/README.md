@@ -1,19 +1,23 @@
 # PhantomView
 
-Current direction: a standard PhantomOrg-based viewer with optional declarative
-modules and the existing runtime's default persona as assistant. See the
-[viewer architecture](VIEWER_ARCHITECTURE.md) for the stable core, module contract,
-module-specific assistant selection and implementation boundaries. The native
-ordinary-worker experiments are not standard installation prerequisites.
+Current direction: a standard visual interface to PhantomOrg-authorized information
+and the existing collaborative persona that issued the identified access link.
+The [collaborative viewer plan](COLLABORATIVE_VIEWER_PLAN.md) is authoritative for
+component ownership, issuer selection, native conversation, optional modules and
+the ordered implementation milestones. The runtime default is a setup fallback,
+not an override for an identified issuer. Historical worker/engine experiments and
+view-bound native ACL proposals are not standard installation prerequisites.
 
 A read-only visual observatory for Phantomyard organizations. It combines declared
 organization structure with bounded filesystem and service observations, preserving
 source evidence and distinguishing declarations from operational checks.
 
-See the [scope-aware execution plan](EXECUTION_PLAN.md) for identified access,
-resource authorization, organization/project views and persistent personalization.
-It also records future requirement F01 for organization-wide ingestion ACL metadata;
-that requirement is deferred and does not change current ingestion behavior.
+See the active plan for identified access, visual resource authorization,
+organization/project views and additive modules. It retains future requirement F01
+for organization-wide ingestion ACL metadata; that requirement remains deferred
+and does not change current ingestion behavior. The [earlier execution plan](EXECUTION_PLAN.md)
+and related experimental setup recipes are historical, not deployment instructions
+for the new standard path.
 The private [scope and action model](SCOPE_ACCESS.md) defines explicit session
 boundaries and separate modification capabilities; it is not enabled on the live reader.
 

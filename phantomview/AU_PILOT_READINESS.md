@@ -1,5 +1,10 @@
 # AU scoped assistant readiness
 
+Historical inspection, not a fresh live check. The replacement-worker deployment
+sequence below belongs to the earlier design and is superseded by the
+[collaborative viewer plan](COLLABORATIVE_VIEWER_PLAN.md). Preserve the dated
+observations; do not treat them as current standard installation prerequisites.
+
 Read-only inspection: 2026-10-16. Result: **not ready for scoped activation**.
 This report describes the inspected installation, not an authorization to change
 accounts, publish access policy or replace the running persona daemon.

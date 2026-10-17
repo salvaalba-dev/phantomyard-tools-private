@@ -1,4 +1,11 @@
-# Existing-persona assistant integration review
+# Historical native assistant integration review
+
+Reinterpreted on 2026-10-17 by the [collaborative viewer plan](COLLABORATIVE_VIEWER_PLAN.md).
+The pinned source observations below remain evidence. The former conclusion that
+standard persona chat requires new native human/category ACL inputs is withdrawn.
+PhantomOrg owns organizational authority; native collaborative persona conversation
+is not constrained to the currently displayed viewer resource subset. The
+view-bound context helper remains optional inactive research, not an activation gate.
 
 ## Decision
 

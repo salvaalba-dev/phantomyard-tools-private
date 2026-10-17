@@ -1,5 +1,11 @@
 # Verified human access: integration status
 
+The [collaborative viewer plan](COLLABORATIVE_VIEWER_PLAN.md) now governs delivery.
+This document preserves channel-authentication findings and earlier experiments;
+it is not a mandate to deploy their isolated replacement-worker architecture.
+Verified sender-to-session binding is still required. That transport question is
+separate from adding human/organizational ACL logic inside PhantomBot.
+
 Status: private, tested primitives; **not enabled on the AU reader or daemon**.
 The current assistant remains the bounded, tool-less PhantomView analysis pilot.
 
