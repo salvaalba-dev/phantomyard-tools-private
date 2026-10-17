@@ -92,6 +92,13 @@ sections over the same authorized projection. Internal `state(headers)` remains
 unchanged for search, review and consultation evidence. No raw catalog is exposed.
 Construct the backend with operator-owned `modules` manifests and an optional
 `default_report_loader` callable that reads the existing runtime observation.
+`runtime_default.RuntimeDefault` adapts the installation's existing
+`default_persona_file` observation, written by `assistant.py`, to this callable.
+It rereads the file on every workspace refresh, requires a matching organization,
+valid provenance and a fresh timezone-aware timestamp, and returns only the
+minimal persona selection. It never reads credentials or the native memory store.
+The default freshness bound is 30 minutes; operators can align it with the existing
+observation refresh interval, up to one day. No new timer or service is installed.
 Missing or unavailable observations disable assistant selection without hiding
 authorized records. The ordinary live reader is unchanged.
 
@@ -109,3 +116,28 @@ module lifecycle support, and validate allowed/denied organization and project
 views against native runtime sources. Resource synchronization should reuse the
 existing collection/refresh mechanisms. This change is source-only and has not
 been deployed to AU.
+
+## Native assistant transport decision
+
+The public [`phantombot ask` command](https://github.com/phantomyard/phantombot/blob/main/src/cli/ask.ts)
+is the next integration candidate. It already loads the selected persona's
+effective configuration and harness chain, accepts the message through stdin,
+and treats input as untrusted. Its existing `--history --conversation <id>`
+options use native conversation storage and retrieval. This avoids a separate
+engine root, model credential copy or replacement persona memory. Its normal
+capabilities must be reviewed as those of the existing persona: this command
+does not expose the embedding engine's per-turn `tools: "none"` control.
+
+The [`embedded engine`](https://github.com/phantomyard/phantombot/blob/main/docs/reference/engine.md)
+requires an exclusive isolated root and explicitly warns against using the host
+daemon's directories. It does not satisfy the existing-persona integration here.
+The local ACP connector is also unsuitable for browser input: its local OS-user
+trust model skips the untrusted-input threat screen.
+
+Do not enable ordinary CLI conversation merely because menu eligibility passes.
+Before activation, verify how a current human identity and the selected
+PhantomOrg category/project scope reach native retrieval and output authorization.
+A conversation ID, caller-supplied prompt, successful access link or JEV threat
+verdict is not evidence that record-level confidentiality is enforced. This is
+the remaining integration check, not a reason to create a second ACL database.
+No `ask` subprocess or alternate transport is activated by the observation adapter.
