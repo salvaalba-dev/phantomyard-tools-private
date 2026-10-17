@@ -157,3 +157,46 @@ reading note bodies or changing the live organization. Any source write still
 requires a fresh expected-source check, a protected recoverable backup, a minimal
 reviewed diff and verification before downstream publication. Do not activate the
 identified reader or assistant merely because declaration validation succeeds.
+
+## Approved source-only application
+
+On 2026-10-17, after explicit approval of the reviewed scope, the three counterpart
+bindings, independent category-zero owner reference and organization-only viewer
+scope grants were applied to AU's selected `/root/proyeccion/org-live.yaml`.
+This supersedes the earlier not-applied source observations above. The generic
+proposal helper still has no apply operation; this was a bounded operational edit
+of the separately reviewed private artifact, not automatic draft approval.
+
+The change checked the expected raw source fingerprint before writing, preserved
+comments and existing text outside the approved edits, created an exclusive
+root-owned `0600` backup and atomically replaced the source while preserving its
+owner, group and mode. An independent read-back confirmed the expected final bytes,
+parsed proposal equality and exact recovery of the original document after removing
+only the approved changes. No existing role/category exception, channel identity,
+project grant, action grant or unrelated source field changed.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Original source and recoverable backup | `bba3097d4e49764f8e2eda84703733103b4e32391c6245531a863db6270263dd` |
+| Applied source | `29052cfb4ae57dffb9dc0db6d882e8ce02d247b3ea1eb6702d5e54961566697a` |
+| Applied canonical document revision | `4af4987bc07e01980efdf6b422c4339df96f86aeebd2c9df630c8b415085ae43` |
+
+The protected backup is
+`/root/proyeccion/org-live.yaml.before-phantomview-declarations-20261017`.
+No live source, backup or private operational script is committed. A rollback must
+first verify the current applied fingerprint and backup fingerprint, then restore
+the captured original with its original permissions. Preserve intervening edits
+rather than overwriting a changed source blindly.
+
+Verification also confirmed that the viewer and existing collector timer remain
+active, with the last collector result successful. No service was restarted. The
+derived `/opt/phantomdocs/org.yaml` copy still differed from the updated source at
+the time of verification; its propagation was not included in this source-only
+change. It must not be substituted for the selected source or described as current
+authority. The collector remains configured to read the original source directly.
+
+The private authority directory remains absent. No identified reader, verified
+channel handoff or assistant activation occurred. The email-only counterpart is
+still channel-ineligible and all knowledge classification candidates remain
+unapproved. Source declarations are now present; content review, account exposure,
+private publication and end-to-end persona integration remain separate work.

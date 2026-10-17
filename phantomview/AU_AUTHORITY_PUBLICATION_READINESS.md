@@ -5,7 +5,13 @@
 Read-only verification on 2026-10-17 confirms that the existing selected-source
 collector can provide the publication cadence. No new scheduler or resident service
 is needed. Publication is **not deployed** and identified access is **not ready for
-activation**. No source declarations, permissions, units or running code were changed.
+activation**. The initial inspection changed no source declarations, permissions,
+units or running code. The subsequent approved source-only update is recorded in
+[the declaration application report](SETUP_DECLARATION_PROPOSAL.md#approved-source-only-application):
+counterpart bindings, independent owner and organization-only scope declarations
+are now present in the selected source. Private publication is still absent, and
+knowledge classifications remain unapproved. The derived organization copy has
+not been propagated by that change.
 
 This report records operational paths and modes only. It contains no organization
 document, human identifiers, credentials, note bodies or private setup artifact.
@@ -49,9 +55,11 @@ the current directory modes.
 
 ## Proposed bounded change, not an activation instruction
 
-1. Finish and validate the detached PhantomOrg declarations, counterpart bindings,
-   explicit viewer scopes, category-zero owner and approved content classifications.
-   Do not publish an inferred grant matrix or the current incomplete source.
+1. Recheck the applied source declarations against their recorded fingerprints and
+   finish approved content classifications. Counterpart bindings, organization-only
+   viewer scopes and the independent category-zero owner reference have been applied
+   in the source-only follow-up. Do not infer project grants or approve draft content
+   as a side effect of publishing authority.
 2. Review the complete release diff and capture the installed files and exact unit
    contents for rollback. Deploy the compatible collector modules as one reviewed
    release. The tested local implementation is not the installed VPS version.
@@ -96,6 +104,6 @@ publication was performed because that publication does not yet exist.
 
 The code's Linux/Windows and signed-gate checks are described in
 [publication design](AUTHORITY_PUBLICATION.md). They establish component behavior,
-not live deployment readiness. Required next inputs are the reviewed source grants,
+not live deployment readiness. Required next inputs are approved content reviews,
 the accepted account boundary and an identified-reader/native-handoff deployment
-plan with end-to-end evidence.
+plan with end-to-end evidence. Keep those separate from the applied source declarations.
