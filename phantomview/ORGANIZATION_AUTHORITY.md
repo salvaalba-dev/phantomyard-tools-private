@@ -79,11 +79,23 @@ Private source data and review artifacts remain outside the repository.
 
 ## AU deployment boundary
 
-The inspected live viewer remains on its legacy gate. Its selected raw source is
-under an administrator directory, and reader-account traversal/read access has not
-been established for this binding. Do not loosen that directory or silently switch
-to a stale published copy. The existing authoritative/publication layout must be
-checked and one reviewed current raw-source path configured explicitly.
+The inspected live viewer remains on its legacy gate. A read-only check on
+2026-10-17 confirmed that its service is active under the existing domain account.
+Executing a harmless identity command as that account succeeded, while `test -r`
+returned exit code 1 for both `/root/proyeccion/org-live.yaml` and
+`/opt/phantomdocs/org.yaml`. These are file-read denials, not a failed account probe.
+The selected source still matches the reviewed baseline and the published copy
+remains byte-identical. No permissions, files, grants or services were changed.
+
+Do not open the administrator directory to the reader or silently select a stale
+copy. The next integration should prepare an explicit private authority export
+through the existing collector/publication lifecycle, owned by the trusted producer
+and readable only by the intended reader. It must preserve current source binding,
+report publication failure/drift, support atomic refresh and never enter the public
+index or static browser routes. This producer integration is **not implemented or
+activated by this loader**; its exact target and access require deployment review.
+No separate scheduler, resident organization service or independently editable
+policy store is needed. Configure exactly one reviewed current raw-source path.
 
 Before activation, review/apply the detached organization declarations, establish
 source propagation and protected reader access, supply approved resource reviews,
