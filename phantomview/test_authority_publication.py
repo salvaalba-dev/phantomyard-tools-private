@@ -64,6 +64,20 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.reader()
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows short-path regression')
+    def test_windows_short_source_path_matches_the_collected_resolved_path(self):
+        import ctypes
+        buffer = ctypes.create_unicode_buffer(32768)
+        result = ctypes.windll.kernel32.GetShortPathNameW(str(self.source), buffer, len(buffer))
+        if not result or str(Path(buffer.value).resolve()) == str(Path(buffer.value)):
+            self.skipTest('Filesystem has no distinct short-path alias')
+        self.observer.config['org_files'] = [buffer.value]
+        self.state = self.observer.refresh()
+        self.publish()
+        reader = PublishedAuthority(self.private, self.index, 'example', buffer.value,
+                                    max_age=30, clock=lambda: self.ticks[0])
+        self.assertEqual(reader.read(), self.org)
+
     def test_clock_expiry_and_future_dates_fail_without_fallback(self):
         self.publish()
         for timestamp in (99, 130, 200):

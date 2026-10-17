@@ -67,7 +67,8 @@ On Windows the parent ACL must be configured separately; POSIX modes do not prov
 Windows isolation. Protected parent directories and account boundaries remain
 operator responsibilities.
 
-The private `_phantomview_publication` field binds the organization, source,
+The private `_phantomview_publication` field binds the organization, configured source,
+producer-resolved snapshot source (including Windows short-path expansion),
 canonical document revision, collector snapshot digest and publication time.
 It is stripped from raw-document results. This protected local metadata is not a
 signature or another authorization database. Each reader input is bounded to 4 MiB.

@@ -89,7 +89,7 @@ class AuthorityPublication:
     def publish(self, observer, state):
         """Bind a fresh source reread to the exact input captured during collect()."""
         selected = observer.config.get('org_files', [])
-        if any(_absolute(source) == self.path for source in selected):
+        if any(_absolute(source).resolve() == self.path.resolve() for source in selected):
             raise ValueError('Authority publication must never overwrite its source')
         try:
             snapshot = state.get('snapshot')
@@ -100,17 +100,19 @@ class AuthorityPublication:
                     or snapshot.get('collected_at') != (observer.snapshot or {}).get('collected_at')):
                 raise ValueError('Current successful single-source collection required')
             source = str(_absolute(selected[0]))
+            observed_source = str(_absolute(source).resolve())
             rows = snapshot.get('organizations', [])
-            if len(rows) != 1 or rows[0].get('id') != self.organization or rows[0].get('source') != source:
+            if len(rows) != 1 or rows[0].get('id') != self.organization or rows[0].get('source') != observed_source:
                 raise ValueError('Publication organization/source mismatch')
             org = OrganizationAuthority(source, self.organization).read()
-            if META in org or org != observer.organization_inputs.get(source):
+            if META in org or org != observer.organization_inputs.get(observed_source):
                 raise ValueError('Source changed after collection')
             timestamp = self.clock()
             if type(timestamp) not in (int, float) or not math.isfinite(timestamp):
                 raise ValueError('Invalid publication time')
             document = dict(org)
             document[META] = {'schema_version': 1, 'source': source, 'organization': self.organization,
+                              'snapshot_source': observed_source,
                               'organization_revision': revision(org), 'snapshot_digest': snapshot['digest'],
                               'published_at': timestamp}
             self._replace(document)
@@ -136,7 +138,7 @@ class PublishedAuthority:
             metadata = org.pop(META)
             if (not isinstance(metadata, dict) or set(metadata) != {
                     'schema_version', 'source', 'organization', 'organization_revision',
-                    'snapshot_digest', 'published_at'} or type(metadata['schema_version']) is not int
+                    'snapshot_digest', 'snapshot_source', 'published_at'} or type(metadata['schema_version']) is not int
                     or metadata['schema_version'] != 1 or metadata['source'] != self.source
                     or metadata['organization'] != self.organization
                     or not isinstance(metadata['snapshot_digest'], str)
@@ -149,10 +151,12 @@ class PublishedAuthority:
                 raise ValueError('Authority publication expired or future-dated')
             index = _parse(_read(self.index), '.json')
             snapshot = index.get('snapshot', {})
-            if (index.get('error') or index.get('config', {}).get('org_files') != [self.source]
+            selected = index.get('config', {}).get('org_files')
+            if (index.get('error') or not isinstance(selected, list) or len(selected) != 1
+                    or str(_absolute(selected[0])) != self.source
                     or snapshot.get('digest') != metadata['snapshot_digest']
                     or [(row.get('id'), row.get('source')) for row in snapshot.get('organizations', [])]
-                    != [(self.organization, self.source)]):
+                    != [(self.organization, metadata['snapshot_source'])]):
                 raise ValueError('Current index does not match authority publication')
             return org
         except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError, yaml.YAMLError):

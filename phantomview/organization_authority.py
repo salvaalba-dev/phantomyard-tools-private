@@ -87,8 +87,13 @@ class OrganizationAuthority:
     """
     def __init__(self, path, organization):
         self.path = Path(path)
+        self.format = self.path.suffix.lower()
+        if os.name == 'nt' and self.format not in {'.yaml', '.yml', '.json'}:
+            # Short filenames may shorten the extension too. Retain self.path
+            # for all link/descriptor checks; only parsing format uses expansion.
+            self.format = self.path.resolve().suffix.lower()
         if (not self.path.is_absolute() or '..' in self.path.parts
-                or self.path.suffix not in {'.yaml', '.yml', '.json'}
+                or self.format not in {'.yaml', '.yml', '.json'}
                 or not isinstance(organization, str) or not organization):
             raise ValueError('Explicit absolute source and organization required')
         self.organization = organization
@@ -96,7 +101,7 @@ class OrganizationAuthority:
     def read(self):
         """Return a fresh validated document; never fall back to an older copy."""
         try:
-            org = _parse(_read(self.path), self.path.suffix)
+            org = _parse(_read(self.path), self.format)
             if not isinstance(org, dict) or org.get('organization', {}).get('id') != self.organization:
                 raise ValueError('Organization source mismatch')
             if HumanDirectory(org).scope.policy.get('view_access') is None:
