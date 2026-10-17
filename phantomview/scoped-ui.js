@@ -81,6 +81,23 @@ class ScopedModel {
     model.byId=new Map(model.resources.map(row=>[row.id,row]));return model;
   }
   title(row) { return String(row.data.title || row.data.display_name || row.data.name || row.data.label || row.data.id || SCOPED_KINDS[row.kind]); }
+  static isReviewedNote(row) {return row.kind==='knowledge'&&row.data.source==='reviewed-knowledge';}
+  static detailPath(row) {
+    scopedRecord(row);
+    return (ScopedModel.isReviewedNote(row)?'/api/reviewed-knowledge/':'/api/resource/')+row.id;
+  }
+  static detailText(row,current) {
+    if(ScopedModel.isReviewedNote(row)) {
+      if(!current||current.id!==row.id||current.actor!==row.data.actor||current.title!==row.data.title
+          ||current.payload_sha256!==row.data.payload_sha256||!scopedHex(current.payload_sha256)
+          ||current.trust!=='untrusted'||current.format!=='markdown'||current.excerpt_only!==false
+          ||typeof current.content!=='string'||current.content.length>262144)throw Error('Current reviewed note required');
+      return current.content;
+    }
+    scopedRecord(current);
+    if(current.id!==row.id||current.kind!==row.kind)throw Error('Record identity changed');
+    return JSON.stringify(current.data,null,2);
+  }
   organization() {
     const row = this.resources.find(row => row.kind === 'organization');
     return row ? this.title(row) : this.view.organization;
@@ -156,12 +173,12 @@ async function startScopedWorkspace() {
     // Remove old contents before any new read; never show a cached fallback.
     detailFocus=null;$('assistant-about').hidden=true;
     $('detail-content').textContent='Loading current record…';$('detail-title').textContent='Record';$('detail').showModal();
-    api('/api/resource/'+row.id,undefined,controller?.signal).then(current=>{
-      if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;scopedRecord(current);
-      if(current.id!==row.id||current.kind!==row.kind)throw Error('Record identity changed');
-      $('detail-title').textContent=model.title(current);
-      $('detail-content').textContent=JSON.stringify(current.data,null,2);
-      detailFocus={id:current.id,title:model.title(current)};$('assistant-about').hidden=!chat.view;
+    api(ScopedModel.detailPath(row),undefined,controller?.signal).then(current=>{
+      if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
+      $('detail-content').textContent=ScopedModel.detailText(row,current);
+      const title=ScopedModel.isReviewedNote(row)?current.title:model.title(current);
+      $('detail-title').textContent=title;
+      detailFocus={id:current.id,title};$('assistant-about').hidden=!chat.view;
     }).catch(error=>failure(error,ticket));
   }
   function renderGraph() {

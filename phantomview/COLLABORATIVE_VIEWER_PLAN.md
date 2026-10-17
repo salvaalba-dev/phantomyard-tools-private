@@ -261,8 +261,9 @@ legacy-sidecar migration and live AU compatibility remain pending.
 
 The [optional reviewed knowledge detail reader](REVIEWED_KNOWLEDGE_VIEW.md) reuses
 existing approved classifications, current collector provenance and the identified
-backend gate for full-note reads. It adds no classifier or resident process.
-Authorized listing/search/navigation and live configuration remain pending.
+backend gate for full-note reads, authorized metadata cards, body search and
+existing navigation/counts. It adds no classifier or resident process. Live source
+configuration and AU activation remain pending.
 
 The [AU role projection review](AU_PROJECTION_ADAPTER_REVIEW.md) identifies a
 possible reusable briefing adapter with installation-owned supplemental metadata.

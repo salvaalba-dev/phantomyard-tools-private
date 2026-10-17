@@ -81,8 +81,9 @@ useful AU behavior before any replacement is considered.
 2. Authorized record adapter using existing PhantomOrg classifications, dependency
    checks and viewer publication boundaries. Unresolved references cannot be exposed.
    The [reviewed knowledge detail reader](REVIEWED_KNOWLEDGE_VIEW.md) now opens
-   existing approved notes under the same identified session. Briefing publication
-   alone does not classify or expose a note; record discovery remains pending.
+   existing approved notes under the same identified session, with authorized
+   cards and global body search in the scoped workspace. Briefing publication
+   alone does not classify or expose a note; live source binding remains pending.
 3. Additive declarative viewer sections over those records. Existing module
    manifests cannot execute this adapter or grant access. Reuse setup/refresh rather
    than add another scheduler or resident agent.

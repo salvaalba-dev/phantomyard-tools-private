@@ -58,7 +58,10 @@ def dispatch(handler, method):
             handler.send(200, backend.workspace(handler.headers))
         elif method == 'GET' and parsed.path.startswith('/api/reviewed-knowledge/'):
             from reviewed_knowledge import ReviewedKnowledge
-            reader = getattr(handler.server, 'reviewed_knowledge', None)
+            reader = getattr(backend, 'reviewed_knowledge', None) or getattr(handler.server, 'reviewed_knowledge', None)
+            configured = getattr(handler.server, 'reviewed_knowledge', reader)
+            if configured is not reader:
+                return reject(handler, method, 403, 'Reviewed knowledge bindings disagree')
             if not isinstance(reader, ReviewedKnowledge) or reader.gate is not backend.gate:
                 return reject(handler, method, 403, 'Reviewed knowledge is not configured')
             note = reader.detail(handler.headers, parsed.path.removeprefix('/api/reviewed-knowledge/'))

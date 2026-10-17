@@ -116,7 +116,8 @@ class PrivateRecordStore:
 
 
 class ScopedBackend:
-    def __init__(self, gate, catalog_loader, record_loader, *, modules=(), default_report_loader=None):
+    def __init__(self, gate, catalog_loader, record_loader, *, modules=(), default_report_loader=None,
+                 reviewed_knowledge=None):
         if not isinstance(gate, IdentifiedGate) or not callable(catalog_loader) or not callable(record_loader):
             raise ValueError('An identified gate and protected projection loaders are required')
         self.gate, self.catalog_loader, self.record_loader = gate, catalog_loader, record_loader
@@ -124,6 +125,11 @@ class ScopedBackend:
         if default_report_loader is not None and not callable(default_report_loader):
             raise ValueError('A server-owned runtime default reader is required')
         self.default_report_loader = default_report_loader
+        if reviewed_knowledge is not None:
+            from reviewed_knowledge import ReviewedKnowledge
+            if not isinstance(reviewed_knowledge, ReviewedKnowledge) or reviewed_knowledge.gate is not gate:
+                raise ValueError('Reviewed knowledge must use the exact identified backend gate')
+        self.reviewed_knowledge = reviewed_knowledge
 
     def workspace(self, headers):
         """Compile menus over one current authorized projection, never raw records."""
@@ -184,6 +190,13 @@ class ScopedBackend:
         for ident, raw in raw_records.items():
             if self.record_loader(ident) != raw:
                 raise ValueError('A selected resource changed or was excluded; refresh the view')
+        if self.reviewed_knowledge is not None:
+            if self.reviewed_knowledge.gate is not self.gate:
+                raise ValueError('The reviewed knowledge gate changed')
+            for record in self.reviewed_knowledge.records(headers):
+                if record['id'] in visible or len(visible) >= MAX_RECORDS:
+                    raise ValueError('Knowledge IDs collide or exceed projection bounds')
+                visible[record['id']] = record
         current, _ = self.gate.identified_scope(headers)
         if current != recipient or ProjectionCatalog(self.catalog_loader()).revision != catalog.revision:
             raise ValueError('Session or projection classification changed')
@@ -212,6 +225,12 @@ class ScopedBackend:
         view = self.state(headers)
         found = [row for row in view['resources'] + view['relations']
                  if all(term in normalize(json.dumps(row['data'], ensure_ascii=False)) for term in terms)]
+        if self.reviewed_knowledge is not None:
+            matches = self.reviewed_knowledge.records(headers, query)
+            allowed = {row['id']: row for row in view['resources'] if row['kind'] == 'knowledge'}
+            if any(allowed.get(row['id']) != row for row in matches) or self.state(headers) != view:
+                raise ValueError('Knowledge changed during global search; refresh the view')
+            found = list({row['id']: row for row in found + matches}.values())
         return {'results': found[:100], 'partial': len(found) > 100,
                 **{key: view[key] for key in ('organization', 'scope_id', 'policy_revision', 'view_revision')},
                 'scope': 'current identified resource projection', 'complete_corpus': False}

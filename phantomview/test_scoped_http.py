@@ -113,6 +113,27 @@ class ScopedHTTPTests(ProjectionFixture):
         self.assertEqual(self.request('GET', route, cookie='phantomview=' + cookie)[0], 401)
         forbidden.assert_not_called()
 
+    def test_backend_bound_knowledge_is_listed_searched_and_opened_through_current_routes(self):
+        from reviewed_knowledge import ReviewedKnowledge
+        from scoped_backend import ScopedBackend
+        from test_reviewed_knowledge import knowledge_fixture
+        source = knowledge_fixture(self.org)
+        reader = ReviewedKnowledge(self.gate, lambda: source['bundle'], lambda: self.org,
+                                   lambda: source['snapshot'], lambda ident: source['raw'])
+        self.server.scoped_backend = ScopedBackend(self.gate, lambda: self.catalog, self.load,
+                                                   reviewed_knowledge=reader)
+        status, view = self.request('GET', '/api/state')
+        self.assertEqual(status, 200)
+        self.assertEqual(view['counts']['knowledge'], 1)
+        self.assertNotIn('Reviewed field procedures.', json.dumps(view))
+        status, result = self.request('POST', '/api/search', {'query': 'field'})
+        self.assertEqual(status, 200)
+        self.assertEqual([row['id'] for row in result['results']], [source['id']])
+        route = '/api/reviewed-knowledge/' + source['id']
+        self.assertEqual(self.request('GET', route)[1]['content'], 'Reviewed field procedures.')
+        self.server.reviewed_knowledge = object()
+        self.assertEqual(self.request('GET', route)[0], 403)
+
     def test_rejected_small_post_bodies_return_denial_without_opening_sources(self):
         for _ in range(12):
             with self.subTest(attempt=_):

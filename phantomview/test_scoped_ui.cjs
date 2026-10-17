@@ -81,3 +81,20 @@ test('projection bodies are detached and graph limits exclude out-of-view endpoi
   assert.equal(model.resources[0].data.title,'River partner');assert.deepEqual([...model.impact(a,1).nodes],[a]);
   assert.equal(model.impact(a,1).edges.size,0);
 });
+
+test('reviewed knowledge cards open the bounded note endpoint and retain plain text',()=>{
+  const row={id:a,kind:'knowledge',data:{title:'Handbook',actor:'coordinator',source:'reviewed-knowledge',payload_sha256:b}};
+  const note={id:a,title:'Handbook',actor:'coordinator',payload_sha256:b,trust:'untrusted',format:'markdown',excerpt_only:false,
+    content:'<img src=x onerror=alert(1)>\n# Untrusted Markdown'};
+  assert.equal(ScopedModel.detailPath(row),'/api/reviewed-knowledge/'+a);
+  assert.equal(ScopedModel.detailText(row,note),note.content);
+  assert.equal(ScopedModel.detailPath(fixture().resources[0]),'/api/resource/'+a);
+});
+
+test('note details reject stale bytes, wrong identity and incomplete or trusted content',()=>{
+  const row={id:a,kind:'knowledge',data:{title:'Handbook',actor:'coordinator',source:'reviewed-knowledge',payload_sha256:b}};
+  const note={id:a,title:'Handbook',actor:'coordinator',payload_sha256:b,trust:'untrusted',format:'markdown',excerpt_only:false,content:'Text'};
+  for(const change of [{id:c},{actor:'other'},{title:'Other note'},{payload_sha256:c},{trust:'trusted'},
+    {format:'html'},{excerpt_only:true},{content:null},{content:'x'.repeat(262145)}])
+    assert.throws(()=>ScopedModel.detailText(row,{...note,...change}));
+});
