@@ -15,7 +15,7 @@ test('project menus contain only visible kinds and visible counts ignore global 
 
 function navigation(data){return {schema_version:1,api_version:1,organization:data.organization,scope_id:data.scope_id,
   policy_revision:data.policy_revision,view_revision:data.view_revision,
-  assistant:{persona:null,eligible:false,source:'runtime-default'},
+  assistant:{persona:null,eligible:false,source:'session-issuer'},
   core:[{id:'core:partner',kind:'partner',label:'Partners',view:'table',count:1}],
   modules:[{id:'project-management',label:'Project management',assistant:{persona:'project-guide',eligible:true,source:'module'},
     sections:[{id:'project-management:partners',kind:'partner',label:'Project partners',view:'cards',count:1}]}]};}
@@ -27,6 +27,16 @@ test('server navigation preserves core and module sections with distinct local a
   assert.equal(model.assistant('project-management:partners').persona,'project-guide');
   assert.equal(model.assistant('core:partner').eligible,false);
   data.navigation.modules[0].label='Changed';assert.equal(model.sections()[1].module,'Project management');
+});
+
+test('issuer navigation accepts only its matching operational transport',()=>{
+  const data=fixture();data.navigation=navigation(data);
+  data.navigation.assistant={persona:'coordinator',eligible:true,source:'session-issuer'};
+  const model=new ScopedModel(data),info={available:true,persona:'coordinator',scope_id:data.scope_id};
+  assert.equal(model.assistant('core:partner').source,'session-issuer');
+  assert.equal(model.acceptsAssistant(info,'core:partner'),true);
+  assert.equal(model.acceptsAssistant({...info,persona:'administrator'},'core:partner'),false);
+  assert.equal(model.acceptsAssistant({...info,available:false},'core:partner'),false);
 });
 
 test('stale, hidden-kind, duplicate and executable navigation cannot be rendered',()=>{

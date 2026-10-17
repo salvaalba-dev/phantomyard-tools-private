@@ -36,7 +36,7 @@ class ViewerModuleTests(unittest.TestCase):
         result = self.navigation()
         self.assertEqual([row['id'] for row in result['core']], ['core:partner', 'core:task'])
         self.assertEqual(result['modules'], [])
-        self.assertEqual(result['assistant'], {'persona': 'administrator', 'eligible': True, 'source': 'runtime-default'})
+        self.assertEqual(result['assistant'], {'persona': 'administrator', 'eligible': True, 'source': 'session-issuer'})
         self.assertNotIn('PRIVATE_SENTINEL', str(result))
 
     def test_optional_module_adds_namespaced_sections_without_replacing_the_core(self):
@@ -71,12 +71,32 @@ class ViewerModuleTests(unittest.TestCase):
             projection=projection, default_report=self.report, assistant_authorized=lambda *args: True)
         self.assertFalse(result['modules'][0]['assistant']['eligible'])
 
-    def test_unknown_persona_or_unverified_runtime_default_is_rejected(self):
+    def test_unknown_module_persona_is_rejected_but_observation_cannot_disable_issuer(self):
         with self.assertRaises(ValueError):
             self.navigation([projects() | {'assistant': {'persona': 'unknown'}}])
         self.report['default_persona']['served'] = False
         result = self.navigation()
-        self.assertFalse(result['assistant']['eligible'])
+        self.assertTrue(result['assistant']['eligible'])
+        self.assertEqual(result['assistant']['persona'], self.recipient.persona)
+        self.assertEqual(len(result['core']), 2)
+
+    def test_changed_or_missing_host_default_cannot_redirect_issuer_or_inherited_module(self):
+        for report in (None, {}, {'default_persona': {'resolved': 'coordinator',
+                      'exists': True, 'served': True, 'provenance': 'config'}}):
+            with self.subTest(report=report):
+                result = ModuleRegistry([projects()]).navigation(
+                    directory=self.directory, recipient=self.recipient,
+                    projection=self.projection, default_report=report)
+                expected = {'persona': 'administrator', 'eligible': True, 'source': 'session-issuer'}
+                self.assertEqual(result['assistant'], expected)
+                self.assertEqual(result['modules'][0]['assistant'], expected)
+
+    def test_unavailable_issuer_route_never_falls_back_to_host_default(self):
+        self.report['default_persona']['resolved'] = 'coordinator'
+        result = self.navigation([projects()], assistant_authorized=lambda *args: False)
+        expected = {'persona': None, 'eligible': False, 'source': 'session-issuer'}
+        self.assertEqual(result['assistant'], expected)
+        self.assertEqual(result['modules'][0]['assistant'], expected)
         self.assertEqual(len(result['core']), 2)
 
     def test_module_scope_or_missing_data_never_adds_empty_or_foreign_menus(self):

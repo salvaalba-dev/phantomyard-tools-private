@@ -67,9 +67,17 @@ class NativeTurnContextTests(ProjectionFixture):
             NativeTurnContext(backend, self.headers, section_id='project-management:missing')
 
     def test_unavailable_or_unauthorized_assistant_cannot_create_a_native_context(self):
-        self.report['default_persona']['served'] = False
-        with self.assertRaises(PermissionError):
-            NativeTurnContext(self.backend, self.headers)
+        workspace = self.backend.workspace
+
+        def denied(headers):
+            view = workspace(headers)
+            view['navigation']['assistant'] = {
+                'persona': None, 'eligible': False, 'source': 'session-issuer'}
+            return view
+
+        with patch.object(self.backend, 'workspace', side_effect=denied):
+            with self.assertRaises(PermissionError):
+                NativeTurnContext(self.backend, self.headers)
         with self.assertRaises(ValueError):
             NativeTurnContext(self.backend, {'Cookie': 'phantomview=forged'})
 
@@ -101,13 +109,12 @@ class NativeTurnContextTests(ProjectionFixture):
             with self.assertRaises(ValueError):
                 context.release('Old recipient answer')
 
-    def test_changed_default_or_resource_invalidates_the_turn(self):
+    def test_host_default_cannot_redirect_turn_but_changed_resource_invalidates_it(self):
         context = NativeTurnContext(self.backend, self.headers)
+        self.report['default_persona']['resolved'] = 'coordinator'
+        self.assertEqual(context.metadata()['persona'], 'administrator')
         self.report['default_persona']['served'] = False
-        with self.assertRaises(ValueError):
-            context.release('Old answer')
-        self.report['default_persona']['served'] = True
-        context = NativeTurnContext(self.backend, self.headers)
+        self.assertEqual(context.release('Same issuer answer')['persona'], 'administrator')
         self.replace(self.public, {'title': 'Revised public profile'})
         with self.assertRaises(ValueError):
             context.read(self.public)

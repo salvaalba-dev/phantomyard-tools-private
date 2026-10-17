@@ -95,17 +95,21 @@ The existing opt-in scoped backend now exposes `workspace(headers)` through its
 state and sync HTTP routes. It compiles standard navigation and installed module
 sections over the same authorized projection. Internal `state(headers)` remains
 unchanged for search, review and consultation evidence. No raw catalog is exposed.
-Construct the backend with operator-owned `modules` manifests and an optional
-`default_report_loader` callable that reads the existing runtime observation.
-`runtime_default.RuntimeDefault` adapts the installation's existing
-`default_persona_file` observation, written by `assistant.py`, to this callable.
-It rereads the file on every workspace refresh, requires a matching organization,
-valid provenance and a fresh timezone-aware timestamp, and returns only the
-minimal persona selection. It never reads credentials or the native memory store.
-The default freshness bound is 30 minutes; operators can align it with the existing
-observation refresh interval, up to one day. No new timer or service is installed.
-Missing or unavailable observations disable assistant selection without hiding
-authorized records. The ordinary live reader is unchanged.
+Construct the backend with operator-owned `modules` manifests. Identified navigation
+selects the validated session issuer for the core and any module without an explicit
+assistant override. A changed, absent or stale runtime-default observation cannot
+redirect that choice. Explicit module routes still require PhantomOrg scope and
+routing eligibility; a denied route never falls back to a host default.
+
+The optional `default_report_loader` and registry `default_report` argument remain
+accepted for compatibility with existing discovery integrations. Observations are
+not authority for identified assistant selection. `RuntimeDefault` remains useful
+for installation discovery before an identified session exists.
+
+Navigation eligibility is policy metadata, not a claim that a native transport is
+running. The client also requires an available matching persona/scope transport;
+the server must independently validate routing on dispatch. This change does not
+connect a native assistant, enable multi-issuer issuance or alter the live reader.
 
 The scoped shell validates navigation against the current scope and revisions,
 renders namespaced standard/module menus, and supports compact rows, cards,

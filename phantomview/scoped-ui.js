@@ -35,7 +35,7 @@ class ScopedModel {
         ||nav.view_revision!==this.view.view_revision||!Array.isArray(nav.core)||!Array.isArray(nav.modules)
         ||nav.modules.length>24)throw Error('Current navigation required');
     const route=value=>{
-      if(!value||typeof value.eligible!=='boolean'||!['runtime-default','module'].includes(value.source)
+      if(!value||typeof value.eligible!=='boolean'||!['session-issuer','runtime-default','module'].includes(value.source)
           ||(value.eligible?(typeof value.persona!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/.test(value.persona)):value.persona!==null))
         throw Error('Invalid assistant route');
     };

@@ -65,7 +65,8 @@ describes the installed version. In particular, keep actual channel/JEV semantic
 
 Current implementation limits must remain explicit: `IdentifiedGate` is bound to
 one configured issuer actor, the existing scoped consultation queue routes through
-the session persona, and core module navigation still resolves a runtime default.
+the session persona, and core module navigation now selects the validated session issuer. This route
+metadata expresses policy eligibility, not proof of an available native transport.
 Supporting several issuing personas in one viewer requires explicit trusted runtime
 route registration and issuer-bound lookup, not overwriting a global actor/default
 or accepting arbitrary persona/runtime values from the browser.
@@ -181,7 +182,10 @@ counts, search and document details; switching sections changes presentation onl
 
 ### P4. Connect the existing issuing persona
 
-First correct the current runtime-default selection to prefer the identified issuer.
+Implemented foundation: core and inheriting-module navigation select the validated
+session issuer even when the host default changes or its observation is unavailable.
+Explicit module overrides still require current authorization; denied routes never
+fall back to the host default. This does not activate a native transport.
 Bind each configured runtime and persona explicitly; no browser-provided command,
 filesystem path, native conversation ID or global persona switch is authoritative.
 

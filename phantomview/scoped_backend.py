@@ -132,7 +132,7 @@ class ScopedBackend:
         try:
             report = self.default_report_loader() if self.default_report_loader else {}
         except (OSError, ValueError):
-            report = {}  # Runtime observation failure disables chat, not the viewer.
+            report = {}  # Optional discovery failure cannot replace the identified issuer.
         navigation = self.modules.navigation(directory=directory, recipient=recipient,
                                              projection=view, default_report=report)
         current, _ = self.gate.identified_scope(headers)

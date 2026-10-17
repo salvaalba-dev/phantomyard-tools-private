@@ -6,7 +6,6 @@ Call only with server-owned PhantomOrg/session and current projection objects.
 import copy
 import re
 
-from assistant import safe_default
 from channel_identity import HumanDirectory
 
 LABELS = {'organization': 'Organization', 'department': 'Departments', 'role': 'Roles',
@@ -66,12 +65,14 @@ class ModuleRegistry:
             raise ValueError(FAILURE)
         self._modules = checked
 
-    def navigation(self, *, directory, recipient, projection, default_report, assistant_authorized=None):
+    def navigation(self, *, directory, recipient, projection, default_report=None, assistant_authorized=None):
         """Describe visible menus; never use menu presence as authorization.
 
         Projection comes from the existing server-side backend, not request JSON.
         A server-owned optional adapter predicate may authorize a persona route;
         it cannot add data grants. No transport is called by this method.
+        The identified issuer owns the core route. default_report is retained
+        for call compatibility only and never influences identified navigation.
         """
         if not isinstance(directory, HumanDirectory):
             raise ValueError('Current PhantomOrg authority is required')
@@ -98,12 +99,7 @@ class ModuleRegistry:
             seen.add(row['id'])
             counts[row['kind']] = counts.get(row['kind'], 0) + 1
         actors = directory.scope.policy['personas']
-        try:
-            default = safe_default(default_report)['persona']
-        except ValueError:
-            default = None
-        if default not in actors:
-            default = None  # An offline assistant must not disable the viewer.
+        issuer = recipient.persona
         if any('assistant' in module and module['assistant']['persona'] not in actors for module in self._modules):
             raise ValueError('Module assistant must exist in PhantomOrg')
 
@@ -125,7 +121,7 @@ class ModuleRegistry:
         result = {'schema_version': 1, 'api_version': 1, 'organization': recipient.organization,
                   'scope_id': recipient.scope_id, 'policy_revision': recipient.policy_revision,
                   'view_revision': projection['view_revision'], 'core': core,
-                  'assistant': assistant(default, 'runtime-default'), 'modules': []}
+                  'assistant': assistant(issuer, 'session-issuer'), 'modules': []}
         for module in self._modules:
             if scope['kind'] not in module['scope_kinds']:
                 continue
@@ -133,9 +129,9 @@ class ModuleRegistry:
                         for row in module['sections'] if counts.get(row['kind'])]
             if not sections:
                 continue
-            selected = module.get('assistant', {}).get('persona', default)
+            selected = module.get('assistant', {}).get('persona', issuer)
             result['modules'].append({'id': module['id'], 'version': module['version'],
                 'label': module['label'], 'sections': sections,
-                'assistant': assistant(selected, 'module' if 'assistant' in module else 'runtime-default')})
+                'assistant': assistant(selected, 'module' if 'assistant' in module else 'session-issuer')})
         directory.validate(recipient)
         return result

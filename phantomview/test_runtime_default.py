@@ -81,7 +81,7 @@ class RuntimeDefaultTests(unittest.TestCase):
 
 
 class RuntimeDefaultIntegrationTests(ProjectionFixture):
-    def test_existing_file_selects_core_assistant_and_expiry_only_disables_chat(self):
+    def test_observation_expiry_cannot_disable_identified_issuer_selection(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'default.json'
             now = datetime.now(timezone.utc)
@@ -94,7 +94,9 @@ class RuntimeDefaultIntegrationTests(ProjectionFixture):
             self.assertTrue(first['navigation']['assistant']['eligible'])
             reader.clock = lambda: now + timedelta(seconds=1801)
             second = backend.workspace(self.headers)
-            self.assertFalse(second['navigation']['assistant']['eligible'])
+            self.assertTrue(second['navigation']['assistant']['eligible'])
+            self.assertEqual(first['navigation']['assistant'], second['navigation']['assistant'])
+            self.assertEqual(second['navigation']['assistant']['source'], 'session-issuer')
             self.assertEqual(first['resources'], second['resources'])
             self.assertEqual(first['view_revision'], second['view_revision'])
 

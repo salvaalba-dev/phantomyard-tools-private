@@ -65,12 +65,13 @@ class ProjectionFixture(unittest.TestCase):
 
 
 class ScopedBackendTests(ProjectionFixture):
-    def test_workspace_menus_use_filtered_records_and_do_not_require_an_assistant(self):
+    def test_workspace_menus_use_filtered_records_and_bind_issuer_without_observation(self):
         view = self.backend.workspace(self.headers)
         navigation = view.pop('navigation')
         self.assertEqual(view, self.backend.state(self.headers))
         self.assertEqual({row['kind'] for row in navigation['core']}, {'persona', 'partner'})
-        self.assertFalse(navigation['assistant']['eligible'])
+        self.assertTrue(navigation['assistant']['eligible'])
+        self.assertEqual(navigation['assistant']['source'], 'session-issuer')
         self.assertNotIn(self.hidden, json.dumps(navigation))
 
     def test_workspace_installed_module_is_scope_bound_and_refreshes_visible_counts(self):
@@ -101,7 +102,8 @@ class ScopedBackendTests(ProjectionFixture):
         backend = ScopedBackend(self.gate, lambda: self.catalog, self.load, default_report_loader=unavailable)
         view = backend.workspace(self.headers)
         self.assertTrue(view['resources'])
-        self.assertFalse(view['navigation']['assistant']['eligible'])
+        self.assertTrue(view['navigation']['assistant']['eligible'])
+        self.assertEqual(view['navigation']['assistant']['persona'], 'administrator')
 
     def test_state_authorizes_before_reads_and_counts_only_visible_nodes(self):
         view = self.backend.state(self.headers)
