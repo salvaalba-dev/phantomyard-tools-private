@@ -174,6 +174,13 @@ Linux account tests are separate from deployment acceptance.
 
 ### P2. Align PhantomOrg declarations and resource metadata
 
+Installed-path review: [AU compatibility evidence](AU_PHANTOMORG_COMPATIBILITY.md)
+identifies a custom YAML projector rather than a confirmed matching standard
+PhantomOrg package. Live counterpart declarations are absent and category-zero
+ownership does not resolve to a registered human. Prepare an explicit source
+preview for this actual path; do not apply the package patch to the runtime or
+install another organization engine merely to make the patch applicable.
+
 Prepared source foundation: [minimal counterpart proposal](PHANTOMORG_COUNTERPART_PROPOSAL.md)
 adds only the optional explicit human-to-actor relationship to a pinned disposable
 PhantomOrg tree. Schema/model/reference/registry and existing viewer integration
@@ -243,6 +250,13 @@ Session ownership, revocation and native outcomes are tested end to end. No clai
 of a separately sandboxed native knowledge subset is made.
 
 ### P5. Add explicit optional module lifecycle
+
+The [AU role projection review](AU_PROJECTION_ADAPTER_REVIEW.md) identifies a
+possible reusable briefing adapter with installation-owned supplemental metadata.
+Preserve its useful local behavior. Treat source mapping, optional KB publication
+and declarative UI sections as separate contracts; current navigation manifests
+do not execute generators or grant data access. No adapter implementation or AU
+projector replacement is activated by this review.
 
 Provide validated operator installation/removal/version checks for declarative
 modules. Keep core menus intact and namespace module sections. Modules cannot
