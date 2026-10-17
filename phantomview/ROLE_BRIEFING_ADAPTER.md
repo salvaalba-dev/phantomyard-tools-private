@@ -1,7 +1,9 @@
 # Optional role briefing adapter foundation
 
-Status: private deterministic preview implementation. No AU deployment, live note
-write, model call, viewer route, background service or module activation.
+Status: private deterministic preview implementation. The separate optional
+[local note publisher](BRIEFING_PUBLICATION.md) is now available for trusted
+operator use. No AU deployment, live note write, model call, viewer route,
+background service or module activation.
 
 `role_briefing.prepare_briefing(organization, persona, supplemental=None)` prepares
 one actor's structured briefing from an explicit PhantomOrg mapping. It reuses
@@ -73,8 +75,9 @@ useful AU behavior before any replacement is considered.
 
 ## Next increments
 
-1. Optional KB renderer/publisher with strict owned-marker handling, manual-content
-   preservation, explicit contained targets, atomic writes and unchanged-input no-op.
+1. Implemented separately: [optional local note publication](BRIEFING_PUBLICATION.md)
+   with owned-marker handling, exact manual-content preservation, explicit targets,
+   per-note atomic replacement and unchanged-input no-op. Live binding remains pending.
 2. Authorized record adapter using existing PhantomOrg classifications, dependency
    checks and viewer publication boundaries. Unresolved references cannot be exposed.
 3. Additive declarative viewer sections over those records. Existing module

@@ -254,8 +254,10 @@ of a separately sandboxed native knowledge subset is made.
 Implemented foundation: the [optional role briefing adapter](ROLE_BRIEFING_ADAPTER.md)
 prepares deterministic private structured previews using PhantomOrg validation
 and access resolution. It retains both role/actor exception origins and scoped
-supplemental references. KB writing, authorized viewer publication, legacy-sidecar
-migration and live AU compatibility remain separate pending increments.
+supplemental references. The separate [local note publisher](BRIEFING_PUBLICATION.md)
+now supplies explicit target preflight, owned blocks, manual-content preservation,
+unchanged-input no-op and per-note atomic writes. Authorized viewer publication,
+legacy-sidecar migration and live AU compatibility remain pending.
 
 The [AU role projection review](AU_PROJECTION_ADAPTER_REVIEW.md) identifies a
 possible reusable briefing adapter with installation-owned supplemental metadata.
