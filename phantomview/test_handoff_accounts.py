@@ -3,6 +3,7 @@
 Run only in an ephemeral CI runner as root with PHANTOMVIEW_ACCOUNT_TESTS=1.
 No users, groups, services or production configuration are created or changed.
 """
+import io
 import json
 from http.client import HTTPConnection
 from http.cookies import SimpleCookie
@@ -20,6 +21,7 @@ import unittest
 
 from handoff_client import ReaderPolicy, request_access
 from native_access_command import DirectMessage, NativeAccessCommand, Outcome
+from native_link_client import run as run_native_link_client
 from reader_handoff import ReaderHandoff
 from scoped_backend import ScopedBackend
 from scoped_http import dispatch as scoped_dispatch
@@ -191,6 +193,39 @@ class CrossAccountTests(unittest.TestCase):
                                                      'scope': 'river-project', 'replay_rejected': True,
                                                      'socket_removed': True,
                                                      'scoped_counts': {'partner': 1, 'relationship': 0}}})
+
+    def test_one_shot_native_client_preserves_real_peer_and_recipient_binding(self):
+        def reader():
+            gate = self.fixture.gate
+            with bind_listener(self.path, ISSUER) as listener:
+                listener.settimeout(6)
+                os.write(self.ready_write, b'1')
+                connection, _ = listener.accept()
+                accepted = serve_connection(connection, gate, PeerPolicy(ISSUER, frozenset({MODEL})))
+            self.assertEqual(len(gate.recipient_links), 1)
+            recipient = next(iter(gate.recipient_links.values()))[0]
+            return {'accepted': accepted, 'human': recipient.human, 'scope': recipient.scope_id}
+
+        def invoke(uid):
+            document = {'schema_version': 1, 'authorization': self.authorization,
+                'channel': 'telegram', 'sender': '101', 'direct': True,
+                'principal_authenticated': True, 'scope_id': 'river-project'}
+            outgoing = io.StringIO()
+            status = run_native_link_client(['--socket', self.path, '--issuer-uid', str(uid),
+                '--reader-uid', str(READER), '--model-uid', str(MODEL), '--origin', self.fixture.gate.origin,
+                '--channel', 'telegram', '--scope-id', 'river-project'],
+                io.BytesIO(json.dumps(document).encode()), outgoing)
+            response = json.loads(outgoing.getvalue())
+            return {'status': status, 'has_link': isinstance(response.get('link'), str)}
+
+        server = self.start(reader)
+        attacker = finish(spawn(MODEL, lambda: invoke(MODEL)))
+        native = finish(spawn(ISSUER, lambda: invoke(ISSUER)))
+        result = finish(server)
+        self.assertEqual(attacker, {'ok': True, 'value': {'status': 1, 'has_link': False}})
+        self.assertEqual(native, {'ok': True, 'value': {'status': 0, 'has_link': True}})
+        self.assertEqual(result, {'ok': True, 'value': {
+            'accepted': True, 'human': 'owner', 'scope': 'river-project'}})
 
     def test_model_account_cannot_use_socket_even_with_valid_signing_event(self):
         def reader():

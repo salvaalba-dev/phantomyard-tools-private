@@ -166,6 +166,12 @@ handoff account checks remain unchanged. Native compatibility, safe callback
 embedding, signing/delivery and authoritative counterpart declarations are still
 required before P1 acceptance.
 
+The [native link callback](NATIVE_LINK_CALLBACK.md) now supplies bounded one-shot
+client framing and original-sender delivery using the existing protected socket
+client. This does not provision a signer, authorize a shared model account, create
+another service or establish live AU compatibility. Callback lifecycle and real
+Linux account tests are separate from deployment acceptance.
+
 ### P2. Align PhantomOrg declarations and resource metadata
 
 Use existing organization, role/access, human and compiled-scope declarations.

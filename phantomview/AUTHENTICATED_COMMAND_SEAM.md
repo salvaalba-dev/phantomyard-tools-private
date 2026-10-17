@@ -46,6 +46,14 @@ make this callback available, and do not treat this source proposal as AU readin
 The existing signed-link design is untouched. No human login or second signature
 is added by the seam. No credential is copied and no global persona is switched.
 
+## Reader callback integration
+
+The private [native link callback](NATIVE_LINK_CALLBACK.md) now connects the seam
+to the unchanged protected reader client through a bounded one-shot process and
+original-sender direct delivery. It is an inactive embedding library, not signer
+discovery or live AU activation. Shared-account and PhantomOrg deployment gaps
+remain explicit; existing kernel peer policies are unchanged.
+
 ## Exact-source preparation
 
 `authenticated_command_patch.py` targets the reviewed native source revision
