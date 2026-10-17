@@ -207,6 +207,13 @@ the identified backend rather than publishing the private registry in the index.
 No live source, projector or service has been modified. Native handoff, reviewed
 content and selected-installation activation remain pending.
 
+The optional [raw-source authority loader](ORGANIZATION_AUTHORITY.md) now binds
+the existing identified gate to one operator-selected current document. Real
+signed component tests cover file-backed recipients, filtered workspace access
+and denial after source/permission changes. They use synthetic trusted channel
+contexts, not an installed native callback. AU source permissions, declaration
+approval, protected handoff and live activation remain pending.
+
 Reuse approved source classifications and folder-rule drafts for viewer resources.
 Unknown/private sources are not guessed public. Copies, summaries and linked
 resources retain applicable restrictions. Approval remains separate from discovery.
