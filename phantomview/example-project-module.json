@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "api_version": 1,
+  "id": "project-management",
+  "version": "1.0.0",
+  "label": "Project management",
+  "scope_kinds": ["project"],
+  "sections": [
+    {"id": "partners", "label": "Partners", "kind": "partner", "view": "cards"},
+    {"id": "tasks", "label": "Assigned tasks", "kind": "task", "view": "table"}
+  ]
+}

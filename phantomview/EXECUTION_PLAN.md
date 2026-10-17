@@ -1,5 +1,11 @@
 # PhantomView scope aware execution plan
 
+The [standard viewer/module architecture](VIEWER_ARCHITECTURE.md) is the current
+direction and takes precedence over earlier ordinary-worker replacement and
+initial manual-personalization proposals below. Initial navigation is standard
+from PhantomOrg; optional modules extend it. The assistant delegates to an
+existing persona rather than requiring a new identity, service or memory store.
+
 PhantomView will provide one reusable application with identity-bound sessions,
 server-enforced resource permissions and interfaces adapted to the user's scope.
 Organization and project views share the same access, search, document, assistant

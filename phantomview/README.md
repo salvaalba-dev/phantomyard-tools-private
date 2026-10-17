@@ -1,5 +1,11 @@
 # PhantomView
 
+Current direction: a standard PhantomOrg-based viewer with optional declarative
+modules and the existing runtime's default persona as assistant. See the
+[viewer architecture](VIEWER_ARCHITECTURE.md) for the stable core, module contract,
+module-specific assistant selection and implementation boundaries. The native
+ordinary-worker experiments are not standard installation prerequisites.
+
 A read-only visual observatory for Phantomyard organizations. It combines declared
 organization structure with bounded filesystem and service observations, preserving
 source evidence and distinguishing declarations from operational checks.
