@@ -16,11 +16,13 @@ from bounded_process import run
 from conversation_forwarding import AccountPolicy, MAX_TEXT, WorkerInbox
 from worker_environment import MODEL_CREDENTIALS, environment as model_environment
 from worker_store import load_credentials
+from worker_workspace import WorkerWorkspace
 
 
 class ConversationProcess:
     """One fixed-persona execution slot; never accepts command/config from a frame."""
-    def __init__(self, *, inbox, executable, sha256, working_dir, environment, credential_file=None):
+    def __init__(self, *, inbox, executable, sha256, working_dir, environment, credential_file=None,
+                 workspace=None):
         if not isinstance(inbox, WorkerInbox) or not isinstance(inbox.policy, AccountPolicy):
             raise ValueError('A fixed authenticated worker inbox is required')
         if (not isinstance(sha256, str) or len(sha256) != 64
@@ -36,6 +38,15 @@ class ConversationProcess:
         # No ambient issuer/channel environment is inherited.
         fixed = {'PHANTOMVIEW_WORKER_PERSONA': inbox.persona,
                  'PHANTOMVIEW_WORKER_UID': str(inbox.policy.worker_uid)}
+        self.workspace = workspace
+        if workspace is not None:
+            if (not isinstance(workspace, WorkerWorkspace) or workspace.persona != inbox.persona
+                    or workspace.worker_uid != inbox.policy.worker_uid or str(working_dir) != workspace.home):
+                raise ValueError('A matching fixed worker workspace is required')
+            locations = workspace.launch_environment()
+            if any(key in environment and environment[key] != value for key, value in locations.items()):
+                raise ValueError('Worker workspace locations cannot be overridden')
+            environment = environment | locations
         if any(key in environment and environment[key] != value for key, value in fixed.items()):
             raise ValueError('Worker environment cannot override the fixed persona/account')
         self.environment = model_environment(environment.copy() | fixed)
@@ -57,6 +68,8 @@ class ConversationProcess:
 
     def verify(self):
         self.inbox.policy.check('worker')
+        if self.workspace is not None:
+            self.workspace.verify()
         binary, working = Path(self.executable), Path(self.working_dir)
         for path in (binary, working):
             if not path.is_absolute() or path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
@@ -111,7 +124,8 @@ class ConversationProcess:
                 marker = HeldMarker()
                 raw = run([self.executable, '__conversation-worker'], payload,
                           cwd=self.working_dir, deadline=job.deadline, cancelled=cancelled,
-                          stderr_sink=marker.feed, environment=self.launch_environment(), output_limit=MAX_TEXT)
+                          stderr_sink=marker.feed, environment=self.launch_environment(), output_limit=MAX_TEXT,
+                          private_files=self.workspace is not None)
                 if cancelled():
                     return 'cancelled'
                 if marker.seen:

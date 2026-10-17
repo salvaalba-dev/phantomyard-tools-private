@@ -13,6 +13,7 @@ from unittest.mock import patch
 from conversation_execution import ConversationProcess
 from conversation_forwarding import WorkerInbox, WorkerJob
 from test_conversation_forwarding import Connection, POLICY, ROUTE
+from test_worker_workspace import workspace
 
 
 class ConversationExecutionTests(unittest.TestCase):
@@ -125,6 +126,27 @@ class ConversationExecutionTests(unittest.TestCase):
             ConversationProcess(inbox=self.inbox, executable='/protected/native', sha256='a' * 64,
                                 working_dir='/protected/work', credential_file='/protected/model.json',
                                 environment={'PHANTOMBOT_PI_API_KEY': 'INLINE_SENTINEL'})
+
+    def test_fixed_workspace_binds_locations_and_private_child_files(self):
+        plan = workspace(worker_uid=POLICY.worker_uid)
+        with patch.object(ConversationProcess, 'verify'):
+            self.executor = ConversationProcess(inbox=self.inbox, executable='/protected/native', sha256='a' * 64,
+                working_dir=plan.home, environment={}, workspace=plan)
+        outcome, run, _ = self.serve()
+        self.assertEqual(outcome, 'complete')
+        self.assertTrue(run.call_args.kwargs['private_files'])
+        self.assertEqual(run.call_args.kwargs['environment']['HOME'], plan.home)
+        self.assertEqual(run.call_args.kwargs['environment']['PHANTOMBOT_PERSONAS_DIR'], plan.root + '/profiles')
+
+    def test_workspace_mismatch_and_location_overrides_fail_before_verification(self):
+        for changes in ({'working_dir': '/other'}, {'environment': {'HOME': '/issuer'}},
+                        {'workspace': workspace(persona='other')}, {'workspace': object()}):
+            plan = workspace(worker_uid=POLICY.worker_uid)
+            args = {'inbox': self.inbox, 'executable': '/protected/native', 'sha256': 'a' * 64,
+                    'working_dir': plan.home, 'environment': {}, 'workspace': plan} | changes
+            with patch.object(ConversationProcess, 'verify') as verify, self.assertRaises(ValueError):
+                ConversationProcess(**args)
+            verify.assert_not_called()
 
     @unittest.skipUnless(sys.platform == 'linux', 'Real Unix disconnect and process groups required')
     def test_real_disconnect_stops_ignoring_native_fixture_and_releases_slot(self):

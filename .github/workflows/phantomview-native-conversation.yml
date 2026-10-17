@@ -8,6 +8,8 @@ on:
       - 'phantomview/test_native_conversation_patch.py'
       - 'phantomview/native_host_review.py'
       - 'phantomview/native-host-review.json'
+      - 'phantomview/worker_workspace.py'
+      - 'phantomview/worker_environment.py'
       - '.github/workflows/phantomview-native-conversation.yml'
   pull_request:
     paths:
@@ -15,6 +17,8 @@ on:
       - 'phantomview/test_native_conversation_patch.py'
       - 'phantomview/native_host_review.py'
       - 'phantomview/native-host-review.json'
+      - 'phantomview/worker_workspace.py'
+      - 'phantomview/worker_environment.py'
       - '.github/workflows/phantomview-native-conversation.yml'
 
 permissions:
@@ -49,6 +53,25 @@ jobs:
       - name: Install locked native dependencies
         working-directory: native-source
         run: bun install --frozen-lockfile
+      - name: Prepare a synthetic dedicated configuration fixture
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, sys
+          sys.path.insert(0, 'phantomview')
+          from worker_workspace import WorkerWorkspace
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'phantomview-native-workspace'
+          root.mkdir()
+          plan = WorkerWorkspace(str(root), 'guide', os.getuid(), os.getgid(),
+              'openrouter', 'fixture/brain', 'typesafe', 'fixture/judge', {'BOOT.md': 'SELECTED_PROFILE_FIXTURE'})
+          for name in plan.directories():
+              (root / name).mkdir(parents=True, exist_ok=True)
+          for name, content in plan.files().items():
+              (root / name).write_bytes(content)
+          for name in ('profiles/guide', 'profiles'):
+              (root / name).chmod(0o550)
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('PHANTOMVIEW_WORKSPACE_FIXTURE=' + str(root) + '\n')
+          PY
       - name: Verify real screening, JEV, persona history and denial paths
         working-directory: native-source
         run: bun test tests/phantomview-conversation.test.ts tests/memory.test.ts tests/lib-threatJudge.test.ts

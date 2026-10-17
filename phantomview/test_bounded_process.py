@@ -34,6 +34,11 @@ class BoundedProcessTests(unittest.TestCase):
             self.execute('raise AssertionError()', cancelled=lambda: True, popen=popen)
         popen.assert_not_called()
 
+    def test_private_files_use_child_only_restrictive_umask(self):
+        source = ('import os,stat; open("memory.sqlite","w").close(); '
+                  'print(oct(stat.S_IMODE(os.stat("memory.sqlite").st_mode)))')
+        self.assertEqual(self.execute(source, private_files=True), b'0o600\n')
+
     def test_cancel_kills_ignoring_child_even_when_stdin_is_not_consumed(self):
         ready = self.root / 'ready'
         created = []

@@ -68,6 +68,10 @@ category or project scope is not widened by this ordinary conversation build.
 
 ## Credential and deployment prerequisites
 
+The optional [dedicated workspace](WORKER_WORKSPACE.md) now plans separate
+configuration, selected read-only profile text and private writable state. Its
+new memory starts empty; existing shared history is not imported automatically.
+
 The optional [dedicated model credential file](WORKER_STORE.md) supplies a fresh
 protected model-only selection per ordinary turn. Full worker configuration,
 native vault/auth fallback and filesystem exclusion remain activation gates.

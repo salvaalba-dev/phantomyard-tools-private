@@ -15,7 +15,7 @@ def _signal_group(process, sig):
 
 
 def run(command, payload, *, cwd, deadline, cancelled, stderr_sink=None,
-        environment=None, output_limit=64000, popen=subprocess.Popen):
+        environment=None, output_limit=64000, popen=subprocess.Popen, private_files=False):
     """Return bounded stdout, closing pipes and terminating the original group.
 
     The caller supplies trusted fixed argv/environment and a monotonic deadline.
@@ -23,7 +23,7 @@ def run(command, payload, *, cwd, deadline, cancelled, stderr_sink=None,
     this library is not a cgroup or privilege boundary.
     """
     if (sys.platform != 'linux' or not isinstance(payload, bytes) or len(payload) > 65536
-            or not callable(cancelled) or not 0 < output_limit <= 64000):
+            or not callable(cancelled) or not 0 < output_limit <= 64000 or type(private_files) is not bool):
         raise RuntimeError('Native process unavailable')
     if cancelled() or time.monotonic() >= deadline:
         raise RuntimeError('Native process stopped')
@@ -32,7 +32,8 @@ def run(command, payload, *, cwd, deadline, cancelled, stderr_sink=None,
     output, offset, exited = bytearray(), 0, None
     try:
         process = popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                        start_new_session=True, close_fds=True, cwd=cwd, env=environment)
+                        start_new_session=True, close_fds=True, cwd=cwd, env=environment,
+                        umask=0o077 if private_files else -1)
         for pipe, event in ((process.stdin, selectors.EVENT_WRITE),
                             (process.stdout, selectors.EVENT_READ), (process.stderr, selectors.EVENT_READ)):
             os.set_blocking(pipe.fileno(), False)

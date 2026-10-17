@@ -5,6 +5,7 @@ from pathlib import Path
 import select
 import socket
 import tempfile
+import time
 import unittest
 
 from conversation_forwarding import AccountPolicy, Forwarder, Route, WorkerInbox, _send
@@ -13,6 +14,8 @@ from test_conversation_forwarding import frame, request
 from test_handoff_accounts import ENABLED, ISSUER, MODEL, READER, finish, spawn
 from trusted_handoff import bind_listener
 from worker_store import encode_credentials, load_credentials
+from test_worker_workspace import workspace
+from bounded_process import run
 
 OTHER_MODEL = 29004
 POLICY = AccountPolicy(ISSUER, MODEL, READER, frozenset({MODEL, OTHER_MODEL}))
@@ -240,6 +243,76 @@ class ConversationAccountTests(unittest.TestCase):
         client = finish(spawn(ISSUER, self.issuer))
         self.assertEqual(finish(server), {'ok': True, 'value': 'complete'})
         self.assertEqual(client, {'ok': True, 'value': {'denied': False, 'bound': True, 'answer': True}})
+
+    def workspace_fixture(self):
+        directory = tempfile.TemporaryDirectory(prefix='phantomview-workspace-', dir='/run')
+        self.addCleanup(directory.cleanup)
+        plan = workspace(root=directory.name, worker_uid=MODEL, worker_gid=MODEL)
+        for name, (uid, gid, mode) in plan.directories().items():
+            path = Path(directory.name) / name
+            path.mkdir(parents=True, exist_ok=True)
+            os.chown(path, uid, gid)
+            path.chmod(mode)
+        for name, content in plan.files().items():
+            path = Path(directory.name) / name
+            path.write_bytes(content)
+            os.chown(path, 0, MODEL)
+            path.chmod(0o640)
+        return plan
+
+    def test_workspace_keeps_config_readonly_and_new_sqlite_memory_private_and_persistent(self):
+        plan = self.workspace_fixture()
+
+        def worker():
+            plan.verify()
+            try:
+                (Path(plan.root) / 'config/config.toml').write_text('changed')
+            except PermissionError:
+                pass
+            else:
+                return False
+            source = ('import os,sqlite3; p=os.path.join(os.environ["XDG_DATA_HOME"],"memory.sqlite"); '
+                'db=sqlite3.connect(p); db.execute("CREATE TABLE IF NOT EXISTS turns (text TEXT)"); '
+                'db.execute("INSERT INTO turns VALUES (?)",("Synthetic turn",)); db.commit(); '
+                'print(db.execute("SELECT count(*) FROM turns").fetchone()[0]); db.close()')
+            answers = [run(['/usr/bin/python3', '-c', source], b'', cwd=plan.home,
+                deadline=time.monotonic() + 5, cancelled=lambda: False,
+                environment=plan.launch_environment(), private_files=True) for _ in range(2)]
+            return answers == [b'1\n', b'2\n'] and plan.verify()
+
+        self.assertEqual(finish(spawn(MODEL, worker, gid=MODEL)), {'ok': True, 'value': True})
+        memory = Path(plan.root) / 'data/memory.sqlite'
+        for uid in (ISSUER, READER, OTHER_MODEL):
+            def denied():
+                try:
+                    memory.read_bytes()
+                except PermissionError:
+                    return True
+                return False
+            self.assertEqual(finish(spawn(uid, denied)), {'ok': True, 'value': True})
+
+    def test_workspace_refuses_extra_identity_config_changes_and_memory_links(self):
+        plan = self.workspace_fixture()
+
+        def refused():
+            try:
+                plan.verify()
+            except ValueError:
+                return True
+            return False
+
+        identity = Path(plan.root) / 'profiles/guide/identity.json'
+        identity.write_text('{}')
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
+        identity.unlink()
+        config = Path(plan.root) / 'config/config.toml'
+        original = config.read_bytes()
+        config.write_bytes(original.replace(b'example/model', b'otherxx/model'))
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
+        config.write_bytes(original)
+        redirected = Path(plan.root) / 'data/memory.sqlite'
+        redirected.symlink_to('/etc/passwd')
+        self.assertEqual(finish(spawn(MODEL, refused, gid=MODEL)), {'ok': True, 'value': True})
 
     def test_isolated_worker_process_receives_full_metadata_and_returns_bound_reply(self):
         binary, digest = self.process_fixture('import json,sys\njob=json.load(sys.stdin)\n'

@@ -37,6 +37,10 @@ supported for existing embeddings; choosing a protected file is explicit.
 
 ## Remaining configuration and account work
 
+The optional [workspace plan](WORKER_WORKSPACE.md) now supplies separate fixed
+configuration, profile and memory locations with Linux permission verification.
+It does not provision AU or migrate existing shared history.
+
 This reader separates a model credential file; it does not sanitize a worker's
 home, generate a complete native configuration or prevent the native runtime
 from reading another reachable store. Provision separate worker home, XDG,

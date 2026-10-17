@@ -3,6 +3,9 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { loadConfigForPersona } from "../src/config.ts";
+import { harnessSpawnEnv } from "../src/lib/vault.ts";
 import { parseConversation, runConversation } from "../src/lib/phantomviewConversation.ts";
 import type { Config } from "../src/config.ts";
 import type { Harness, HarnessChunk, HarnessRequest } from "../src/harnesses/types.ts";
@@ -133,4 +136,34 @@ test("configured native JEV hold remains active for a principal", async () => {
 test("canonical PhantomChat direct identity is accepted without an envelope identity override", () => {
   const hex = "a".repeat(64);
   expect(parseConversation(JSON.stringify(document({ channel: "phantomchat", sender: hex, conversation: hex })), "guide").sender).toBe(hex);
+});
+
+test("generated workspace resolves native config without borrowing an issuer vault or identity", async () => {
+  const fixture = process.env.PHANTOMVIEW_WORKSPACE_FIXTURE;
+  expect(fixture).toBeTruthy();
+  const values = { HOME: join(fixture!, "home"), XDG_CONFIG_HOME: join(fixture!, "config"),
+    XDG_DATA_HOME: join(fixture!, "data"), XDG_STATE_HOME: join(fixture!, "state"),
+    PHANTOMBOT_CONFIG: join(fixture!, "config", "config.toml"),
+    PHANTOMBOT_PERSONAS_DIR: join(fixture!, "profiles"),
+    PHANTOMBOT_PI_API_KEY: "MODEL_ONLY_FIXTURE", PHANTOMBOT_JEV_API_KEY: "SCREEN_ONLY_FIXTURE" };
+  const saved = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
+  try {
+    Object.assign(process.env, values);
+    const loaded = await loadConfigForPersona("guide");
+    expect(loaded.persona).toBe("guide");
+    expect(loaded.config.personasDir).toBe(join(fixture!, "profiles"));
+    expect(loaded.config.memoryDbPath).toBe(join(fixture!, "data", "memory.sqlite"));
+    expect(loaded.config.harnesses.chain).toEqual(["native"]);
+    expect(loaded.config.channels.telegram).toBeUndefined();
+    expect(loaded.config.jev?.judge.enabled).toBe(true);
+    expect(loaded.config.jev?.apiKey).toBe("SCREEN_ONLY_FIXTURE");
+    const spawned = await harnessSpawnEnv("guide");
+    expect(spawned.PHANTOMBOT_PI_API_KEY).toBe("MODEL_ONLY_FIXTURE");
+    for (const name of ["identity.json", "vault.sqlite", "phantomchat.json"])
+      expect(existsSync(join(fixture!, "profiles", "guide", name))).toBe(false);
+  } finally {
+    for (const key of Object.keys(values)) {
+      if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key];
+    }
+  }
 });
