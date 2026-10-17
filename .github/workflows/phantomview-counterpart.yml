@@ -1,0 +1,53 @@
+name: PhantomView minimal PhantomOrg counterpart
+on:
+  push:
+    paths:
+      - 'phantomview/**'
+      - '.github/workflows/phantomview-counterpart.yml'
+  pull_request:
+    paths:
+      - 'phantomview/**'
+      - '.github/workflows/phantomview-counterpart.yml'
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.11'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: phantomyard/phantomtools
+          ref: 5e007b4f2864e52ffef1360df86ed6b5267750cb
+          path: counterpart-source
+          persist-credentials: false
+      - run: python -m pip install -r phantomview/requirements.txt -e './counterpart-source/phantomorg[dev]'
+      - name: Prepare exact disposable source and reject reapplication
+        run: |
+          python phantomview/phantomorg_counterpart_patch.py counterpart-source
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'phantomview')
+          from phantomorg_counterpart_patch import patch
+          try:
+              patch('counterpart-source')
+          except ValueError:
+              pass
+          else:
+              raise SystemExit('Reapplication was not rejected')
+          from phantomorg.spec.model import Human
+          assert 'counterpart_persona' in Human.__dataclass_fields__
+          PY
+      - name: Full PhantomOrg regression suite
+        working-directory: counterpart-source/phantomorg
+        run: python -m pytest tests -q
+      - name: Minimal counterpart and viewer compatibility
+        run: |
+          python -m unittest discover -s phantomview -p 'test_phantomorg_counterpart*.py' -v
+          python -m unittest discover -s phantomview -p 'test_channel_identity.py'
+          python -m compileall -q phantomview counterpart-source/phantomorg/phantomorg
