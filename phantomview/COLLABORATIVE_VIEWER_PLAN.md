@@ -193,6 +193,12 @@ does not express them. Keep any necessary compatible extension in PhantomOrg;
 validate it against the installed package, not an old patch base. Preserve existing
 categories, exceptions and the independently assigned category-zero human.
 
+The [detached setup review helper](SETUP_DECLARATION_PROPOSAL.md) now prepares
+explicit counterpart/absolute-owner declarations, organization-only scope
+suggestions and inert exact-folder candidates from selected offline inputs.
+The AU draft preserves existing grants and exceptions; no live source is changed.
+Source compatibility, content review and trusted-channel integration remain pending.
+
 Reuse approved source classifications and folder-rule drafts for viewer resources.
 Unknown/private sources are not guessed public. Copies, summaries and linked
 resources retain applicable restrictions. Approval remains separate from discovery.

@@ -110,8 +110,12 @@ review, signatures, content hashes or per-human authorization test is claimed.
    the current collaborative viewer plan. Only then stage an AU-only reversible
    activation with exact artifacts, owned files and rollback.
 
-Steps 1-5 remain pending. This review did not convert the active viewer or authorize
-content merely because a human can currently receive a legacy temporary link.
+Follow-up, 2026-10-17: [detached setup review](SETUP_DECLARATION_PROPOSAL.md)
+has prepared the requested counterpart and independent-owner declarations, minimal
+organization-scope suggestions and an eligible-only exact-folder draft. Step 1 is
+prepared for review, not applied; project scopes remain unresolved. Steps 2-5 remain
+pending. This review did not convert the active viewer or authorize content merely
+because a human can currently receive a legacy temporary link.
 
 ## Validation and boundaries
 
