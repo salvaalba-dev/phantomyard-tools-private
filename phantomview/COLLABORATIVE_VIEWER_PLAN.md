@@ -126,6 +126,13 @@ already connected native assistant.
 
 ### P1. Verify the installed adapter and authenticated handoff
 
+Progress, 2026-10-17: the selected installation's read-only inspection is complete.
+See the [authenticated handoff review](P1_AUTHENTICATED_HANDOFF_REVIEW.md).
+The installed reader still uses the legacy gate; verified requesting-human context
+does not reach that reader through the inspected helper. CLI help compatibility
+is confirmed, but identified-link acceptance and native conversation remain
+pending. Next: authoritative counterpart mapping and the minimal trusted handoff.
+
 Read the selected installation's actual versions, public command surface, existing
 link issuer and channel integration. Document how proven sender context reaches
 the reader. The existing shared slash dispatcher was not found to expose a general
