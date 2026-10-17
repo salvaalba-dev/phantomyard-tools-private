@@ -8,6 +8,11 @@ the ordered implementation milestones. The runtime default is a setup fallback,
 not an override for an identified issuer. Historical worker/engine experiments and
 view-bound native ACL proposals are not standard installation prerequisites.
 
+The private [authenticated direct-command seam](AUTHENTICATED_COMMAND_SEAM.md)
+is an inactive source proposal for the missing pre-model handoff. It preserves
+native channel identity and receiving persona without embedding organizational
+policy in PhantomBot. It is not a live signer or protected reader connection.
+
 A read-only visual observatory for Phantomyard organizations. It combines declared
 organization structure with bounded filesystem and service observations, preserving
 source evidence and distinguishing declarations from operational checks.
@@ -238,7 +243,7 @@ channels are distinguished from failures. Local evidence never verifies a remote
 Every persona card, overview operation cell and profile carries a visible status flag:
 **Alive**, **Not running**, **Unverified**, or **Check expired**. Alive refers only to a
 recently observed active local service. An active service with diagnostic warnings or
-incomplete evidence shows **Alive · review** or **Alive · partial** in amber. Profiles
+incomplete evidence shows **Alive Â· review** or **Alive Â· partial** in amber. Profiles
 refresh their diagnostic flags with the snapshot, including expiry, while they remain open.
 Successful checks confirm the observed service/listeners/timers, not a real message reply,
 model inference or effective email/Drive/tool permissions. Changes in observation dates
@@ -273,7 +278,7 @@ resolved finding or a recorded approval. Closing clears all active indicators.
 
 The optional collector configuration `installation_labels` maps selected
 `organization:persona` keys to short human labels (maximum 48 characters), for
-example `{"example:lead": "Example · VPS", "example:remote": "Example · PC Lead"}`.
+example `{"example:lead": "Example Â· VPS", "example:remote": "Example Â· PC Lead"}`.
 The existing installation badge is replaced rather than supplemented. Detection
 or declared remote-location evidence remains in its tooltip and persona details.
 A label identifies the setup and machine; it does not prove installation or remote
@@ -410,7 +415,7 @@ expiry, logout, operator revocation, assistant request IDs and observed job
 states. Repeated identical poll events are deduplicated. No prompts, responses,
 credentials or link grants are stored. `Ledger.export()` is an operator API;
 there is no public audit endpoint. Default retention is 30 days, bounded to
-1–90 days when constructing the ledger. Expired rows are removed on writes and
+1â€“90 days when constructing the ledger. Expired rows are removed on writes and
 excluded from exports. Retention does not erase operator backups or filesystem
 copies; those need their own retention policy. Expiry is recorded on the next
 session check, not by a scheduler. A reader restart invalidates in-memory

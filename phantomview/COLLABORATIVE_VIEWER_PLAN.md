@@ -158,6 +158,14 @@ Acceptance: Telegram and PhantomChat demonstrate a verified direct sender to
 PhantomOrg mapping and one identified link, including denial/replay cases, without
 a second human authentication step. A missing integration remains visibly pending.
 
+A private [generic direct-command seam](AUTHENTICATED_COMMAND_SEAM.md) now prepares
+an optional callback in the reviewed native channel loops. It carries existing
+verified sender and receiving-persona context without an organization model in
+PhantomBot. It is not an installed hook or a protected issuer transport; existing
+handoff account checks remain unchanged. Native compatibility, safe callback
+embedding, signing/delivery and authoritative counterpart declarations are still
+required before P1 acceptance.
+
 ### P2. Align PhantomOrg declarations and resource metadata
 
 Use existing organization, role/access, human and compiled-scope declarations.
