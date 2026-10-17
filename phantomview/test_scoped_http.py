@@ -67,12 +67,51 @@ class ScopedHTTPTests(ProjectionFixture):
 
     def test_legacy_and_future_api_routes_are_closed_without_loading_sources(self):
         for method, path in (('GET', '/api/knowledge/' + self.public),
+                             ('GET', '/api/reviewed-knowledge/' + self.public),
                              ('GET', '/api/phantombot/status'), ('POST', '/api/phantombot/check'),
                              ('GET', '/api/assistant/status'), ('POST', '/api/assistant/jobs'),
                              ('POST', '/api/config'), ('GET', '/api/future-export')):
             status, _ = self.request(method, path, {} if method == 'POST' else None)
             self.assertEqual(status, 403)
         self.assertEqual(self.loaded, [])
+
+    def test_explicit_reviewed_knowledge_reader_uses_the_same_identified_gate(self):
+        from reviewed_knowledge import ReviewedKnowledge
+        from test_reviewed_knowledge import knowledge_fixture
+        source = knowledge_fixture(self.org)
+        loaded = []
+        def load(ident):
+            loaded.append(ident)
+            return source['raw']
+        reader = ReviewedKnowledge(self.gate, lambda: source['bundle'], lambda: self.org,
+                                   lambda: source['snapshot'], load)
+        self.server.reviewed_knowledge = reader
+        route = '/api/reviewed-knowledge/' + source['id']
+        status, note = self.request('GET', route)
+        self.assertEqual(status, 200)
+        self.assertEqual(note['content'], 'Reviewed field procedures.')
+        self.assertEqual(note['trust'], 'untrusted')
+        self.assertNotIn('DO_NOT_DISCLOSE', json.dumps(note))
+        source['snapshot']['actors'][0]['knowledge'][0]['searchable'] = False
+        loaded.clear()
+        self.assertEqual(self.request('GET', route), (404, {'error': 'Resource unavailable'}))
+        self.assertEqual(loaded, [])
+        reader.gate = object()
+        self.assertEqual(self.request('GET', route)[0], 403)
+        self.assertEqual(self.loaded, [])
+
+    def test_reviewed_knowledge_does_not_accept_query_identity_or_unsigned_cookie(self):
+        from reviewed_knowledge import ReviewedKnowledge
+        from test_reviewed_knowledge import knowledge_fixture
+        source = knowledge_fixture(self.org)
+        forbidden = Mock(side_effect=AssertionError('No note read is allowed'))
+        self.server.reviewed_knowledge = ReviewedKnowledge(
+            self.gate, lambda: source['bundle'], lambda: self.org, lambda: source['snapshot'], forbidden)
+        route = '/api/reviewed-knowledge/' + source['id']
+        self.assertEqual(self.request('GET', route + '?human=owner')[0], 400)
+        cookie = self.gate.create_session()
+        self.assertEqual(self.request('GET', route, cookie='phantomview=' + cookie)[0], 401)
+        forbidden.assert_not_called()
 
     def test_rejected_small_post_bodies_return_denial_without_opening_sources(self):
         for _ in range(12):

@@ -259,6 +259,11 @@ now supplies explicit target preflight, owned blocks, manual-content preservatio
 unchanged-input no-op and per-note atomic writes. Authorized viewer publication,
 legacy-sidecar migration and live AU compatibility remain pending.
 
+The [optional reviewed knowledge detail reader](REVIEWED_KNOWLEDGE_VIEW.md) reuses
+existing approved classifications, current collector provenance and the identified
+backend gate for full-note reads. It adds no classifier or resident process.
+Authorized listing/search/navigation and live configuration remain pending.
+
 The [AU role projection review](AU_PROJECTION_ADAPTER_REVIEW.md) identifies a
 possible reusable briefing adapter with installation-owned supplemental metadata.
 Preserve its useful local behavior. Treat source mapping, optional KB publication

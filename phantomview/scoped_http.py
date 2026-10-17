@@ -56,6 +56,13 @@ def dispatch(handler, method):
             handler.send(*operation(handler.headers, parsed.path.removeprefix(ASSISTANT_JOBS + '/')))
         elif method == 'GET' and parsed.path == '/api/state':
             handler.send(200, backend.workspace(handler.headers))
+        elif method == 'GET' and parsed.path.startswith('/api/reviewed-knowledge/'):
+            from reviewed_knowledge import ReviewedKnowledge
+            reader = getattr(handler.server, 'reviewed_knowledge', None)
+            if not isinstance(reader, ReviewedKnowledge) or reader.gate is not backend.gate:
+                return reject(handler, method, 403, 'Reviewed knowledge is not configured')
+            note = reader.detail(handler.headers, parsed.path.removeprefix('/api/reviewed-knowledge/'))
+            handler.send(200 if note else 404, note or {'error': 'Resource unavailable'})
         elif method == 'GET' and parsed.path == '/api/review' and getattr(handler.server, 'review_service', None):
             handler.send(200, handler.server.review_service.view(handler.headers))
         elif method == 'GET' and parsed.path.startswith('/api/resource/'):

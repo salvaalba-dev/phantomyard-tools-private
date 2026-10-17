@@ -50,6 +50,7 @@ def _classifications(catalog, org, scope):
 
 
 def _current(row, organization, snapshot, note_loader):
+    """Validate current provenance and return the payload; this is not authorization."""
     matches = [(actor, note) for actor in snapshot.get('actors', [])
                for note in actor.get('knowledge', []) if note.get('id') == row['id']]
     if len(matches) != 1:
@@ -70,6 +71,7 @@ def _current(row, organization, snapshot, note_loader):
             or not isinstance(payload.get('content'), str)
             or not isinstance(payload.get('title'), str) or len(payload['title']) > 500):
         raise ValueError('Reviewed payload identity is invalid or incomplete')
+    return payload
 
 
 def decisions_from_folders(draft, org, review):
