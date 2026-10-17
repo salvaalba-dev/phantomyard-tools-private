@@ -199,6 +199,14 @@ suggestions and inert exact-folder candidates from selected offline inputs.
 The AU draft preserves existing grants and exceptions; no live source is changed.
 Source compatibility, content review and trusted-channel integration remain pending.
 
+The [detached loader check](AU_PHANTOMORG_COMPATIBILITY.md#detached-declaration-compatibility-follow-up)
+now confirms raw-source preservation and the presentation boundary using static
+installed-source comparison and disposable local collection. The existing index
+omits authority fields by design; bind the protected raw organization source to
+the identified backend rather than publishing the private registry in the index.
+No live source, projector or service has been modified. Native handoff, reviewed
+content and selected-installation activation remain pending.
+
 Reuse approved source classifications and folder-rule drafts for viewer resources.
 Unknown/private sources are not guessed public. Copies, summaries and linked
 resources retain applicable restrictions. Approval remains separate from discovery.
