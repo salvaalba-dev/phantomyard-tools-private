@@ -46,6 +46,26 @@ conversation over the persona's whole native knowledge surface.
 
 ## Smallest compatible next change
 
+The viewer-side part now exists in `native_turn_context.py`. A trusted native
+integration can construct `NativeTurnContext` from the existing scoped backend
+and authenticated request headers. Its control metadata binds human, issuing and
+selected personas, scope, directory/authority/policy/view revisions and a turn ID.
+It does not expose the session cookie or accept a browser-authored grant object.
+The selected section must be installed and visible; an unauthorized module
+assistant cannot fall back silently to the core persona.
+
+`read` and `search` delegate to the existing authorized backend projection, and
+revalidate the original session and revisions before returning data. `release`
+revalidates before returning a bounded response envelope; `close` invalidates the
+handle. Category-zero information privileges come from PhantomOrg and do not
+create write capabilities. No new policy store or configurable grant is added.
+
+This is the viewer-side contract, not native enforcement. `release` cannot detect
+hidden information that a native adapter already loaded elsewhere, and metadata
+must never be pasted into a prompt as an ACL mechanism. The native input surfaces
+below must consume the authority before ordinary native conversation can start.
+No subprocess or HTTP execution route is registered by this module.
+
 1. Use the existing verified recipient and current PhantomOrg policy as the only
    authority. Keep native channel identity and request text separate. The browser
    cannot choose a human, grant, project or policy revision as an authority claim.
