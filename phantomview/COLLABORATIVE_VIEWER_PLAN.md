@@ -174,6 +174,12 @@ Linux account tests are separate from deployment acceptance.
 
 ### P2. Align PhantomOrg declarations and resource metadata
 
+Prepared source foundation: [minimal counterpart proposal](PHANTOMORG_COUNTERPART_PROPOSAL.md)
+adds only the optional explicit human-to-actor relationship to a pinned disposable
+PhantomOrg tree. Schema/model/reference/registry and existing viewer integration
+are tested independently of the historical broad access patch. Installed-source
+compatibility, real mappings and selected-installation acceptance remain pending.
+
 Use existing organization, role/access, human and compiled-scope declarations.
 Resolve authoritative counterpart mappings explicitly where the installed schema
 does not express them. Keep any necessary compatible extension in PhantomOrg;

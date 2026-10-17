@@ -1,0 +1,141 @@
+--- a/phantomorg/README.md
++++ b/phantomorg/README.md
+@@ -525,3 +525,29 @@
+ ## License
+ 
+ MIT — see [LICENSE](LICENSE).
++
++
++## Private proposal: explicit human counterpart
++
++The optional `humans[].counterpart_persona` field names one existing actor ID.
++Omit it for an unbound human; explicit null, invalid IDs, missing actors and two
++humans bound to the same actor are rejected. Existing organizations without the
++field retain their previous human registry output. When mappings exist, the
++compiled human registry includes a `counterpart_persona` column.
++
++```yaml
++humans:
++  - id: board-member
++    name: Board Member
++    counterpart_persona: coordinator
++    email: member@example.org
++```
++
++This example assumes an actor named `coordinator` already exists. A counterpart
++is an organizational relationship, not evidence of channel authentication.
++Names, role labels and `reports_to_human` never infer it. An email address alone
++does not authorize a Telegram or PhantomChat session. Consumers must verify the
++native channel principal and derive applicable access from existing PhantomOrg
++policy; this field introduces no separate human grants, owner assignment or
++category-zero privilege. It does not change native collaborative memory or tools.
++This is a private compatibility proposal, not an installed upstream feature.
+--- a/phantomorg/phantomorg/compiler/humans.py
++++ b/phantomorg/phantomorg/compiler/humans.py
+@@ -28,6 +28,7 @@
+     if not spec.humans:
+         return ""
+     org = spec.organization
++    show_counterpart = any(h.counterpart_persona is not None for h in spec.humans)
+     lines = [
+         f"# Human Registry — {org.name}",
+         "",
+@@ -41,13 +42,17 @@
+         "| id | name | role | telegram_user_id | npub | email |",
+         "|---|---|---|---|---|---|",
+     ]
++    if show_counterpart:
++        lines[-2] += " counterpart_persona |"
++        lines[-1] += "---|"
+     for h in spec.humans:
+         tg = str(h.telegram_user_id) if h.telegram_user_id is not None else "—"
+         npub = h.npub if h.npub else "—"
+         email = h.email if h.email else "—"
+-        lines.append(
+-            f"| `{h.id}` | {h.name or '—'} | {h.role or '—'} | {tg} | `{npub}` | {email} |"
+-        )
++        row = f"| `{h.id}` | {h.name or '—'} | {h.role or '—'} | {tg} | `{npub}` | {email} |"
++        if show_counterpart:
++            row += f" `{h.counterpart_persona or '—'}` |"
++        lines.append(row)
+     return "\n".join(lines) + "\n"
+ 
+ 
+--- a/phantomorg/phantomorg/spec/model.py
++++ b/phantomorg/phantomorg/spec/model.py
+@@ -124,6 +124,7 @@
+     telegram_user_id: int | None = None
+     npub: str | None = None
+     email: str | None = None
++    counterpart_persona: str | None = None
+ 
+     @classmethod
+     def from_dict(cls, d: dict) -> Human:
+@@ -134,6 +135,7 @@
+             telegram_user_id=d.get("telegram_user_id"),
+             npub=d.get("npub"),
+             email=d.get("email"),
++            counterpart_persona=d.get("counterpart_persona"),
+         )
+ 
+ 
+--- a/phantomorg/phantomorg/spec/schema.json
++++ b/phantomorg/phantomorg/spec/schema.json
+@@ -427,6 +427,10 @@
+         ],
+         "additionalProperties": false,
+         "properties": {
++          "counterpart_persona": {
++            "type": "string",
++            "pattern": "^[a-z0-9][a-z0-9_-]*$"
++          },
+           "id": {
+             "type": "string",
+             "pattern": "^[a-z0-9][a-z0-9_-]*$"
+--- a/phantomorg/phantomorg/spec/shape_validator.py
++++ b/phantomorg/phantomorg/spec/shape_validator.py
+@@ -261,6 +261,7 @@
+     "email",
+ }
+ _HUMAN_KEYS = {
++    "counterpart_persona",
+     "id",
+     "name",
+     "role",
+@@ -445,6 +446,8 @@
+             _reject_unknown_keys(h, _HUMAN_KEYS, f"humans[{i}]")
+             _require(h, "id", f"humans[{i}]")
+             _require_id(h["id"], f"humans[{i}].id")
++            if "counterpart_persona" in h:
++                _require_id(h["counterpart_persona"], f"humans[{i}].counterpart_persona")
+             _require_optional_type(h.get("name"), str, f"humans[{i}].name")
+             _require_optional_type(h.get("role"), str, f"humans[{i}].role")
+             _require_optional_type(
+--- a/phantomorg/phantomorg/validator/refs.py
++++ b/phantomorg/phantomorg/validator/refs.py
+@@ -234,6 +234,25 @@
+             else:
+                 seen_npubs[a.npub] = a.id
+ 
++    # Counterparts are explicit one-to-one actor references, never role labels.
++    actor_ids = {actor.id for actor in spec.actors}
++    counterpart_owners: dict[str, str] = {}
++    for human in spec.humans:
++        persona = human.counterpart_persona
++        if persona is None:
++            continue
++        if persona not in actor_ids:
++            problems.append(
++                f"humans.{human.id}: counterpart_persona '{persona}' does not exist"
++            )
++        if persona in counterpart_owners:
++            problems.append(
++                f"humans.{human.id}: counterpart_persona '{persona}' duplicated "
++                f"with humans.{counterpart_owners[persona]}"
++            )
++        else:
++            counterpart_owners[persona] = human.id
++
+     # escalation_matrix: from/to must exist (from allows '*') and pairs must
+     # not be duplicated (the compiler emits one escalation path per entry, so
+     # a repeated from->to would silently duplicate the path in the SOUL).
