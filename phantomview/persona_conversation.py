@@ -71,6 +71,17 @@ class PersonaAssistant(ScopedAssistant):
     """Reuse session/queue lifecycle, without replacing native persona knowledge."""
     mode = 'persona-conversation'
 
+    def available(self, headers):
+        recipient, directory = self.gate.identified_scope(headers)
+        # Native collaborative memory/tools do not enforce a human-only limit.
+        return (recipient.persona in self.executors
+                and recipient.human not in directory.scope.policy.get('human_category_limits', {}))
+
+    def _current(self, headers, recipient, view_revision):
+        super()._current(headers, recipient, view_revision)
+        if not self.available(headers):
+            raise PermissionError('Native conversation cannot enforce this human category limit')
+
     def consult(self, headers, question, *, resource_ids=(), cancelled=None, request_id=None):
         from scoped_consultations import identifier
         if (not isinstance(question, str) or not question.strip() or len(question) > 1800
@@ -79,6 +90,8 @@ class PersonaAssistant(ScopedAssistant):
         request_id = identifier(request_id)
         headers = {'Cookie': headers.get('Cookie', '')}
         recipient = self.gate.identified_scope(headers)[0]
+        if not self.available(headers):
+            raise PermissionError('Native conversation cannot enforce this human category limit')
         owner, _ = self.gate.session_scope(headers)
         executor = self.executors.get(recipient.persona)
         if executor is None or not callable(getattr(executor, 'run', None)):

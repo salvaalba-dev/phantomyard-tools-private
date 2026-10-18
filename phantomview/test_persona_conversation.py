@@ -7,6 +7,7 @@ import unittest
 import uuid
 
 import phantomview as pv
+from channel_identity import HumanDirectory
 from persona_conversation import NativePersonaClient, PersonaAssistant
 from scoped_consultations import ScopedConsultations
 from test_scoped_consultations import Executor, QueueFixture
@@ -60,6 +61,36 @@ class PersonaConversationTests(QueueFixture):
         with self.assertRaises(PermissionError):
             self.service.submit(self.headers, self.question(resource_ids=[self.hidden]))
         self.assertEqual(len(self.executor.calls), 1)
+
+    def restrict_current_human(self):
+        recipient = self.gate.identified_scope(self.headers)[0]
+        self.org['policies']['phantomview']['human_category_limits'] = {'secretary': ['category-1']}
+        directory = HumanDirectory(self.org)
+        from dataclasses import replace
+        self.gate.recipients[self.gate.digest(self.cookie)] = replace(
+            recipient, policy_revision=directory.scope.revision, directory_revision=directory.revision)
+        self.catalog['authority_revision'] = directory.authority_revision
+
+    def test_restricted_human_cannot_queue_or_directly_dispatch_native_questions(self):
+        self.restrict_current_human()
+        self.assertFalse(self.assistant.available(self.headers))
+        with self.assertRaises(PermissionError):
+            self.service.submit(self.headers, self.question())
+        with self.assertRaises(PermissionError):
+            self.assistant.consult(self.headers, 'Explain the institution',
+                                   cancelled=threading.Event(), request_id=str(uuid.uuid4()))
+        self.assertEqual(self.executor.calls, [])
+        self.assertEqual(self.service.rows, {})
+
+    def test_restriction_added_during_native_work_suppresses_delivery(self):
+        self.executor.release.clear()
+        _, job = self.service.submit(self.headers, self.question())
+        self.assertTrue(self.executor.started.wait(2))
+        self.restrict_current_human()
+        self.executor.release.set()
+        row = self.terminal(job['id'])
+        self.assertIsNone(row['result'])
+
 
     def test_web_thread_is_stable_within_session_and_distinct_for_a_new_link(self):
         self.ask(); self.ask()
@@ -133,6 +164,17 @@ class PersonaConversationTests(QueueFixture):
                 connection.request('GET', '/api/scoped-assistant/jobs/' + job['id'], headers=self.headers)
                 response = connection.getresponse()
                 self.assertEqual(json.loads(response.read())['result']['native_context'], 'existing-persona')
+                self.restrict_current_human()
+                connection.request('GET', '/api/scoped-assistant/info', headers=self.headers)
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertFalse(json.loads(response.read())['available'])
+                connection.request('POST', '/api/scoped-assistant/jobs', json.dumps(self.question()),
+                                   self.headers | {'Content-Type': 'application/json'})
+                response = connection.getresponse()
+                self.assertEqual(response.status, 403)
+                response.read()
+                self.assertEqual(len(self.executor.calls), 1)
             finally:
                 connection.close()
         finally:

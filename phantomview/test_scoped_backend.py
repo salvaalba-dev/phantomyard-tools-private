@@ -65,6 +65,21 @@ class ProjectionFixture(unittest.TestCase):
 
 
 class ScopedBackendTests(ProjectionFixture):
+    def test_human_category_limit_filters_search_counts_details_and_incident_edges(self):
+        self.org['policies']['phantomview']['human_category_limits'] = {'secretary': ['category-3']}
+        self.org['actors'][1]['actor_exceptions'] = ['category-3']
+        directory = HumanDirectory(self.org)
+        self.gate.recipients[self.gate.digest(self.cookie)] = directory.resolve(
+            **context('102', 'administrator'), scope_id='example')
+        self.catalog['authority_revision'] = directory.authority_revision
+        view = self.backend.state(self.headers)
+        self.assertEqual([row['id'] for row in view['resources']], [self.hidden])
+        self.assertEqual(view['relations'], [])
+        self.assertEqual(view['counts'], {'document': 1, 'relationship': 0})
+        self.assertEqual(self.backend.search(self.headers, 'River')['results'], [])
+        self.assertIsNone(self.backend.detail(self.headers, self.public))
+        self.assertNotIn(self.public, self.loaded)
+
     def test_workspace_menus_use_filtered_records_and_bind_issuer_without_observation(self):
         view = self.backend.workspace(self.headers)
         navigation = view.pop('navigation')

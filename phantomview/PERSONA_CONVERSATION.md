@@ -66,6 +66,13 @@ or tools, or claim the answer uses only the displayed data. The web UI labels th
 mode accordingly. Native tool actions retain existing capabilities and safeguards;
 the viewer does not add write grants or promise tool-less execution.
 
+An explicit `policies.phantomview.human_category_limits` entry disables native
+conversation for that human, including queue submission, dispatch and delivery.
+The native persona cannot enforce a human-specific category restriction inside
+its collaborative memory or tools. The reader reports the assistant unavailable
+and does not select a fallback. Unrestricted counterpart sessions retain the
+existing native behavior. See [Human category limits](HUMAN_CATEGORY_LIMITS.md).
+
 Threads are derived server-side per session, organization, issuer and scope. They
 persist in native conversation history but do not merge with the phone transcript.
 Logout/revocation suppress pending web delivery and cancellation disconnects the

@@ -53,6 +53,7 @@ def dispatch(handler, method):
                     'persona': recipient.persona, 'scope_id': recipient.scope_id}
             if consultations.assistant.mode == 'persona-conversation':
                 info['mode'] = 'persona-conversation'
+                info['available'] = consultations.assistant.available(handler.headers)
             handler.send(200, info)
         elif method in {'GET', 'DELETE'} and parsed.path.startswith(ASSISTANT_JOBS + '/') and consultations:
             operation = consultations.get if method == 'GET' else consultations.cancel

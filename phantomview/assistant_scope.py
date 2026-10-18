@@ -12,7 +12,7 @@ from view_permissions import ACTIONS, FIELDS, validate_view_access
 class Scope:
     def __init__(self, policy):
         if (not isinstance(policy, dict) or not {"organization", "humans", "personas"} <= set(policy)
-                or set(policy) - {"organization", "humans", "personas", "category_zero", "view_access"}):
+                or set(policy) - {"organization", "humans", "personas", "category_zero", "view_access", "human_category_limits"}):
             raise ValueError("Explicit assistant policy required")
         if not isinstance(policy["organization"], str) or not policy["organization"]:
             raise ValueError("Explicit organization required")
@@ -45,6 +45,18 @@ class Scope:
         counterparts = [h["counterpart_persona"] for h in policy["humans"].values() if "counterpart_persona" in h]
         if len(set(counterparts)) != len(counterparts):
             raise ValueError("Ambiguous human counterpart")
+        limits = policy.get('human_category_limits', {})
+        if not isinstance(limits, dict):
+            raise ValueError('Explicit human category limit mapping required')
+        for human, categories in limits.items():
+            binding = policy['humans'].get(human)
+            persona = binding.get('counterpart_persona') if isinstance(binding, dict) else None
+            if (persona is None or zero is not None and human == zero['owner']
+                    or not isinstance(categories, list) or not categories
+                    or any(not isinstance(c, str) or not c or c == 'category-0' for c in categories)
+                    or len(set(categories)) != len(categories)
+                    or not set(categories) <= set(policy['personas'][persona]['categories'])):
+                raise ValueError('Human category limits may only narrow an ordinary counterpart grant')
         normalized_view = None
         if 'view_access' in policy:
             normalized_view = validate_view_access(
@@ -75,7 +87,7 @@ class Scope:
         levels = policies.get("access_levels", {})
         declared = policies.get("security_categories", {})
         view = policies.get('phantomview', {})
-        if not isinstance(view, dict) or set(view) - (FIELDS | {'project_grants'}):
+        if not isinstance(view, dict) or set(view) - (FIELDS | {'project_grants', 'human_category_limits'}):
             raise ValueError('Invalid private PhantomView policy')
         projects = view.get("project_grants", {})
         if not all(isinstance(x, dict) for x in (levels, declared, projects)):
@@ -100,6 +112,8 @@ class Scope:
                 normalized.append(label)
             personas[ident] = {"categories": sorted(set(normalized)), "projects": projects.get(ident, [])}
         policy = {"organization": org["organization"]["id"], "humans": bindings, "personas": personas}
+        if 'human_category_limits' in view:
+            policy['human_category_limits'] = view['human_category_limits']
         if FIELDS & set(view):
             policy['view_access'] = validate_view_access(
                 {key: value for key, value in view.items() if key in FIELDS},
@@ -140,6 +154,9 @@ class Scope:
             return None
         grants = json.loads(json.dumps(self.policy["personas"][row["counterpart_persona"]]))
         grants['categories'] = [category for category in grants['categories'] if category != 'category-0']
+        limits = self.policy.get('human_category_limits', {}).get(human)
+        if limits is not None:
+            grants['categories'] = [category for category in grants['categories'] if category in limits]
         return grants
 
     def can_issue(self, human, persona):

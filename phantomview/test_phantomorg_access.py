@@ -18,6 +18,17 @@ except ImportError:
 
 @unittest.skipUnless(COMPATIBLE, "Install the private PhantomOrg counterpart patch for integration tests")
 class PhantomOrgAccessTests(unittest.TestCase):
+    def test_legacy_compiler_rejects_viewer_only_human_limit_extension(self):
+        from phantomorg.spec.loader import OrgSpecError
+        org = self.source()
+        org['policies']['phantomview']['human_category_limits'] = {'secretary': ['category-1']}
+        self.assertEqual(HumanDirectory(org).scope.human_grants('secretary')['categories'], ['category-1'])
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'org.yaml'
+            path.write_text(yaml.safe_dump(org), encoding='utf-8')
+            with self.assertRaisesRegex(OrgSpecError, 'human_category_limits'):
+                validate_org(path)
+
     def source(self):
         org = organization()
         org["version"] = 1

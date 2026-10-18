@@ -54,6 +54,8 @@ class ScopedConsultations:
         recipient, owner, expiry = self._identity(headers)
         if self.gate.audit is not self.assistant.audit:
             raise ValueError('The protected consultation audit changed')
+        if self.assistant.mode == 'persona-conversation' and not self.assistant.available(headers):
+            raise PermissionError('Native conversation is unavailable under current human restrictions')
         if (not isinstance(body, dict) or set(body) != {'request_id', 'question', 'resource_ids'}
                 or not isinstance(body['question'], str) or not body['question'].strip() or len(body['question']) > 1800
                 or not isinstance(body['resource_ids'], list) or len(body['resource_ids']) > MAX_EVIDENCE
