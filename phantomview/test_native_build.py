@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -120,6 +121,18 @@ class BuildTests(unittest.TestCase):
         for symbols in ('', 'GLIBC_PRIVATE GLIBC_2.25'):
             with self.subTest(symbols=symbols), self.assertRaises(ValueError):
                 build.required_glibc(symbols)
+
+    def test_version_contract_is_exact_stdout_with_bounded_diagnostics(self):
+        result = subprocess.CompletedProcess([], 0, '1.2.3\n', 'dependency diagnostic\n')
+        self.assertTrue(build.verify_binary_version(result, '1.2.3'))
+        for output in ('1.2.30', 'prefix 1.2.3', '1.2.3\nextra'):
+            result.stdout = output
+            with self.assertRaises(ValueError):
+                build.verify_binary_version(result, '1.2.3')
+        result.stdout = '1.2.3'
+        result.stderr = 'x' * 4097
+        with self.assertRaises(ValueError):
+            build.verify_binary_version(result, '1.2.3')
 
     def test_host_preflight_rejects_digest_mismatch_before_inspection(self):
         binary = self.root / 'binary'

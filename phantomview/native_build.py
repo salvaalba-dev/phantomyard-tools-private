@@ -172,6 +172,15 @@ def test_results(environment):
     return results
 
 
+
+def verify_binary_version(result, expected):
+    # CLI dependencies may emit diagnostics on stderr; only stdout is its version contract.
+    if result.stdout.strip() != expected or len(result.stdout) > 1024 or len(result.stderr) > 4096:
+        raise ValueError('Compiled native version does not match its provenance: '
+                         + repr(result.stdout[:1024]))
+    return True
+
+
 def receipt(binary, source, root, environment):
     results = test_results(environment)
     image = {key: environment.get(key, '') for key in ('ImageOS', 'ImageVersion')}
@@ -182,8 +191,7 @@ def receipt(binary, source, root, environment):
         raise ValueError('Bun version differs from the configured compiler')
     version = subprocess.run([str(Path(binary).resolve()), '--version'], check=True,
                              capture_output=True, text=True, timeout=10)
-    if version.stdout.strip() != source['native_version'] or version.stderr or len(version.stdout) > 1024:
-        raise ValueError('Compiled native version does not match its provenance')
+    verify_binary_version(version, source['native_version'])
     routes = (root / 'routes.json').read_bytes()
     digest = hashlib.sha256(routes).hexdigest()
     if digest != (root / 'routes.sha256').read_text():
@@ -201,7 +209,8 @@ def receipt(binary, source, root, environment):
         'routes_sha256': digest, 'binary_sha256': binary_sha, 'binary_bytes': Path(binary).stat().st_size,
         'workflow_run_id': environment['GITHUB_RUN_ID'],
         'workflow_run_attempt': environment['GITHUB_RUN_ATTEMPT'],
-        'compiled_version_verified': version.stdout.strip() == source['native_version'],
+        'compiled_version_verified': verify_binary_version(version, source['native_version']),
+        'version_diagnostics_sha256': hashlib.sha256(version.stderr.encode()).hexdigest(),
         'embedded_extension_version': source['release_version'],
         'test_results': results, 'tests_passed': all(value == 'success' for value in results.values()),
         'installed': False, 'activation_ready': False}
