@@ -99,7 +99,7 @@ class PublishedReader:
         server.review_service = None
         return server
 
-    def serve(self):
+    def serve(self, *, stop_event=None):
         with self._start_lock:
             if self._started:
                 raise ValueError('An identified reader instance cannot be restarted')
@@ -113,7 +113,13 @@ class PublishedReader:
             server = self._make_server()
             self.server, self.handoff = server, handoff
             handoff.start(server)
-            server.serve_forever()
+            if stop_event is None:
+                server.serve_forever()
+            else:
+                # Signal handlers only set an event; cleanup remains on this thread.
+                server.timeout = 0.25
+                while not stop_event.is_set():
+                    server.handle_request()
         finally:
             try:
                 if handoff is not None:

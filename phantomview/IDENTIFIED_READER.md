@@ -8,7 +8,8 @@ The trusted host supplies one `PublishedAuthority`, a protected reviewed project
 directory, the fixed issuing persona and its public signer allowlist, explicit
 HTTPS origin/loopback port, native daemon UID, socket path/group and an existing
 metadata-only `Ledger`. There is no environment discovery or browser configuration
-endpoint. The production host still needs an explicitly reviewed launch/cutover.
+endpoint. The [protected launcher](READER_LAUNCH.md) now supplies the optional
+JSON host entry; production still needs an explicitly reviewed launch/cutover.
 
 ```python
 from authority_publication import PublishedAuthority

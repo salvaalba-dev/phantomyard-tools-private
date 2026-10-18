@@ -1,5 +1,9 @@
 # PhantomView
 
+The optional [protected reader launcher](READER_LAUNCH.md) supplies a fixed JSON
+host configuration, a read-only preflight command and graceful shutdown for the
+identified assembly. Its AU cutover and rollback procedure is prepared, not applied.
+
 An optional [existing-persona conversation transport](PERSONA_CONVERSATION.md)
 now connects the identified reader to the issuing persona inside the existing
 native daemon. It preserves native configuration, knowledge, history, tools and

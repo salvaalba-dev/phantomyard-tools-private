@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "organization": "example",
+  "actor": "coordinator",
+  "identities": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+  "origin": "https://view.example:8790",
+  "port": 8790,
+  "reader_uid": 12002,
+  "issuer_uid": 12001,
+  "socket_group": 12001,
+  "socket_path": "/run/example-view/reader/link.sock",
+  "conversation_socket": "/run/example-view/native/persona.sock",
+  "authority_directory": "/var/lib/example-view/authority",
+  "index_path": "/var/lib/example-view/reader/index.json",
+  "source_path": "/opt/example/org.yaml",
+  "projection_root": "/var/lib/example-view/projection",
+  "audit_path": "/var/lib/example-view/audit/sessions.sqlite",
+  "authority_max_age": 600,
+  "session_seconds": 1800
+}

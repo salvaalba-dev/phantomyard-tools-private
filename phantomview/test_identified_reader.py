@@ -272,5 +272,20 @@ class PublishedReaderTests(unittest.TestCase):
         fake_server.server_close.assert_called_once()
 
 
+    def test_stop_event_exits_request_loop_and_cleans_up_without_shutdown_thread(self):
+        stop = threading.Event()
+        fake_server, handoff = Mock(), Mock()
+        fake_server.handle_request.side_effect = stop.set
+        with patch.object(reader, 'DaemonPeerPolicy'), \
+                patch.object(reader, 'ReaderHandoff', return_value=handoff), \
+                patch.object(self.application, '_make_server', return_value=fake_server):
+            self.application.serve(stop_event=stop)
+        fake_server.handle_request.assert_called_once()
+        fake_server.serve_forever.assert_not_called()
+        handoff.close.assert_called_once()
+        fake_server.server_close.assert_called_once()
+        self.assertEqual(self.application.gate.sessions, {})
+
+
 if __name__ == '__main__':
     unittest.main()
