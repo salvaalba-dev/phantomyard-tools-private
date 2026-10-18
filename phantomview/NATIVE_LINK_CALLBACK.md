@@ -114,3 +114,44 @@ and an in-flight relay operation may complete after cancellation. Failure is not
 retried automatically. Tests use mocked HTTP/relay IO and disposable Nostr keys;
 no production human is contacted. Signing, protected reader handoff and AU
 activation remain separate pending steps.
+
+## Native signing adapter
+
+`nativeAccessAuthorization` now provides the `signAuthorization` callable using
+an explicitly supplied native signing closure. It does not load a key, read an
+identity file, copy a vault or discover a default persona. The trusted host must
+select the receiving persona's existing identity and the exact reader origin.
+That public identity must already be allowed by the reader; the adapter never
+adds an identity or rotates credentials automatically.
+
+```typescript
+const signAuthorization = nativeAccessAuthorization({
+  origin,
+  publicKey: identity.publicKeyHex,
+  signEvent: async event => finalizeEvent(event, identity.secretKey),
+});
+```
+
+The example uses the existing native `finalizeEvent` and an identity already
+loaded by the host. It is not a standalone executable or registration from a
+message. The adapter fixes kind 27235, the exact access-link URL, POST method,
+SHA-256 payload binding for `{}`, empty content and a fresh random nonce. No
+recipient, project, category or human identifier is added to the signed event.
+It checks the returned canonical NIP-01 event ID and Schnorr signature with the
+existing native Nostr library, exact fields/tags and configured public identity.
+An independent plain event prevents a provider's cached verification marker from
+substituting for verification. Changed bindings, malformed output, cancellation
+and provider failure return only a generic error. The two-second signing wait
+cannot undo an already computed signature; a late result is not forwarded.
+
+The native CI fixture uses disposable keys, then supplies the authorization to
+the actual Python `IdentifiedGate` and unchanged PhantomBlog/coincurve verifier.
+It checks recipient binding, signed-request replay, single-use redemption and a
+forged-signature refusal. Its channel identity is a synthetic trusted context;
+this is not proof of installed native channel delivery or a protected IPC peer.
+No production identity, human, network endpoint or inference provider is used.
+
+The adapter preserves the existing link protocol and peer-account requirements.
+Real host signer selection, registration with the native link callback, compatible
+protected reader handoff and AU activation remain pending. The old isolated
+callback is not made compatible with a shared model account by this signer.

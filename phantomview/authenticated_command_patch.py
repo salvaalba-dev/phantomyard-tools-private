@@ -16,6 +16,7 @@ INPUTS = reviewed.INPUTS | control.INPUTS | {
 }
 HELPER = 'src/channels/core/authenticatedCommand.ts'
 REGISTRY = 'src/channels/core/authenticatedCommandRegistry.ts'
+SIGNER = 'src/channels/core/nativeLinkSigner.ts'
 NOTE = """
 
 ## Private optional authenticated direct-command seam
@@ -40,6 +41,12 @@ checks an explicit private-chat API acknowledgement. PhantomChat uses existing
 native encrypted wrapping and relay acceptance without reaction correlation or message
 rewrap retries. Acceptance is not proof of human receipt. Cancellation bounds
 waiting but cannot undo a dispatched network message. Ordinary sends are unchanged.
+
+`nativeAccessAuthorization` formats the unchanged NIP-98 access request around a
+fixed native signing callback. It neither loads keys nor registers a model tool.
+It verifies the returned canonical event ID, signature, identity, exact tags and
+payload before returning an authorization. Host callback registration, protected
+reader handoff and live signing identity selection remain integration work.
 
 The callback is trusted native embedding, never a model tool or browser identity
 API. PhantomChat context uses its verified native hexadecimal sender ID; an
@@ -66,7 +73,7 @@ def patch(root):
         if hashlib.sha256(source.encode()).hexdigest() != expected:
             raise ValueError('Unsupported native source; no command seam prepared')
         sources[name] = source
-    for name in (HELPER, REGISTRY, control.HELPER, provenance.HELPER, reviewed.HELPER):
+    for name in (HELPER, REGISTRY, SIGNER, control.HELPER, provenance.HELPER, reviewed.HELPER):
         if (root / name).exists() or (root / name).is_symlink():
             raise ValueError('Existing native helper; use a fresh disposable checkout')
     helper = Path(__file__).with_name('authenticated_command.ts').read_text(encoding='utf-8')
@@ -74,6 +81,7 @@ def patch(root):
     registry = provenance.replace_exact(registry, '"./authenticated_command.ts"',
                                         '"./authenticatedCommand.ts"')
     private_control = Path(__file__).with_name('private_control.ts').read_text(encoding='utf-8')
+    signer = Path(__file__).with_name('native_link_signer.ts').read_text(encoding='utf-8')
     sources.update(control.prepare(sources))
     for name in reviewed.INPUTS:
         source = sources[name]
@@ -130,6 +138,7 @@ def patch(root):
     (root / HELPER).write_text(helper, encoding='utf-8', newline='\n')
     (root / REGISTRY).write_text(registry, encoding='utf-8', newline='\n')
     (root / control.HELPER).write_text(private_control, encoding='utf-8', newline='\n')
+    (root / SIGNER).write_text(signer, encoding='utf-8', newline='\n')
     for name in ('README.md', 'AGENTS.md'):
         target = root / name
         target.write_text(target.read_text(encoding='utf-8') + NOTE, encoding='utf-8', newline='\n')

@@ -45,6 +45,7 @@ class AuthenticatedCommandPatchTests(unittest.TestCase):
         self.assertIn('input.authenticatedCommands?.resolve("telegram", l.persona)', startup)
         self.assertIn('input.authenticatedCommands?.resolve("phantomchat", spec.persona)', startup)
         self.assertTrue((self.root / native.REGISTRY).is_file())
+        self.assertTrue((self.root / native.SIGNER).is_file())
         self.assertTrue((self.root / native.control.HELPER).is_file())
         for name in native.control.INPUTS:
             transport = (self.root / name).read_text(encoding='utf-8')
