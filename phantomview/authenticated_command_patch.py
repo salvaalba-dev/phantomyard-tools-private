@@ -11,8 +11,10 @@ import native_ingress_patch as provenance
 
 INPUTS = reviewed.INPUTS | {
     'src/channels/commands.ts': 'd69a2953e7ecd4fa23868ffa47336285b39b5d410a3dd062d33adb6d0f7b2f22',
+    'src/cli/run.ts': 'dd4463ad141598fe86f54fb1dd67ea0f9468c5a21ecf2c788f795ed557636122',
 }
 HELPER = 'src/channels/core/authenticatedCommand.ts'
+REGISTRY = 'src/channels/core/authenticatedCommandRegistry.ts'
 NOTE = """
 
 ## Private optional authenticated direct-command seam
@@ -25,6 +27,12 @@ model executor or additional service is added to PhantomBot by this variant.
 With no handler, existing channel behavior remains unchanged.
 Optional commands cannot replace any native control command. Source preparation
 also verifies the pinned native dispatcher before adding the optional hook.
+
+`runRun` accepts an optional `AuthenticatedCommandRegistry` from trusted host code.
+It validates the registry before configuration loading and resolves each listener
+by its actual channel and persona. The immutable registry has no default route,
+rejects duplicates and never reads browser, model, environment or JSON claims.
+This is a programmatic startup API, not CLI auto-discovery or an installed plugin.
 
 The callback is trusted native embedding, never a model tool or browser identity
 API. PhantomChat context uses its verified native hexadecimal sender ID; an
@@ -51,10 +59,13 @@ def patch(root):
         if hashlib.sha256(source.encode()).hexdigest() != expected:
             raise ValueError('Unsupported native source; no command seam prepared')
         sources[name] = source
-    for name in (HELPER, provenance.HELPER, reviewed.HELPER):
+    for name in (HELPER, REGISTRY, provenance.HELPER, reviewed.HELPER):
         if (root / name).exists() or (root / name).is_symlink():
             raise ValueError('Existing native helper; use a fresh disposable checkout')
     helper = Path(__file__).with_name('authenticated_command.ts').read_text(encoding='utf-8')
+    registry = Path(__file__).with_name('authenticated_command_registry.ts').read_text(encoding='utf-8')
+    registry = provenance.replace_exact(registry, '"./authenticated_command.ts"',
+                                        '"./authenticatedCommand.ts"')
     for name in reviewed.INPUTS:
         source = sources[name]
         telegram = name.endswith('engine.ts')
@@ -83,11 +94,32 @@ def patch(root):
                 '      commandPrincipals.size > 0 && commandPrincipals.has(msg.senderId.toLowerCase())\n'
                 '        && !relaySet.has(msg.senderId.toLowerCase()), input.signal)) continue;')
         sources[name] = source
+    entry = sources['src/cli/run.ts']
+    entry = provenance.replace_exact(entry, 'export interface RunInput {',
+        'export interface RunInput {\n'
+        '  /** Fixed trusted host registration; never resolved from message or browser input. */\n'
+        '  authenticatedCommands?: AuthenticatedCommandRegistry;')
+    entry = provenance.replace_exact(entry,
+        'export async function runRun(input: RunInput = {}): Promise<number> {',
+        'export async function runRun(input: RunInput = {}): Promise<number> {\n'
+        '  verifyAuthenticatedCommandRegistry(input.authenticatedCommands);')
+    entry = provenance.replace_exact(entry, '        persona: l.persona,',
+        '        persona: l.persona,\n'
+        '        authenticatedCommand: input.authenticatedCommands?.resolve("telegram", l.persona),')
+    entry = provenance.replace_exact(entry, '            persona: spec.persona,\n            runningPersonas,',
+        '            persona: spec.persona,\n'
+        '            authenticatedCommand: input.authenticatedCommands?.resolve("phantomchat", spec.persona),\n'
+        '            runningPersonas,')
+    sources['src/cli/run.ts'] = (
+        'import { AuthenticatedCommandRegistry, verifyAuthenticatedCommandRegistry } '
+        'from "../channels/core/authenticatedCommandRegistry.ts";\n' + entry)
     # All hashes, absent helpers and hook anchors are checked before any writes.
     provenance.patch(root)
     for name in reviewed.INPUTS:
         (root / name).write_text(sources[name], encoding='utf-8', newline='\n')
+    (root / 'src/cli/run.ts').write_text(sources['src/cli/run.ts'], encoding='utf-8', newline='\n')
     (root / HELPER).write_text(helper, encoding='utf-8', newline='\n')
+    (root / REGISTRY).write_text(registry, encoding='utf-8', newline='\n')
     for name in ('README.md', 'AGENTS.md'):
         target = root / name
         target.write_text(target.read_text(encoding='utf-8') + NOTE, encoding='utf-8', newline='\n')

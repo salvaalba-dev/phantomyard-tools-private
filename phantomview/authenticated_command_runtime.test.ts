@@ -12,6 +12,7 @@ import { SimplePoolPhantomchatTransport } from "../src/channels/phantomchat/tran
 import { wrapNip17Message, unwrapNip17Message, type NTNostrEvent } from "../src/lib/nostrCrypto.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
 import { TELEGRAM_BOT_COMMANDS } from "../src/channels/commands.ts";
+import { AuthenticatedCommandRegistry } from "../src/channels/core/authenticatedCommandRegistry.ts";
 
 let root: string, agentDir: string, memory: Awaited<ReturnType<typeof openMemoryStore>>;
 beforeEach(async () => {
@@ -72,9 +73,10 @@ describe("actual Telegram server dispatch", () => {
     const transport = { sent: [] as string[], async getUpdates() {
       return { updates: [message(extra)], reactions: [], nextOffset: 901 };
     }, async sendMessage(_id: string, text: string) { this.sent.push(text); }, async sendTyping() {} };
-    const router = new AuthenticatedCommand(options(async context => {
+    const registry = new AuthenticatedCommandRegistry([{ channel: "telegram", ...options(async context => {
       calls.push(context); if (fails) throw Error("synthetic private error");
-    }));
+    }) }]);
+    const router = registry.resolve("telegram", "phantom");
     await runTelegramServer({ config: config(allowed), memory, agentDir, persona: "phantom",
       harnesses: [h as never], transport: transport as never, oneShot: true,
       authenticatedCommand: enabled ? router : undefined });
@@ -121,7 +123,9 @@ describe("actual PhantomChat server dispatch", () => {
     const pool = new Pool(), controller = new AbortController(), calls: AuthenticatedCommandContext[] = [], h = harness();
     const transport = new SimplePoolPhantomchatTransport(own, ["wss://relay.example"], pool as never);
     const channel = createPhantomchatChannel({ secretKey: own, publicKeyHex: ownHex, transport });
-    const router = new AuthenticatedCommand(options(async context => { calls.push(context); controller.abort(); }));
+    const registry = new AuthenticatedCommandRegistry([{ channel: "phantomchat",
+      ...options(async context => { calls.push(context); controller.abort(); }) }]);
+    const router = registry.resolve("phantomchat", "phantom");
     const task = runPhantomchatServer({ config: config(), memory, agentDir, persona: "phantom",
       harnesses: [h as never], channel, secretKey: own, allowedHex: [peerHex], authenticatedCommand: router,
       signal: controller.signal, fetchProfiles: async () => new Map() });

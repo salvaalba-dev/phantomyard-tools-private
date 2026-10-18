@@ -53,6 +53,44 @@ make this callback available, and do not treat this source proposal as AU readin
 The existing signed-link design is untouched. No human login or second signature
 is added by the seam. No credential is copied and no global persona is switched.
 
+## Explicit daemon startup registration
+
+The private source proposal now threads `RunInput.authenticatedCommands` through
+the existing `runRun` startup. Trusted host code constructs an
+`AuthenticatedCommandRegistry` with explicit channel/persona/command/callback
+entries. The registry is validated before configuration loading. Each actual
+listener resolves its own exact route; an unregistered persona or channel gets no
+handler. There is no default-persona fallback. Registrations are copied, duplicate
+routes and native control names are rejected, and state is separate per route.
+
+An embedded startup can use the following shape after the reviewed native patch:
+
+```typescript
+const authenticatedCommands = new AuthenticatedCommandRegistry([
+  { channel: "telegram", persona: "coordinator", command: "/phantomview",
+    handle: verifiedTelegramLinkHandler },
+  { channel: "phantomchat", persona: "coordinator", command: "/phantomview",
+    handle: verifiedPhantomchatLinkHandler },
+]);
+await runRun({ authenticatedCommands });
+```
+
+The two handlers above must be supplied by the trusted integration; the example
+does not create them. They are not model tools or JSON configuration. Use the
+existing daemon startup and process lock, not a second polling process. No native
+CLI flag, dynamic module loader, environment hook, service or signer discovery is
+added. An unmodified CLI still starts without this registration. This closes
+programmatic startup routing, not live link issuance or AU activation. The old
+account-isolated callback keeps its checks and is not automatically compatible
+with the shared collaborative daemon.
+
+Standalone tests cover exact routing, immutable copies, duplicate/control-name
+refusal and independent persona attempt state. The native startup fixture uses
+temporary stores and stubbed Telegram listeners to check actual `runRun` wiring.
+Native Telegram dispatch and verified PhantomChat gift-wrap fixtures now resolve
+their handlers through the same registry. They do not contact live users or prove
+production signing, delivery, reader integration or full startup networking.
+
 ## Reader callback integration
 
 The private [native link callback](NATIVE_LINK_CALLBACK.md) now connects the seam

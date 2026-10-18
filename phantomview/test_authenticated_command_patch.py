@@ -39,6 +39,12 @@ class AuthenticatedCommandPatchTests(unittest.TestCase):
             self.assertIn(native.NOTE, (self.root / name).read_text(encoding='utf-8'))
         self.assertTrue((self.root / native.HELPER).is_file())
         self.assertFalse((self.root / native.reviewed.HELPER).exists())
+        startup = (self.root / 'src/cli/run.ts').read_text(encoding='utf-8')
+        self.assertLess(startup.index('verifyAuthenticatedCommandRegistry(input.authenticatedCommands)'),
+                        startup.index('let config = input.config'))
+        self.assertIn('input.authenticatedCommands?.resolve("telegram", l.persona)', startup)
+        self.assertIn('input.authenticatedCommands?.resolve("phantomchat", spec.persona)', startup)
+        self.assertTrue((self.root / native.REGISTRY).is_file())
 
     def test_drift_or_reapplication_refuses_before_writing(self):
         path = self.root / 'src/channels/phantomchat/server.ts'
@@ -72,6 +78,21 @@ class AuthenticatedCommandPatchTests(unittest.TestCase):
             native.patch(self.root)
         self.assertEqual(before, self.snapshot())
 
+    def test_startup_drift_or_existing_registry_refuses_without_partial_preparation(self):
+        path = self.root / 'src/cli/run.ts'
+        original = path.read_text(encoding='utf-8')
+        path.write_text(original + '\n// Unsupported startup\n', encoding='utf-8', newline='\n')
+        before = self.snapshot()
+        with self.assertRaises(ValueError):
+            native.patch(self.root)
+        self.assertEqual(before, self.snapshot())
+        path.write_text(original, encoding='utf-8', newline='\n')
+        (self.root / native.REGISTRY).write_text('operator registry', encoding='utf-8')
+        before = self.snapshot()
+        with self.assertRaises(ValueError):
+            native.patch(self.root)
+        self.assertEqual(before, self.snapshot())
+
 
 @unittest.skipUnless(shutil.which('node'), 'Node.js is required')
 class AuthenticatedCommandRuntimeTests(unittest.TestCase):
@@ -79,6 +100,7 @@ class AuthenticatedCommandRuntimeTests(unittest.TestCase):
         version = subprocess.run(['node', '--version'], capture_output=True, text=True, check=True)
         if int(version.stdout.strip().lstrip('v').split('.')[0]) < 24:
             self.skipTest('Node 24 TypeScript stripping is required for standalone tests')
-        result = subprocess.run(['node', '--test', 'test_authenticated_command.cjs'],
+        result = subprocess.run(['node', '--test', 'test_authenticated_command.cjs',
+                                 'test_authenticated_command_registry.cjs'],
             cwd=Path(__file__).parent, capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

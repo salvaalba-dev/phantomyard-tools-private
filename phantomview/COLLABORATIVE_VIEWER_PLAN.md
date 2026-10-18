@@ -172,6 +172,14 @@ client. This does not provision a signer, authorize a shared model account, crea
 another service or establish live AU compatibility. Callback lifecycle and real
 Linux account tests are separate from deployment acceptance.
 
+Programmatic startup routing now passes an explicit immutable command registry
+through the existing `runRun` to each exact channel/persona listener. Missing
+registrations have no fallback, and no extra process or CLI plugin loader is
+introduced. Native startup and both channel dispatch fixtures exercise this
+source proposal. This does not register production handlers, resolve the shared
+host/old callback boundary or activate AU; verified issuance through the actual
+reader remains the P1 acceptance requirement.
+
 ### P2. Align PhantomOrg declarations and resource metadata
 
 Installed-path review: [AU compatibility evidence](AU_PHANTOMORG_COMPATIBILITY.md)
