@@ -90,3 +90,57 @@ a human, add channel hooks, start an assistant or change native collaborative me
 See [source application](SETUP_DECLARATION_PROPOSAL.md#approved-source-only-application),
 [publication prerequisites](AU_AUTHORITY_PUBLICATION_READINESS.md) and
 [the collaborative plan](COLLABORATIVE_VIEWER_PLAN.md).
+
+## Recovered AU preflight, 2026-10-18
+
+The separate administrative terminal again displayed a root shell and completed
+the selected read-only checks. The user-opened terminal belonged to another domain
+account; it was observed only and was not used to run commands.
+
+The authoritative source still has the applied SHA-256
+`29052cfb4ae57dffb9dc0db6d882e8ce02d247b3ea1eb6702d5e54961566697a`,
+three counterpart declarations and the viewer scope policy. The installed collector
+still has SHA-256 `5c501b508f842b05afa02242d341af9db4d5a9a32de1f2feb55eacc8b60f5d2c`;
+the staged package has not been installed. System Python is 3.12.3. Configured
+software auto-update interval is zero and no software tag is selected.
+
+The effective collector command is the existing Python `sync --export` invocation
+recorded in the publication prerequisites. Its base unit uses `NoNewPrivileges=true`,
+`ProtectSystem=strict` and `ReadWritePaths=/var/lib/phantomview-au`. One existing
+drop-in, `assistant.conf`, adds only `ExecStartPre` and references the installed
+`assistant.py`. Preserve this helper, the sandbox settings and all existing options.
+The viewer and timer were active; the collector was observed during an invocation
+with its previous result successful. Serialize any switch with that oneshot.
+
+The reader directory remains root-owned, mode `02750`, group ID 1001. Both the
+private authority directory and collector-release parent are absent. The original
+projector fingerprint is unchanged. The derived organization file still has the
+original source hash: its parent is `root:phantomdocs` mode `0750`, and the file is
+`root:phantomdocs` mode `0640`. Do not copy it to the reader or change that group's
+permissions as a substitute for the reviewed private publication.
+
+The existing analysis worker runs as `pb-paco`, while its bridge runs as `aunited`.
+This is evidence about current service accounts, not a native conversation test or
+an isolated browser-session boundary. No raw environment or credentials were read.
+
+The [proposed collector drop-in](au-collector-publication.conf.example)
+now provides the exact command for review. It would be installed as a new dedicated
+`private-authority.conf` drop-in, preserving `assistant.conf`. Only the collector
+would use `/opt/phantomview-au/collector-releases/cac4a3b`; the installed viewer's
+program and assets would remain unchanged. The existing timer would be paused only
+for the serialized switch, then resumed at its existing cadence. No new unit,
+listener, signer or credential is proposed.
+
+The access decision remains explicit: the new authority directory would be
+`root:aunited` mode `02750`, with generated files `0640`. The complete organization
+document includes human identity and policy metadata. Every process with the same
+reader account or applicable group access could read it; per-human browser ACL does
+not isolate processes sharing that account. Creating this access requires approval
+at the point of activation. This preflight made no permission or deployment change.
+
+Approval of that collector-only publication would not activate the identified
+reader or assistant, approve KB candidates, propagate the separate derived copy,
+grant projects/actions or select an active reader lease. The proposed 600-second
+lease remains for the later identified-reader configuration. After an approved
+switch, verify private ownership/modes, exact source/index binding, excluded private
+metadata, successful collection and preserved viewer/timer state before proceeding.

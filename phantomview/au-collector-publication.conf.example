@@ -1,0 +1,6 @@
+# Proposed AU collector drop-in; not installed or activated.
+# Preserve the existing assistant.conf ExecStartPre and unit sandbox settings.
+# Verify the staged release and approve private-reader access before installation.
+[Service]
+ExecStart=
+ExecStart=/usr/bin/python3 /opt/phantomview-au/collector-releases/cac4a3b/phantomview.py --config /var/lib/phantomview-au/collector/config.json sync --export /var/lib/phantomview-au/reader/index.json --authority-dir /var/lib/phantomview-au/authority --authority-org aquaponics-united
