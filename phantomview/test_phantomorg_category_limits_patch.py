@@ -10,6 +10,20 @@ import phantomorg_category_limits_patch as proposal
 
 
 class CategoryPreparationTests(unittest.TestCase):
+    def test_git_receives_only_normalized_binary_patch_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'proposal.patch'
+            path.write_bytes(b'patch\r\ncontext\r\n')
+            with mock_patch.object(proposal.subprocess, 'run') as run:
+                proposal._apply(Path(directory), path)
+                self.assertEqual(run.call_count, 2)
+                for call in run.call_args_list:
+                    self.assertEqual(call.kwargs['input'], b'patch\ncontext\n')
+                    self.assertTrue(call.kwargs['check'])
+                    self.assertNotIn('text', call.kwargs)
+                self.assertIn('--check', run.call_args_list[0].args[0])
+                self.assertNotIn('--check', run.call_args_list[1].args[0])
+
     def test_drift_rejected_before_git_and_source_writes(self):
         manifest = json.loads(Path(proposal.__file__).with_name('phantomorg-category-limits.manifest.json').read_text())
         with tempfile.TemporaryDirectory() as directory:

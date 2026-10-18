@@ -10,6 +10,16 @@ def digest(path):
     return hashlib.sha256(path.read_text(encoding='utf-8').replace('\r\n', '\n').encode()).hexdigest()
 
 
+def _apply(root, proposal):
+    # Match the normalized checksum even when an editor stores the patch as CRLF.
+    # Binary stdin avoids Windows text-mode newline translation on the way to Git.
+    raw = proposal.read_text(encoding='utf-8').replace('\r\n', '\n').encode()
+    command = ['git', 'apply', '--whitespace=error', '-']
+    subprocess.run(command[:2] + ['--check'] + command[2:], cwd=root, input=raw,
+                   check=True, capture_output=True)
+    subprocess.run(command, cwd=root, input=raw, check=True, capture_output=True)
+
+
 def patch(root):
     root = Path(root).absolute()
     bundle = Path(__file__).resolve().parent
@@ -33,9 +43,7 @@ def patch(root):
                 raise ValueError('Category limit proposal requires a new path')
         elif not target.is_file() or digest(target) != expected:
             raise ValueError('Unsupported PhantomOrg source; prepare the exact historical private proposal first')
-    command = ['git', 'apply', '--whitespace=error', str(proposal)]
-    subprocess.run(command[:2] + ['--check'] + command[2:], cwd=root, check=True, capture_output=True, text=True)
-    subprocess.run(command, cwd=root, check=True, capture_output=True, text=True)
+    _apply(root, proposal)
     for name, row in manifest['files'].items():
         if digest(root / name) != row['output_sha256_lf']:
             raise ValueError('Category limit proposal result mismatch; discard this disposable source tree')
