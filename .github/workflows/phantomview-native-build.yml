@@ -1,0 +1,137 @@
+# Operator build only: accepts non-secret fixed deployment coordinates.
+# Never supply keys, human contacts, tokens, transcripts or organization payloads.
+# Produces a private, short-lived artifact; cannot deploy or activate any host.
+name: PhantomView operator native build
+
+on:
+  workflow_dispatch:
+    inputs:
+      native_host_json:
+        description: Reviewed non-secret native host routes JSON (no credentials or human identifiers)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.repository == 'salvaalba-dev/phantomyard-tools-private' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate operator input as data before native preparation
+        env:
+          NATIVE_HOST_JSON: ${{ inputs.native_host_json }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'phantomview')
+          from native_host_entry import _unique, validate_routes
+          raw = os.environ.pop('NATIVE_HOST_JSON')
+          if len(raw.encode('utf-8')) > 65536:
+              raise ValueError('Build input exceeds its bound')
+          document = json.loads(raw, object_pairs_hook=_unique)
+          validate_routes(document)
+          directory = Path('operator-build')
+          directory.mkdir(mode=0o700)
+          canonical = json.dumps(document, sort_keys=True, separators=(',', ':')).encode()
+          with (directory / 'routes.json').open('xb') as stream:
+              stream.write(canonical)
+          (directory / 'routes.json').chmod(0o600)
+          (directory / 'routes.sha256').write_text(hashlib.sha256(canonical).hexdigest())
+          print('Validated fixed native deployment coordinates; no access grants created')
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: phantomyard/phantombot
+          ref: 5af27060327ee8c53fe730dd8b98b6b305c62add
+          path: native-source
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.3.11'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: salvaalba-dev/phantomyard-tools
+          ref: 4147924afad85b1db6752b709c29b78d6f56774c
+          path: signing-source
+          persist-credentials: false
+      - name: Install the reviewed real verifier in a disposable environment
+        run: |
+          python3 -m venv signer-venv
+          signer-venv/bin/python -m pip install -r phantomview/requirements.txt './signing-source/phantomblog[access]'
+      - name: Verify exact-source preparation and refusal tests
+        working-directory: phantomview
+        env:
+          PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/native-source
+        run: python3 -m unittest test_authenticated_command_patch test_native_host_entry -v
+      - name: Prepare reviewed operator routes without changing upstream
+        run: |
+          python3 phantomview/native_host_entry.py native-source operator-build/routes.json
+          cp phantomview/authenticated_command_runtime.test.ts native-source/tests/phantomview-authenticated-command.test.ts
+          cp phantomview/authenticated_command_startup.test.ts native-source/tests/phantomview-command-startup.test.ts
+          cp phantomview/private_control_runtime.test.ts native-source/tests/phantomview-private-control.test.ts
+          cp phantomview/native_link_callback.test.ts native-source/tests/phantomview-native-link.test.ts
+          cp phantomview/native_link_signer.test.ts native-source/tests/phantomview-native-signer.test.ts
+          cp phantomview/native_startup_binding.test.ts native-source/tests/phantomview-runtime-binding.test.ts
+          cp phantomview/native_ingress_runtime.test.ts native-source/tests/phantomview-ingress.test.ts
+          cp phantomview/persona_conversation_runtime.test.ts native-source/tests/phantomview-persona-conversation.test.ts
+      - name: Install unchanged locked native dependencies
+        working-directory: native-source
+        run: bun install --frozen-lockfile
+      - name: Verify native dispatch, authenticated channels and startup
+        working-directory: native-source
+        run: |
+          bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-native-link.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
+          bun test tests/phantomview-command-startup.test.ts tests/phantomview-runtime-binding.test.ts tests/cli-run.test.ts
+      - name: Verify existing-persona transport, private controls and real signing
+        working-directory: native-source
+        env:
+          PHANTOMVIEW_SIGNER_PYTHON: ${{ github.workspace }}/signer-venv/bin/python
+          PHANTOMVIEW_SOURCE: ${{ github.workspace }}/phantomview
+        run: |
+          bun test tests/phantomview-persona-conversation.test.ts tests/cli-ask.test.ts
+          bun test tests/phantomview-private-control.test.ts tests/phantomview-native-signer.test.ts
+      - name: Compile Linux x64 baseline binary
+        working-directory: native-source
+        run: bun run build:x64
+      - name: Record exact artifact provenance without copying route data
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, shutil
+          from pathlib import Path
+          root = Path('operator-build')
+          output = root / 'artifact'
+          output.mkdir(mode=0o700)
+          binary = output / 'phantombot'
+          shutil.copyfile('native-source/dist/phantombot', binary)
+          binary.chmod(0o755)
+          receipt = {
+              'schema_version': 1,
+              'helper_revision': os.environ['GITHUB_SHA'],
+              'native_revision': '5af27060327ee8c53fe730dd8b98b6b305c62add',
+              'bun_version': '1.3.11',
+              'target': 'bun-linux-x64-baseline',
+              'routes_sha256': (root / 'routes.sha256').read_text(),
+              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+              'binary_bytes': binary.stat().st_size,
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'tests_passed': True,
+              'installed': False,
+              'activation_ready': False,
+          }
+          (output / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phantomview-native-${{ github.run_id }}
+          path: operator-build/artifact/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
