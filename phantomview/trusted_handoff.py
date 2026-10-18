@@ -1,8 +1,7 @@
-"""Inactive Linux IPC boundary for a separately isolated native channel service.
+"""Opt-in Linux IPC with explicit whole-daemon or historical isolated trust.
 
-No HTTP route, shell command, daemon or CLI switch enables this module. The
-operator must provision distinct channel, reader and model security principals.
-The channel service, not a model tool, owns verified direct-message context.
+No import starts a listener. The operator selects the policy in trusted host
+configuration; channel context never chooses its own trust boundary.
 """
 from dataclasses import dataclass
 import json
@@ -41,6 +40,24 @@ class PeerPolicy:
         pid, uid, _ = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, size))
         if pid <= 0 or uid != self.issuer_uid or uid in self.model_uids:
             raise ValueError('Untrusted channel-service peer')
+
+
+@dataclass(frozen=True)
+class DaemonPeerPolicy(PeerPolicy):
+    """Explicit whole-daemon trust, including code with its account privileges.
+
+    Kernel credentials authenticate an account, not a particular PID, channel
+    message or safe model output. The reader still uses a separate account.
+    """
+    model_uids: frozenset[int] = frozenset()
+
+    def __post_init__(self):
+        if sys.platform != 'linux' or not hasattr(socket, 'SO_PEERCRED'):
+            raise ValueError('Daemon handoff requires Linux kernel peer credentials')
+        if (type(self.issuer_uid) is not int or self.issuer_uid <= 0
+                or self.issuer_uid == os.getuid() or os.getuid() == 0
+                or self.model_uids != frozenset() or not isinstance(self.model_uids, frozenset)):
+            raise ValueError('Explicit nonroot daemon and separate reader accounts required')
 
 
 def bind_listener(path, group_id):

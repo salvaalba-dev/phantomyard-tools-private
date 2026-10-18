@@ -1,4 +1,4 @@
-"""Inactive native-service client; never expose this function as a model tool."""
+"""Native client with explicit daemon or historical isolated reader verification."""
 from dataclasses import dataclass
 import json
 import os
@@ -35,6 +35,20 @@ class ReaderPolicy:
                                                               struct.calcsize('3i')))
         if pid <= 0 or uid != self.receiver_uid:
             raise ValueError('Unexpected reader process account')
+
+
+@dataclass(frozen=True)
+class DaemonReaderPolicy(ReaderPolicy):
+    """Reader verification for an explicitly trusted whole-daemon account."""
+    model_uids: frozenset[int] = frozenset()
+
+    def __post_init__(self):
+        if sys.platform != 'linux' or not hasattr(socket, 'SO_PEERCRED'):
+            raise ValueError('Daemon handoff requires Linux kernel peer credentials')
+        if (type(self.receiver_uid) is not int or self.receiver_uid <= 0
+                or os.getuid() == 0 or self.receiver_uid == os.getuid()
+                or not isinstance(self.model_uids, frozenset) or self.model_uids):
+            raise ValueError('Explicit nonroot daemon and separate reader accounts required')
 
 
 def _destination(path, policy):

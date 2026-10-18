@@ -6,6 +6,15 @@ It records the agreed direction; it does not claim a deployed identified assista
 Development remains in `salvaalba-dev/phantomyard-tools-private`, with linear
 history, English source/documentation/examples and no upstream modifications.
 
+Trust decision, 2026-10-18: the existing PhantomBot daemon as a whole is the
+trusted issuer, including its tools and account privileges. Use the explicit
+[daemon trust mode](DAEMON_TRUST.md), preserving peer-account and signed-link
+verification without requiring model/issuer account separation. This supersedes
+that historical isolation prerequisite in older proposals. It does not provide
+per-PID attestation or protect against code that compromises the daemon account.
+PhantomOrg remains authoritative for recipient resolution and information access.
+No production service or access policy is changed by this source implementation.
+
 ## Product and ownership
 
 PhantomView is a visual interface to an existing PhantomOrg organization and a

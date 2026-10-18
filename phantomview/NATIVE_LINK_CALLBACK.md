@@ -1,5 +1,13 @@
 # Native command to identified-link callback
 
+The selected [whole-daemon trust mode](DAEMON_TRUST.md) now supports the existing
+collaborative daemon without separating its model/tool execution. Set the fixed
+host option `trustBoundary: "daemon"` with `modelUids: []`. Omission retains the
+historical isolated mode described below. Kernel account verification, reader
+separation, signed verification and direct recipient delivery remain required;
+daemon mode makes no claim to distinguish tools from other code in that account.
+This explicit source integration is not enabled on AU.
+
 Status: inactive source integration. No live AU configuration, channel, signer,
 credential or service has changed. This binds the
 [generic authenticated command seam](AUTHENTICATED_COMMAND_SEAM.md) to the existing

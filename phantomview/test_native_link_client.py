@@ -44,6 +44,18 @@ class NativeLinkClientTests(unittest.TestCase):
             key: self.document[key] for key in ('channel', 'sender', 'direct', 'principal_authenticated', 'scope_id')})
         self.assertNotIn('101', json.dumps(response))
 
+    def test_explicit_daemon_mode_does_not_require_a_separate_model_inventory(self):
+        args = self.args.copy()
+        at = args.index('--model-uid')
+        del args[at:at + 2]
+        self.assertEqual(self.run_frame(args=args)[0], 1)
+        self.request.assert_not_called()
+        self.assertEqual(self.run_frame(args=args + ['--trust-boundary', 'daemon'])[0], 0)
+        self.assertIsInstance(self.request.call_args.args[1], handoff_client.DaemonReaderPolicy)
+        self.request.reset_mock()
+        self.assertEqual(self.run_frame(args=self.args + ['--trust-boundary', 'daemon'])[0], 1)
+        self.request.assert_not_called()
+
     def test_route_or_authority_overrides_never_reach_ipc(self):
         for changes in ({'channel': 'phantomchat'}, {'scope_id': 'other'}, {'human': 'owner'},
                         {'persona': 'other'}, {'direct': False}, {'principal_authenticated': False}):

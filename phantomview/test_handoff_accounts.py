@@ -19,7 +19,7 @@ import threading
 import time
 import unittest
 
-from handoff_client import ReaderPolicy, request_access
+from handoff_client import DaemonReaderPolicy, ReaderPolicy, request_access
 from native_access_command import DirectMessage, NativeAccessCommand, Outcome
 from native_link_client import run as run_native_link_client
 from reader_handoff import ReaderHandoff
@@ -29,7 +29,7 @@ from test_scoped_backend import ProjectionFixture
 import phantomview as pv
 import test_signed_recipient as signatures
 from test_view_permissions import scoped_organization
-from trusted_handoff import PeerPolicy, bind_listener, serve_connection
+from trusted_handoff import DaemonPeerPolicy, PeerPolicy, bind_listener, serve_connection
 
 READER, ISSUER, MODEL = 29001, 29002, 29003
 ENABLED = (sys.platform == 'linux' and getattr(os, 'geteuid', lambda: -1)() == 0
@@ -105,6 +105,47 @@ class CrossAccountTests(unittest.TestCase):
                               self.fixture.gate.origin, self.authorization,
                               {'channel': 'telegram', 'sender': '101', 'direct': True,
                                'principal_authenticated': True, 'scope_id': 'river-project'})
+
+    def test_explicit_daemon_trust_uses_real_kernel_peers_and_signed_recipient_redemption(self):
+        def reader():
+            gate, captured, accepted = self.fixture.gate, [], []
+            original = gate.issue_identified
+            def issue(*args, **kwargs):
+                link = original(*args, **kwargs)
+                captured.append(link)
+                return link
+            gate.issue_identified = issue
+            with bind_listener(self.path, ISSUER) as listener:
+                listener.settimeout(6)
+                policy = DaemonPeerPolicy(ISSUER)
+                os.write(self.ready_write, b'1')
+                for _ in range(2):
+                    connection, _ = listener.accept()
+                    accepted.append(serve_connection(connection, gate, policy))
+            cookie = gate.redeem(captured[0].split('#c=')[1])
+            recipient, _ = gate.identified_scope({'Cookie': 'phantomview=' + cookie})
+            return {'accepted': accepted, 'human': recipient.human, 'persona': recipient.persona,
+                    'scope': recipient.scope_id}
+
+        context = {'channel': 'telegram', 'sender': '101', 'direct': True,
+                   'principal_authenticated': True, 'scope_id': 'river-project'}
+        server = self.start(reader)
+        attacker = finish(spawn(MODEL, lambda: request_access(self.path, DaemonReaderPolicy(READER),
+            self.fixture.gate.origin, self.authorization, context)))
+        def native():
+            output = io.StringIO()
+            status = run_native_link_client(['--socket', self.path, '--issuer-uid', str(ISSUER),
+                '--reader-uid', str(READER), '--trust-boundary', 'daemon',
+                '--origin', self.fixture.gate.origin, '--channel', 'telegram', '--scope-id', 'river-project'],
+                io.BytesIO(json.dumps({'schema_version': 1, 'authorization': self.authorization} | context).encode()),
+                output)
+            return {'status': status, 'link': 'link' in json.loads(output.getvalue())}
+        trusted = finish(spawn(ISSUER, native))
+        result = finish(server)
+        self.assertFalse(attacker['ok'])
+        self.assertEqual(trusted, {'ok': True, 'value': {'status': 0, 'link': True}})
+        self.assertEqual(result, {'ok': True, 'value': {'accepted': [False, True], 'human': 'owner',
+                                                     'persona': 'coordinator', 'scope': 'river-project'}})
 
     def native_command(self):
         delivered = []

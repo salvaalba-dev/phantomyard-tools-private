@@ -46,6 +46,19 @@ test("one-shot framing keeps authorization and human identity out of argv and re
   expect(captured.argv).not.toContain("101");expect(captured.argv).not.toContain("Nostr synthetic-event");
 });
 
+test("whole-daemon trust is explicit and does not claim isolated model accounts", async () => {
+  expect(() => nativeLinkCallback(options({ modelUids: [] }))).toThrow();
+  expect(() => nativeLinkCallback(options({ trustBoundary: "daemon" }))).toThrow();
+  const delivery = mock(async () => true);
+  await nativeLinkCallback(options({ trustBoundary: "daemon", modelUids: [], deliverDirect: delivery }))
+    (context(), signal());
+  const captured = JSON.parse(await readFile(capture, "utf8"));
+  const at = captured.argv.indexOf("--trust-boundary");
+  expect(captured.argv[at + 1]).toBe("daemon");
+  expect(captured.argv).not.toContain("--model-uid");
+  expect(delivery.mock.calls).toHaveLength(1);
+});
+
 test("PhantomChat uses the existing native npub encoder for policy but native hex for direct delivery", async () => {
   const sender = "a".repeat(64), delivery = mock(async () => true);
   const callback = nativeLinkCallback(options({ channel: "phantomchat", deliverDirect: delivery }));

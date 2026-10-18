@@ -1,5 +1,13 @@
 # Private verified-channel handoff
 
+Selected architecture, 2026-10-18: the complete existing PhantomBot daemon is
+trusted, including its tools and account privileges. The explicit
+[daemon trust mode](DAEMON_TRUST.md) replaces mandatory issuer/model separation
+for that deployment choice. `DaemonPeerPolicy` and `DaemonReaderPolicy` retain
+kernel peer-account verification and the existing separate reader account.
+The isolated `PeerPolicy`/`ReaderPolicy` defaults below remain available and
+unchanged; do not apply their model-isolation claims to daemon mode.
+
 Status: inactive Linux IPC primitives, with synthetic and real-signature tests.
 There is no installed listener, native PhantomBot hook or enabled expanded access.
 See [integration status](VERIFIED_CHANNEL_INTEGRATION.md) for remaining work.

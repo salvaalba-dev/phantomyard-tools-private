@@ -11,6 +11,8 @@ export interface NativeLinkOptions {
   readonly issuerUid: number;
   readonly readerUid: number;
   readonly modelUids: readonly number[];
+  /** Explicit daemon trust includes its tools/account. Omission preserves isolated mode. */
+  readonly trustBoundary?: "isolated" | "daemon";
   readonly python: string;
   readonly clientScript: string;
   readonly socketPath: string;
@@ -28,10 +30,13 @@ export function nativeLinkCallback(options: NativeLinkOptions) {
   const positive = (value: unknown): value is number =>
     typeof value === "number" && Number.isSafeInteger(value) && value > 0;
   const assertAccount = () => {
+    const boundary = o.trustBoundary ?? "isolated";
     if (process.platform !== "linux" || !positive(process.getuid?.()) || process.getuid!() !== o.issuerUid
-      || !positive(o.readerUid) || o.readerUid === o.issuerUid || !o.modelUids.length
-      || o.modelUids.some(uid => !positive(uid) || uid === o.readerUid || uid === o.issuerUid))
-      throw new Error("Protected native issuer, reader and model accounts required");
+      || !positive(o.readerUid) || o.readerUid === o.issuerUid
+      || !["isolated", "daemon"].includes(boundary)
+      || (boundary === "daemon" ? o.modelUids.length !== 0 : (!o.modelUids.length
+        || o.modelUids.some(uid => !positive(uid) || uid === o.readerUid || uid === o.issuerUid))))
+      throw new Error("Configured native trust boundary and separate reader account required");
   };
   assertAccount();
   const origin = new URL(o.origin);
@@ -45,6 +50,7 @@ export function nativeLinkCallback(options: NativeLinkOptions) {
   const argv = ["-I", o.clientScript, "--socket", o.socketPath, "--issuer-uid", String(o.issuerUid),
     "--reader-uid", String(o.readerUid), ...o.modelUids.flatMap(uid => ["--model-uid", String(uid)]),
     "--origin", o.origin, "--channel", o.channel, "--scope-id", o.scopeId];
+  if (o.trustBoundary === "daemon") argv.push("--trust-boundary", "daemon");
   const deny = () => new Error("Native link handoff unavailable");
 
   function request(raw: string, signal: AbortSignal): Promise<string> {
