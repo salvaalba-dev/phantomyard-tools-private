@@ -4,11 +4,17 @@ on:
   push:
     paths:
       - 'phantomview/phantomorg-human-access.*'
+      - 'phantomview/phantomorg-category-limits.*'
+      - 'phantomview/phantomorg_category_limits_patch.py'
+      - 'phantomview/test_phantomorg_category_limits_patch.py'
       - 'phantomview/test_phantomorg_access.py'
       - '.github/workflows/phantomorg-human-access.yml'
   pull_request:
     paths:
       - 'phantomview/phantomorg-human-access.*'
+      - 'phantomview/phantomorg-category-limits.*'
+      - 'phantomview/phantomorg_category_limits_patch.py'
+      - 'phantomview/test_phantomorg_category_limits_patch.py'
       - 'phantomview/test_phantomorg_access.py'
       - '.github/workflows/phantomorg-human-access.yml'
 
@@ -73,3 +79,25 @@ jobs:
         run: python -m unittest test_phantomorg_access -v
       - name: Compile the patched package
         run: python -m compileall -q compatibility-source/phantomorg/phantomorg
+      - name: Prepare exact category-limit overlay and reject reapplication
+        run: |
+          python phantomview/phantomorg_category_limits_patch.py compatibility-source
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'phantomview')
+          from phantomorg_category_limits_patch import patch
+          try:
+              patch('compatibility-source')
+          except ValueError:
+              pass
+          else:
+              raise SystemExit('Overlay reapplication was not rejected')
+          PY
+      - name: Full PhantomOrg regression with category limits
+        working-directory: compatibility-source/phantomorg
+        run: python -m pytest tests -q
+      - name: Verify extended compiler and viewer agreement
+        working-directory: phantomview
+        run: |
+          python -m unittest test_phantomorg_access test_human_category_limits test_phantomorg_category_limits_patch -v
+          python -m compileall -q . ../compatibility-source/phantomorg/phantomorg

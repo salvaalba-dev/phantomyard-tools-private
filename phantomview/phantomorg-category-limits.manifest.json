@@ -1,0 +1,30 @@
+{
+  "base_proposal": "phantomorg-human-access.manifest.json",
+  "files": {
+    "phantomorg/phantomorg/spec/model.py": {
+      "input_sha256_lf": "2e571e2b5487ccccc4c851ab169b4f9abd9cf9c27b2a4d3cb9a4ea32d88198d7",
+      "output_sha256_lf": "0bb1be20347759ca391fea7f691a8e6813886d004a420cbfc911dcaabe9e1183"
+    },
+    "phantomorg/phantomorg/spec/schema.json": {
+      "input_sha256_lf": "530da0d1d4c9d31c16e1ef40a94b4ed2cfcbea2b17eb5ab0ce3f4240c2509bdc",
+      "output_sha256_lf": "b9ce17c5d722fca37fa3868e8f3175c72288b0a56adad0875b7eaf53a0329bb0"
+    },
+    "phantomorg/phantomorg/spec/shape_validator.py": {
+      "input_sha256_lf": "f235cfbaf48c9e73962dfa165095d54f172adc7c5745ed5d217cdfe92c154ce9",
+      "output_sha256_lf": "8c22959a3baf0569332bd49c4b8f5619665bd9b3d2df8282fc8e4cb127f05a17"
+    },
+    "phantomorg/phantomorg/validator/refs.py": {
+      "input_sha256_lf": "b45db5a0b368c95b32b1261a54785fbfcd1d7d0f7cf063b32b928b820c8d16b8",
+      "output_sha256_lf": "50ec33d4506e81e642a1f042021f1b2c402e481122207d45178d30ac2c7a78c4"
+    },
+    "phantomorg/tests/test_category_limits.py": {
+      "input_sha256_lf": null,
+      "output_sha256_lf": "d1880eb03e46c36d0929596193b86f60f73b126ced1bf17006714d33d61f603a"
+    },
+    "phantomorg/tests/test_human_access.py": {
+      "input_sha256_lf": "6880181c37e62fa2a12b0c7a7e3ecd29dea6765052899febdc080f3e02bc988a",
+      "output_sha256_lf": "b8b8a28a671e8b0e65db15ee5bc084f154c44ecdf10739605959f9d11fd04e04"
+    }
+  },
+  "patch_sha256": "f3900bc4f0f7a0f7dcc57cf7365c0f61005eefc157c8fe9d4612a7aeafd9dea5"
+}

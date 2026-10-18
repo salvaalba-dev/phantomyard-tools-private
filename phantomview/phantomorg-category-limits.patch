@@ -1,0 +1,273 @@
+--- a/phantomorg/phantomorg/spec/model.py
++++ b/phantomorg/phantomorg/spec/model.py
+@@ -171,6 +171,7 @@
+     scope_definitions: dict[str, ViewScopeDefinition] | None = None
+     persona_scope_grants: dict[str, list[str]] = field(default_factory=dict)
+     human_action_grants: dict[str, dict[str, list[str]]] = field(default_factory=dict)
++    human_category_limits: dict[str, list[str]] = field(default_factory=dict)
+ 
+ 
+ @dataclass
+@@ -199,6 +200,10 @@
+             access_levels=levels,
+             security_categories=cats,
+             phantomview=PhantomViewPolicy(
++                human_category_limits={
++                    human: list(categories)
++                    for human, categories in view.get("human_category_limits", {}).items()
++                },
+                 project_grants={
+                     actor: list(projects)
+                     for actor, projects in view.get("project_grants", {}).items()
+--- a/phantomorg/phantomorg/spec/schema.json
++++ b/phantomorg/phantomorg/spec/schema.json
+@@ -659,6 +659,83 @@
+                   }
+                 }
+               }
++            },
++            "human_category_limits": {
++              "type": "object",
++              "propertyNames": {
++                "type": "string",
++                "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                "maxLength": 64,
++                "not": {
++                  "enum": [
++                    "con",
++                    "prn",
++                    "aux",
++                    "nul",
++                    "com1",
++                    "com2",
++                    "com3",
++                    "com4",
++                    "com5",
++                    "com6",
++                    "com7",
++                    "com8",
++                    "com9",
++                    "lpt1",
++                    "lpt2",
++                    "lpt3",
++                    "lpt4",
++                    "lpt5",
++                    "lpt6",
++                    "lpt7",
++                    "lpt8",
++                    "lpt9"
++                  ]
++                }
++              },
++              "additionalProperties": {
++                "type": "array",
++                "items": {
++                  "type": "string",
++                  "pattern": "^[a-z0-9][a-z0-9_-]*$(?![\\s\\S])",
++                  "maxLength": 64,
++                  "not": {
++                    "enum": [
++                      "con",
++                      "prn",
++                      "aux",
++                      "nul",
++                      "com1",
++                      "com2",
++                      "com3",
++                      "com4",
++                      "com5",
++                      "com6",
++                      "com7",
++                      "com8",
++                      "com9",
++                      "lpt1",
++                      "lpt2",
++                      "lpt3",
++                      "lpt4",
++                      "lpt5",
++                      "lpt6",
++                      "lpt7",
++                      "lpt8",
++                      "lpt9"
++                    ]
++                  },
++                  "allOf": [
++                    {
++                      "not": {
++                        "const": "category-0"
++                      }
++                    }
++                  ]
++                },
++                "uniqueItems": true,
++                "minItems": 1
++              }
+             }
+           },
+           "dependencies": {
+--- a/phantomorg/phantomorg/spec/shape_validator.py
++++ b/phantomorg/phantomorg/spec/shape_validator.py
+@@ -478,7 +478,7 @@
+     if "phantomview" in policies:
+         view = _require_mapping(policies["phantomview"], "policies.phantomview")
+         _reject_unknown_keys(view, {"project_grants", "scope_definitions", "persona_scope_grants",
+-                                    "human_action_grants"}, "policies.phantomview")
++                                    "human_action_grants", "human_category_limits"}, "policies.phantomview")
+         if ("persona_scope_grants" in view or "human_action_grants" in view) and "scope_definitions" not in view:
+             raise ShapeError("policies.phantomview: scope_definitions required for scope/action grants")
+         if "scope_definitions" in view:
+@@ -496,6 +496,19 @@
+                     _require_type(definition["label"], str, "policies.phantomview.scope_definitions label")
+                     if not definition["label"].strip():
+                         raise ShapeError("policies.phantomview.scope_definitions: empty label")
++        limits = _require_mapping(view.get("human_category_limits", {}),
++                                  "policies.phantomview.human_category_limits")
++        for human, categories in limits.items():
++            _require_id(human, "policies.phantomview.human_category_limits human")
++            _require_list(categories, "policies.phantomview.human_category_limits categories")
++            if not categories:
++                raise ShapeError("policies.phantomview.human_category_limits: empty restriction")
++            for category in categories:
++                _require_id(category, "policies.phantomview.human_category_limits category")
++                if category == "category-0":
++                    raise ShapeError("policies.phantomview.human_category_limits: category zero is independent")
++            if len(set(categories)) != len(categories):
++                raise ShapeError("policies.phantomview.human_category_limits: duplicate category")
+         for field in ("persona_scope_grants", "human_action_grants"):
+             values = _require_mapping(view.get(field, {}), f"policies.phantomview.{field}")
+             for principal, grants_ in values.items():
+--- a/phantomorg/phantomorg/validator/refs.py
++++ b/phantomorg/phantomorg/validator/refs.py
+@@ -241,6 +241,27 @@
+                 problems.append(
+                     "policies.phantomview: category-0 owner must resolve to exactly one registered human"
+                 )
++        humans_by_id = {human.id: human for human in spec.humans}
++        actors_by_id = {actor.id: actor for actor in spec.actors}
++        roles_by_id = {role.id: role for role in spec.roles}
++        for human_id, categories in view.human_category_limits.items():
++            human = humans_by_id.get(human_id)
++            actor = actors_by_id.get(human.counterpart_persona) if human else None
++            if actor is None:
++                problems.append("policies.phantomview.human_category_limits: existing human counterpart required")
++                continue
++            if zero is not None and zero.owner is not None:
++                owner = zero.owner.strip().casefold()
++                if human.id.casefold() == owner or (human.name or "").strip().casefold() == owner:
++                    problems.append("policies.phantomview.human_category_limits: absolute owner cannot be restricted")
++            role = roles_by_id.get(actor.role)
++            level = spec.policies.access_levels.get(role.access_level) if role else None
++            inherited = (list(level.categories) if level else [])
++            inherited += list(role.security_exceptions) if role else []
++            inherited += list(actor.actor_exceptions)
++            granted = {"category-" + str(c) if type(c) is int else c for c in inherited}
++            if not set(categories) <= granted or not set(categories) <= security_category_ids:
++                problems.append("policies.phantomview.human_category_limits: categories may only narrow declared counterpart grants")
+         # Missing owner is resolved by the reader against its verified installation
+         # default. This validator never guesses a default from a role or job title.
+ 
+--- /dev/null
++++ b/phantomorg/tests/test_category_limits.py
+@@ -0,0 +1,92 @@
++"""Restriction metadata cannot widen the inherited counterpart categories."""
++import copy
++from dataclasses import asdict
++import json
++from pathlib import Path
++
++from jsonschema import Draft7Validator
++import pytest
++import yaml
++
++from phantomorg.spec.model import OrgSpec
++from phantomorg.spec.shape_validator import ShapeError, validate_shape
++from phantomorg.validator.refs import check_references
++
++ROOT = Path(__file__).parent.parent
++SCHEMA = json.loads((ROOT / "phantomorg/spec/schema.json").read_text(encoding="utf-8"))
++
++
++@pytest.fixture
++def org():
++    source = yaml.safe_load((ROOT / "organizations/verdant-aquaponics/org.yaml").read_text(encoding="utf-8"))
++    source["humans"] = [{"id": "member", "counterpart_persona": "lucia"}, {"id": "owner"}, {"id": "unbound"}]
++    source["policies"]["security_categories"]["category-0"]["owner"] = "owner"
++    source["policies"]["security_categories"]["category-4-river"] = {"label": "Project sensitive"}
++    actor = next(row for row in source["actors"] if row["id"] == "lucia")
++    actor.setdefault("actor_exceptions", []).append("category-4-river")
++    source["policies"]["phantomview"] = {"human_category_limits": {"member": ["category-4-river"]}}
++    return source
++
++
++def test_round_trip_preserves_restriction_and_does_not_modify_persona(org):
++    before = copy.deepcopy(org)
++    assert Draft7Validator(SCHEMA).is_valid(org)
++    validate_shape(org)
++    model = OrgSpec.from_dict(org)
++    assert check_references(model) == []
++    assert asdict(model.policies.phantomview)["human_category_limits"] == {"member": ["category-4-river"]}
++    org["policies"]["phantomview"]["human_category_limits"]["member"].append("category-1")
++    assert model.policies.phantomview.human_category_limits == {"member": ["category-4-river"]}
++    assert before["actors"] == org["actors"]
++
++
++@pytest.mark.parametrize("limits", [None, [], {"member": []}, {"member": "category-1"},
++    {"member": [1]}, {"member": ["category-0"]}, {"member": ["category-1", "category-1"]}])
++def test_invalid_shapes_rejected_by_both_validators(org, limits):
++    org["policies"]["phantomview"]["human_category_limits"] = limits
++    assert not Draft7Validator(SCHEMA).is_valid(org)
++    with pytest.raises(ShapeError):
++        validate_shape(org)
++
++
++@pytest.mark.parametrize("human,categories", [("missing", ["category-1"]), ("unbound", ["category-1"]),
++    ("member", ["category-unknown"]), ("owner", ["category-1"])])
++def test_unknown_unbound_and_ungranted_references_rejected(org, human, categories):
++    if human == "owner":
++        org["humans"][0].pop("counterpart_persona")
++        org["humans"][1]["counterpart_persona"] = "lucia"
++    org["policies"]["phantomview"]["human_category_limits"] = {human: categories}
++    validate_shape(org)
++    assert any("human_category_limits" in error for error in check_references(OrgSpec.from_dict(org)))
++
++
++def test_missing_field_preserves_existing_defaults(org):
++    del org["policies"]["phantomview"]["human_category_limits"]
++    validate_shape(org)
++    model = OrgSpec.from_dict(org)
++    assert model.policies.phantomview.human_category_limits == {}
++    assert check_references(model) == []
++
++
++def test_declared_but_ungranted_category_is_not_an_escalation(org):
++    org["policies"]["security_categories"]["category-8-ungranted"] = {"label": "Not granted"}
++    org["policies"]["phantomview"]["human_category_limits"] = {"member": ["category-8-ungranted"]}
++    validate_shape(org)
++    assert any("human_category_limits" in error for error in check_references(OrgSpec.from_dict(org)))
++
++
++def test_role_exceptions_and_level_categories_remain_valid_sources(org):
++    actor = next(row for row in org["actors"] if row["id"] == "lucia")
++    role = next(row for row in org["roles"] if row["id"] == actor["role"])
++    role["security_exceptions"] = ["category-4-river"]
++    actor["actor_exceptions"] = []
++    org["policies"]["access_levels"][role["access_level"]]["categories"] = [1, 2]
++    org["policies"]["phantomview"]["human_category_limits"]["member"] = ["category-1", "category-2", "category-4-river"]
++    validate_shape(org)
++    assert check_references(OrgSpec.from_dict(org)) == []
++
++
++def test_absolute_owner_name_alias_is_still_independent(org):
++    org["humans"][0]["name"] = "Board Owner"
++    org["policies"]["security_categories"]["category-0"]["owner"] = " board owner "
++    assert any("absolute owner" in error for error in check_references(OrgSpec.from_dict(org)))
+--- a/phantomorg/tests/test_human_access.py
++++ b/phantomorg/tests/test_human_access.py
+@@ -69,6 +69,7 @@
+         "scope_definitions": None,
+         "persona_scope_grants": {},
+         "human_action_grants": {},
++        "human_category_limits": {},
+     }
+     assert "counterpart_persona" in render_humans(model)
+     assert "`diego`" in render_humans(model)
