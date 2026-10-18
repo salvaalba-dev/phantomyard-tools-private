@@ -22,6 +22,13 @@ configured allowlist, excludes relays and does not elevate TOFU or an open bot.
 Group, media, stale, malformed, duplicate and unauthenticated reserved requests
 are consumed without model fallback. Ordinary text remains on its existing path.
 
+Optional bindings cannot use native control names such as `/stop`, `/reset`,
+`/update` or `/restart`. Construction rejects every command advertised by the
+reviewed native dispatcher, leaving cancellation and lifecycle controls on their
+existing path. Exact-source preparation now checks `src/channels/commands.ts`
+before any writes; dispatcher drift requires a new review. The native fixture
+compares this refusal against the actual exported command list.
+
 PhantomChat sender IDs remain native verified hexadecimal public keys. The future
 handoff adapter must use the existing native NIP-19 encoder to resolve PhantomOrg
 npubs; it must not accept a message-envelope identity or browser replacement.

@@ -9,7 +9,9 @@ import sys
 import native_channel_patch as reviewed
 import native_ingress_patch as provenance
 
-INPUTS = reviewed.INPUTS
+INPUTS = reviewed.INPUTS | {
+    'src/channels/commands.ts': 'd69a2953e7ecd4fa23868ffa47336285b39b5d410a3dd062d33adb6d0f7b2f22',
+}
 HELPER = 'src/channels/core/authenticatedCommand.ts'
 NOTE = """
 
@@ -21,6 +23,8 @@ existing explicit principal decision, receiving persona and source provenance.
 No human registry, organization categories, ACL evaluator, signer, IPC listener,
 model executor or additional service is added to PhantomBot by this variant.
 With no handler, existing channel behavior remains unchanged.
+Optional commands cannot replace any native control command. Source preparation
+also verifies the pinned native dispatcher before adding the optional hook.
 
 The callback is trusted native embedding, never a model tool or browser identity
 API. PhantomChat context uses its verified native hexadecimal sender ID; an
@@ -51,7 +55,7 @@ def patch(root):
         if (root / name).exists() or (root / name).is_symlink():
             raise ValueError('Existing native helper; use a fresh disposable checkout')
     helper = Path(__file__).with_name('authenticated_command.ts').read_text(encoding='utf-8')
-    for name in INPUTS:
+    for name in reviewed.INPUTS:
         source = sources[name]
         telegram = name.endswith('engine.ts')
         relative = './authenticatedCommand.ts' if telegram else '../core/authenticatedCommand.ts'
@@ -81,7 +85,7 @@ def patch(root):
         sources[name] = source
     # All hashes, absent helpers and hook anchors are checked before any writes.
     provenance.patch(root)
-    for name in INPUTS:
+    for name in reviewed.INPUTS:
         (root / name).write_text(sources[name], encoding='utf-8', newline='\n')
     (root / HELPER).write_text(helper, encoding='utf-8', newline='\n')
     for name in ('README.md', 'AGENTS.md'):

@@ -11,6 +11,7 @@ import { createPhantomchatChannel } from "../src/channels/phantomchat/channel.ts
 import { SimplePoolPhantomchatTransport } from "../src/channels/phantomchat/transport.ts";
 import { wrapNip17Message, unwrapNip17Message, type NTNostrEvent } from "../src/lib/nostrCrypto.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
+import { TELEGRAM_BOT_COMMANDS } from "../src/channels/commands.ts";
 
 let root: string, agentDir: string, memory: Awaited<ReturnType<typeof openMemoryStore>>;
 beforeEach(async () => {
@@ -44,6 +45,19 @@ function harness() {
       yield { type: "done", finalText: "ordinary reply", harness: "synthetic" }; } };
   return state;
 }
+
+test("every command in the real native dispatcher is protected from replacement", async () => {
+  let calls = 0;
+  const router = new AuthenticatedCommand(options(async () => { calls++; }));
+  for (const { command } of TELEGRAM_BOT_COMMANDS) {
+    const text = "/" + command;
+    expect(() => new AuthenticatedCommand({ ...options(async () => {}), command: text }))
+      .toThrow("cannot replace native control commands");
+    for (const channel of ["telegram", "phantomchat"] as const)
+      expect(await router.consume(channel, message({ text }), true)).toBe(false);
+  }
+  expect(calls).toBe(0);
+});
 
 describe("actual Telegram server dispatch", () => {
   test("a mismatched persona fails before starting the poller", async () => {

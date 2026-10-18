@@ -28,6 +28,18 @@ test('ordinary text falls through; reserved malformed or unauthorized requests d
   assert.equal(await router.consume('telegram',message(),false),true);assert.equal(calls,0);
 });
 
+test('native controls cannot be replaced and still fall through to native dispatch',async()=>{
+  let calls=0;const router=new AuthenticatedCommand(binding(async()=>{calls++;}));
+  for(const command of ['/start','/stop','/reset','/status','/harness','/update',
+    '/restart','/coder','/chattiness','/model','/help']){
+    assert.throws(()=>new AuthenticatedCommand({...binding(async()=>{}),command}),
+      /cannot replace native control commands/);
+    assert.equal(await router.consume('telegram',message({text:command}),true),false);
+    assert.equal(await router.consume('phantomchat',message({text:command}),true),false);
+  }
+  assert.equal(calls,0);
+});
+
 test('source IDs and native sender encodings are checked for both transports',async()=>{
   const calls=[],router=new AuthenticatedCommand(binding(async context=>calls.push(context)));
   await router.consume('telegram',message({senderId:'9007199254740992',conversationId:'9007199254740992'}),true);

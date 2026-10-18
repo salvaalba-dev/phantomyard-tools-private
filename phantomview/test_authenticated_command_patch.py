@@ -63,6 +63,15 @@ class AuthenticatedCommandPatchTests(unittest.TestCase):
             native.patch(self.root)
         self.assertEqual(before, self.snapshot())
 
+    def test_native_control_dispatcher_drift_refuses_before_any_writes(self):
+        path = self.root / 'src/channels/commands.ts'
+        path.write_text(path.read_text(encoding='utf-8') + '\n// New native control\n',
+                        encoding='utf-8', newline='\n')
+        before = self.snapshot()
+        with self.assertRaises(ValueError):
+            native.patch(self.root)
+        self.assertEqual(before, self.snapshot())
+
 
 @unittest.skipUnless(shutil.which('node'), 'Node.js is required')
 class AuthenticatedCommandRuntimeTests(unittest.TestCase):

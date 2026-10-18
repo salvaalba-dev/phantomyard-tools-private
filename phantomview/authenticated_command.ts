@@ -31,6 +31,13 @@ export interface AuthenticatedCommandOptions {
   readonly handle: (context: AuthenticatedCommandContext, signal: AbortSignal) => Promise<void>;
 }
 
+// Keep native lifecycle, cancellation and conversation controls on their own path.
+// Exact-source preparation checks the native dispatcher before installing this list.
+const NATIVE_CONTROL_COMMANDS = new Set([
+  "/start", "/stop", "/reset", "/status", "/harness", "/update",
+  "/restart", "/coder", "/chattiness", "/model", "/help",
+]);
+
 export class AuthenticatedCommand {
   private readonly options: AuthenticatedCommandOptions;
   private readonly seen = new Map<string, number>();
@@ -41,6 +48,8 @@ export class AuthenticatedCommand {
       || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(options.persona)
       || typeof options.command !== "string" || !/^\/[a-z][a-z0-9_]{0,31}$/.test(options.command)
       || typeof options.handle !== "function") throw new Error("Fixed native command binding required");
+    if (NATIVE_CONTROL_COMMANDS.has(options.command))
+      throw new Error("Optional commands cannot replace native control commands");
     this.options = Object.freeze({ ...options });
   }
 
