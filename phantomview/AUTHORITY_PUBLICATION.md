@@ -98,16 +98,19 @@ Real-signature component tests connect the publication to the identified gate an
 filtered workspace, including expiry and changed-policy denial before record reads.
 Channel context remains a synthetic trusted input, not a live verified handoff.
 
-AU's current reader cannot read either original/published organization source.
-This prepares the missing transport without opening administrator directories.
-It is **not installed or activated in AU**. Read-only verification found an existing
-root collector running every five minutes and a private `root:aunited` reader tree.
-The proposed sibling authority directory does not exist. A ten-minute lease and
-reuse of that group are proposals, not applied settings; the group is shared with
-other processes and is not an isolated assistant boundary. See the
-[AU deployment review](AU_AUTHORITY_PUBLICATION_READINESS.md) for observed modes,
-the bounded change and remaining source/account/native-handoff prerequisites.
-No private AU inputs or artifacts are committed.
+On 2026-10-18, after approval of the account exposure, the collector-side transport
+was installed in AU. The existing five-minute collector now exports the private
+organization beside its current index. Actual `aunited` account loads and renewal
+passed; the web program and its process were unchanged. The account still cannot
+traverse the administrator source directories; it reads only the approved private
+copy. Shared-account access is not an isolated assistant boundary.
+
+The identified HTTP reader and native persona assistant remain unactivated.
+A 600-second lease was exercised by a verification probe only, including simulated
+expiry denial; it is not an active web-reader setting. See the
+[AU deployment evidence](AU_AUTHORITY_PUBLICATION_READINESS.md#approved-publication-deployment-2026-10-18)
+for owned paths, actual checks, rollback limits and remaining native-handoff/content
+prerequisites. No private AU inputs or operational artifacts are committed.
 
 See [raw-source authority](ORGANIZATION_AUTHORITY.md),
 [the collaborative plan](COLLABORATIVE_VIEWER_PLAN.md) and

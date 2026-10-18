@@ -1,6 +1,11 @@
 # Collector publication staging
 
-Status, 2026-10-17: packaged and verified locally; **not deployed**. The AU source
+Current status, 2026-10-18: the approved collector-only package and private publication
+are deployed and verified in AU. See the
+[deployment evidence](AU_AUTHORITY_PUBLICATION_READINESS.md#approved-publication-deployment-2026-10-18).
+The identified web reader and assistant remain unactivated.
+
+Historical stage status, 2026-10-17: packaged and verified locally; **not deployed**. The AU source
 declarations were applied in the earlier source-only change. Webmin subsequently
 became unavailable during the next read-only inspection: its terminal remained
 blank, and a fresh terminal navigation returned a connection timeout. That probe
@@ -91,7 +96,7 @@ See [source application](SETUP_DECLARATION_PROPOSAL.md#approved-source-only-appl
 [publication prerequisites](AU_AUTHORITY_PUBLICATION_READINESS.md) and
 [the collaborative plan](COLLABORATIVE_VIEWER_PLAN.md).
 
-## Recovered AU preflight, 2026-10-18
+## Recovered AU preflight, 2026-10-18 (before activation)
 
 The separate administrative terminal again displayed a root shell and completed
 the selected read-only checks. The user-opened terminal belonged to another domain

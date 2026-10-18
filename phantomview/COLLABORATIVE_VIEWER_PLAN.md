@@ -204,22 +204,30 @@ now confirms raw-source preservation and the presentation boundary using static
 installed-source comparison and disposable local collection. The existing index
 omits authority fields by design; bind the protected raw organization source to
 the identified backend rather than publishing the private registry in the index.
-No live source, projector or service has been modified. Native handoff, reviewed
-content and selected-installation activation remain pending.
+That inspection made no live changes. Later approved source declarations and the
+collector-side publication update are recorded below; native handoff, reviewed
+content and identified application activation remain pending.
 
 The optional [raw-source authority loader](ORGANIZATION_AUTHORITY.md) now binds
 the existing identified gate to one operator-selected current document. Real
 signed component tests cover file-backed recipients, filtered workspace access
 and denial after source/permission changes. They use synthetic trusted channel
-contexts, not an installed native callback. AU source permissions, declaration
-approval, protected handoff and live activation remain pending.
+contexts, not an installed native callback. AU counterpart, independent-owner and
+organization-scope declarations were subsequently approved and applied. Protected
+handoff, content approval and identified application activation remain pending.
 
 An opt-in [private authority publication](AUTHORITY_PUBLICATION.md) now shares the
 existing collector export lifecycle. Its bounded lease, exact source/presentation
 binding and unavailable markers let an identified reader consume current private
 authority without original-source traversal. No data is added to the web index.
-Native verified-channel integration and actual AU target/access/cadence review
-remain pending; no service or permission has been changed.
+On 2026-10-18 the approved collector-only transport was
+[deployed and verified in AU](AU_AUTHORITY_PUBLICATION_READINESS.md#approved-publication-deployment-2026-10-18),
+reusing its five-minute timer and preserving the viewer process and existing helper.
+Actual reader-account access, private-data exclusion and publication renewal passed.
+The simulated 600-second expiry check was a probe, not active web configuration.
+Native verified-channel integration, reviewed content and identified HTTP reader/
+assistant activation remain pending. No second organization engine or resident
+service was installed.
 
 Reuse approved source classifications and folder-rule drafts for viewer resources.
 Unknown/private sources are not guessed public. Copies, summaries and linked

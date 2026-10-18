@@ -2,7 +2,12 @@
 
 ## Status
 
-Read-only verification on 2026-10-17 confirms that the existing selected-source
+Current status, 2026-10-18: **collector-side private publication is deployed and
+verified**, following explicit approval of the shared reader account access.
+The identified web reader and native assistant remain unactivated. See
+[the deployment evidence](#approved-publication-deployment-2026-10-18).
+
+Initial observation, 2026-10-17: read-only verification confirmed that the existing selected-source
 collector can provide the publication cadence. No new scheduler or resident service
 is needed. Publication is **not deployed** and identified access is **not ready for
 activation**. The initial inspection changed no source declarations, permissions,
@@ -107,3 +112,73 @@ The code's Linux/Windows and signed-gate checks are described in
 not live deployment readiness. Required next inputs are approved content reviews,
 the accepted account boundary and an identified-reader/native-handoff deployment
 plan with end-to-end evidence. Keep those separate from the applied source declarations.
+
+## Approved publication deployment, 2026-10-18
+
+The approved archive was uploaded only to the AU application directory and its
+SHA-256 matched `32f5d9f7933973f537706606dee15706935a3020a6baa5b311477bfc550b311f`.
+All ten module hashes and Python syntax were verified before installation under
+`/opt/phantomview-au/collector-releases/cac4a3b`. The installed web program and assets
+were not overwritten.
+
+A protected backup at
+`/var/lib/phantomview-au/collector-publication-backup-20261018` contains the original
+base unit, existing helper drop-in, collector configuration, index and collector
+snapshot, with recorded original metadata/hashes. The directory is root-only
+`0700`; saved files and deployment/verification receipts are `0600`. No private
+backup, configuration, index or organization document is committed.
+
+The existing timer was briefly paused for the serialized switch. A new dedicated
+`/etc/systemd/system/phantomview-au-collect.service.d/private-authority.conf` replaces
+only the collector's `ExecStart` with the reviewed versioned command and authority
+options. The base unit and existing `assistant.conf` remain unchanged. Effective
+argument verification passed; `NoNewPrivileges` and `ProtectSystem=strict` remain
+enabled. The timer was resumed without changing its five-minute interval.
+
+The new authority directory is `/var/lib/phantomview-au/authority`, owned
+`root:aunited`, mode `02750`. Generated `organization.json` and the reader index are
+root-owned, group-readable `0640` with the same intended reader group. This access
+was explicitly approved for the shared account; it is not isolation between
+processes that use that account.
+
+| Live verification | Result |
+| --- | --- |
+| First collection through the existing service | Successful, exit status zero |
+| Source revision | Matches the approved source declarations |
+| Private publication and reader index | Matching snapshot digest |
+| Raw human registry in the presentation index | Human rows remain limited to ID, organization, name and role |
+| Private policy/publication fields in the index | Absent in recursive key checks |
+| Load with `PublishedAuthority` as `aunited` | Passed against actual private files |
+| Expired authority at a simulated 600-second boundary | Denied by the reader probe |
+| Second collection through the same service | Successful; publication timestamp advanced, organization revision unchanged |
+| Existing viewer | Active, same PID, installed entrypoint hash unchanged |
+| Existing HTTPS viewer endpoint | Responded with its temporary-link sign-in screen; no authenticated or identified browsing session was exercised |
+| Existing timer and default-persona helper | Active five-minute timer; helper hash unchanged |
+| Observed exported inventory | 8 actors, 253 note metadata entries, 150 procedures |
+
+The ten-minute lease was used **only by the verification probe**. No identified
+HTTP reader has been configured with it; do not describe it as a newly active
+browser-session policy. No malformed live source was injected. Failure invalidation
+was tested using the earlier synthetic package smoke test, not by disrupting AU.
+The note count includes existing exclusions and is not classification approval.
+
+The separate `/opt/phantomdocs/org.yaml` copy was not propagated. The collector
+reads the authoritative original directly; its private authority now follows that
+same source. Verified requesting-human handoff, identified visual filtering,
+knowledge approval and conversation with the existing issuing persona remain
+pending. The existing analysis worker/bridge were not restarted or replaced.
+
+### Recoverable rollback boundary
+
+Pause the existing timer and wait for its oneshot to finish. Verify the current
+dedicated drop-in against the saved switch receipt, then move only that drop-in to
+a protected disabled backup path; do not remove `assistant.conf` or replace the base
+unit. Reload systemd, verify the original effective command from the backup record
+and resume the original timer. Keep the staged release and private files available
+for diagnosis. Do not overwrite an index changed since the capture without a
+separate consistency review. No rollback was executed or presented as tested.
+
+If an identified reader is activated later, review its revocation and authority
+availability before rolling back publication. Never silently replace identified
+access with legacy unidentified access. The current source declarations and native
+persona memories are outside this collector-only rollback.
