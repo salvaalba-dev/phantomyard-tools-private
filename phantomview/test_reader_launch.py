@@ -95,6 +95,15 @@ class LaunchContractTests(unittest.TestCase):
         self.assertEqual(reader.call_args.kwargs['conversation_socket'], config['conversation_socket'])
         self.assertEqual(reader.call_args.kwargs['actor'], 'coordinator')
 
+    def test_build_forwards_only_protected_additional_issuer_configuration(self):
+        config = example() | {'additional_issuers': [{'actor': 'project-guide', 'identities': ['b' * 64],
+            'issuer_uid': 12004, 'socket_path': '/run/example-view/reader/project.sock',
+            'socket_group': 12003, 'conversation_socket': None}]}
+        config = launch.validate(config)
+        with patch.object(launch, 'Ledger'), patch.object(launch, 'PublishedReader') as reader:
+            launch.build(config, object())
+        self.assertEqual(reader.call_args.kwargs['additional_issuers'], config['additional_issuers'])
+
     def test_signal_sets_stop_event_and_original_handlers_are_restored(self):
         reader, handlers = Mock(), []
         def register(kind, handler):
@@ -136,6 +145,18 @@ class LaunchContractTests(unittest.TestCase):
             self.assertIs(launch.preflight(config), authority)
             self.assertEqual(list(root.iterdir()), [])
             ledger.assert_not_called()
+            config['additional_issuers'] = [{'actor': 'project-guide', 'identities': ['b' * 64],
+                'issuer_uid': 12004, 'socket_path': str(root / 'project.sock'),
+                'socket_group': 12001, 'conversation_socket': None}]
+            with self.assertRaises(ValueError):
+                launch.preflight(config)
+            authority.return_value.scope.policy['personas'].append('project-guide')
+            self.assertIs(launch.preflight(config), authority)
+            self.assertEqual(list(root.iterdir()), [])
+            (root / 'project.sock').write_text('existing endpoint', encoding='utf-8')
+            with self.assertRaises(ValueError):
+                launch.preflight(config)
+            (root / 'project.sock').unlink()
             projection.catalog.side_effect = ValueError('Changed approval')
             with self.assertRaises(ValueError):
                 launch.preflight(config)

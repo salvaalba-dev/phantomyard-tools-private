@@ -147,6 +147,24 @@ class HandoffTests(HandoffSetup, unittest.TestCase):
         self.assertNotIn(b'private sender', connection.output)
         self.assertNotIn(b'Nostr', connection.output)
 
+    def test_protected_route_selects_actor_only_after_matching_peer_authentication(self):
+        class Gate:
+            origin, policy = 'https://view.example', {'actor': 'coordinator'}
+            def issue_identified(self, authorization, origin, **context):
+                self.context = context
+                return self.origin + '/#c=synthetic-grant'
+        gate = Gate()
+        second = handoff.PeerPolicy(201, frozenset({300}))
+        wrong = Connection(frame(request()), uid=200)
+        self.assertFalse(handoff.serve_connection(wrong, gate, second, actor='treasurer'))
+        self.assertEqual(wrong.reads, 0)
+        self.assertFalse(hasattr(gate, 'context'))
+        trusted = Connection(frame(request()), uid=201)
+        self.assertTrue(handoff.serve_connection(trusted, gate, second, actor='treasurer'))
+        self.assertEqual(gate.context['persona'], 'treasurer')
+        forged = Connection(frame(request(persona='coordinator')), uid=201)
+        self.assertFalse(handoff.serve_connection(forged, gate, second, actor='treasurer'))
+
     def test_total_read_deadline_cannot_be_extended_by_fragmented_input(self):
         connection = Connection(frame(request()))
         with patch.object(handoff.time, 'monotonic', side_effect=[0, 4, 4]):

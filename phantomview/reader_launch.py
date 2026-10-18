@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from authority_publication import PublishedAuthority
 from handoff_client import DaemonReaderPolicy, _destination
 from identified_reader import PublishedReader, signed_access
+from issuer_routes import FIELDS as ISSUER_FIELDS, validate_routes
 from organization_authority import _parse, _read
 from projection_review import PublishedProjection
 from session_audit import Ledger
@@ -28,7 +29,8 @@ FIELDS = PATHS | {'schema_version', 'organization', 'actor', 'identities', 'orig
 
 def validate(value):
     """Validate a fixed operator document, never a browser-supplied request."""
-    if not isinstance(value, dict) or set(value) != FIELDS:
+    if (not isinstance(value, dict) or not FIELDS <= set(value)
+            or set(value) - (FIELDS | {'additional_issuers'})):
         raise ValueError('Use exactly the fields in reader-launch.example.json')
     if type(value['schema_version']) is not int or value['schema_version'] != 1:
         raise ValueError('Reader launch schema_version must be 1')
@@ -72,7 +74,19 @@ def validate(value):
     for field in ('socket_path', 'conversation_socket'):
         if value[field] is not None and len(value[field]) > 100:
             raise ValueError('Unix socket paths must be at most 100 bytes')
-    return dict(value, identities=list(keys))
+    result = dict(value, identities=list(keys))
+    if 'additional_issuers' in value:
+        if not isinstance(value['additional_issuers'], list):
+            raise ValueError('Additional issuers must be an explicit route list')
+        routes = validate_routes({key: value[key] for key in ISSUER_FIELDS}, value['additional_issuers'],
+                                 reader_uid=value['reader_uid'],
+                                 occupied=[value[key] for key in PATHS - {'socket_path'}])
+        result['additional_issuers'] = routes[1:]
+    return result
+
+
+def issuer_routes(config):
+    return [{key: config[key] for key in ISSUER_FIELDS}, *config.get('additional_issuers', [])]
 
 
 def load(path):
@@ -90,11 +104,13 @@ def load(path):
 def preflight(config):
     """Read-only check: no socket, audit creation, model call or publication."""
     config = validate(config)
-    DaemonPeerPolicy(config['issuer_uid'])
+    routes = issuer_routes(config)
+    for route in routes:
+        DaemonPeerPolicy(route['issuer_uid'])
     if os.getuid() != config['reader_uid']:
         raise ValueError('Run as the configured nonroot reader account')
     groups = {os.getgid(), *os.getgroups()}
-    if config['socket_group'] not in groups:
+    if any(route['socket_group'] not in groups for route in routes):
         raise ValueError('Reader must already belong to the reviewed handoff group')
     signed_access()
     authority = PublishedAuthority(config['authority_directory'], config['index_path'],
@@ -102,12 +118,13 @@ def preflight(config):
     directory = authority()
     projection = PublishedProjection(config['projection_root'], authority.read, authority.snapshot)
     catalog = projection.catalog()
-    if (config['actor'] not in directory.scope.policy['personas']
+    if (any(route['actor'] not in directory.scope.policy['personas'] for route in routes)
             or catalog['organization'] != config['organization']
             or catalog['authority_revision'] != directory.authority_revision):
         raise ValueError('Current approved projection must authorize the configured issuer')
-    for field in ('socket_path', 'audit_path'):
-        path = Path(config[field])
+    targets = [('socket_path', route['socket_path']) for route in routes] + [('audit_path', config['audit_path'])]
+    for field, target in targets:
+        path = Path(target)
         for component in (path.parent, *path.parent.parents):
             if component.is_symlink():
                 raise ValueError('Reader paths must not traverse links')
@@ -122,21 +139,23 @@ def preflight(config):
             if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
                     or info.st_uid != os.getuid() or info.st_mode & 0o077):
                 raise ValueError('Existing audit file must be reader-owned and mode 0600')
-    if config['conversation_socket'] is not None:
-        target = _destination(config['conversation_socket'], DaemonReaderPolicy(config['issuer_uid']))
-        info = Path(target).stat()
-        if info.st_gid not in groups or stat.S_IMODE(info.st_mode) != 0o660:
-            raise ValueError('Native socket must use its reviewed reader group and mode 0660')
+    for route in routes:
+        if route['conversation_socket'] is not None:
+            target = _destination(route['conversation_socket'], DaemonReaderPolicy(route['issuer_uid']))
+            info = Path(target).stat()
+            if info.st_gid not in groups or stat.S_IMODE(info.st_mode) != 0o660:
+                raise ValueError('Native socket must use its reviewed reader group and mode 0660')
     return authority
 
 
 def build(config, authority):
     """Create the existing assembly only after successful preflight."""
+    options = {'additional_issuers': config['additional_issuers']} if 'additional_issuers' in config else {}
     return PublishedReader(authority=authority, projection_root=config['projection_root'],
         actor=config['actor'], identities=config['identities'], origin=config['origin'], port=config['port'],
         issuer_uid=config['issuer_uid'], socket_path=config['socket_path'], socket_group=config['socket_group'],
         audit=Ledger(config['audit_path']), session_seconds=config['session_seconds'],
-        conversation_socket=config['conversation_socket'])
+        conversation_socket=config['conversation_socket'], **options)
 
 
 def main(argv=None):
@@ -148,7 +167,8 @@ def main(argv=None):
         config = load(args.config)
         authority = preflight(config)
         if args.check:
-            print(json.dumps({'status': 'preflight-passed', 'assistant_enabled': config['conversation_socket'] is not None}))
+            print(json.dumps({'status': 'preflight-passed', 'assistant_enabled': any(
+                route['conversation_socket'] is not None for route in issuer_routes(config))}))
             return 0
         os.umask(0o077)
         reader = build(config, authority)

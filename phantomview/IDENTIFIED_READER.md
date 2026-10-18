@@ -10,6 +10,8 @@ HTTPS origin/loopback port, native daemon UID, socket path/group and an existing
 metadata-only `Ledger`. There is no environment discovery or browser configuration
 endpoint. The [protected launcher](READER_LAUNCH.md) now supplies the optional
 JSON host entry; production still needs an explicitly reviewed launch/cutover.
+The optional [multi-issuer registry](MULTI_ISSUER_READER.md) adds fixed persona
+routes while sharing this reader's HTTP endpoint, authority, audit and sessions.
 
 ```python
 from authority_publication import PublishedAuthority

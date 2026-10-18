@@ -14,8 +14,10 @@ JSON fields are supported. Never put private keys, channel credentials, human
 contacts, tokens or transcripts in this file or in repository examples.
 
 All fields are required. `conversation_socket: null` explicitly disables the
-assistant. There is one fixed issuer per reader instance; this is not yet a
-multi-issuer host registry. `reader_uid` and `issuer_uid` must be distinct nonroot
+assistant for the primary issuer. An optional protected `additional_issuers` list
+adds fixed routes in the same reader; see [multiple issuers](MULTI_ISSUER_READER.md).
+An additional issuer may enable its own conversation socket independently.
+`reader_uid` and every `issuer_uid` must be distinct nonroot
 Linux accounts. `socket_group` is the already-provisioned group allowed to reach
 the reader's handoff listener, not the conversation socket group.
 

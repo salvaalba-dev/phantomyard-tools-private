@@ -13,10 +13,13 @@ from trusted_handoff import PeerPolicy, bind_listener, serve_connection
 
 
 class ReaderHandoff:
-    def __init__(self, path, group_id, peer_policy, gate):
+    def __init__(self, path, group_id, peer_policy, gate, *, actor=None):
         if not isinstance(gate, IdentifiedGate) or not isinstance(peer_policy, PeerPolicy):
             raise ValueError('An identified reader gate and kernel peer policy are required')
         self.path, self.group_id, self.peer_policy, self.gate = Path(path), group_id, peer_policy, gate
+        if actor is not None:
+            gate.issuer_links(actor)
+        self.actor = actor
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._listener, self._connection, self._thread, self._identity = None, None, None, None
@@ -58,7 +61,7 @@ class ReaderHandoff:
                 try:
                     # One connection at a time bounds signing work and in-flight
                     # identity state; rejected peers never reach request reads.
-                    serve_connection(connection, self.gate, self.peer_policy)
+                    serve_connection(connection, self.gate, self.peer_policy, actor=self.actor)
                 finally:
                     with self._lock:
                         self._connection = None

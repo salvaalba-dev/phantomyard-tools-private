@@ -18,23 +18,32 @@ class IdentifiedGate(Gate):
         self.recipient_links, self.recipients = {}, {}
         self.recipient_lock = threading.RLock()
 
+    def issuer_links(self, persona):
+        if persona != self.policy.get('actor'):
+            raise ValueError('Recipient issuer does not match this reader')
+        return self.links
+
+    def redeem_link(self, code, create):
+        return self.links.redeem(code, create)
+
     def issue_identified(self, authorization, origin, **channel_context):
         """Trusted pre-model adapter only; never forward a browser JSON body.
 
         Shared Schnorr verification, exact tags/payload and replay protection stay
         in Gate.issue(). Recipient metadata never enters the URL or signed event.
         """
-        if channel_context.get("persona") != self.policy.get("actor"):
-            raise ValueError("Recipient issuer does not match this reader")
+        links = self.issuer_links(channel_context.get('persona'))
         recipient = self.directory_loader().resolve(**channel_context)
         with self.recipient_lock:
             self._prune_recipients()
             if len(self.recipient_links) >= 1000:
                 raise ValueError("Too many pending recipient links")
-            link = self.issue(authorization, origin)
+            link = links.issue(authorization, origin, self.origin)
             match = re.fullmatch(re.escape(self.origin) + r"/#c=([A-Za-z0-9_-]{43})", link)
             if not match:
                 raise ValueError("Invalid signed access link response")
+            if self.digest(match[1]) in self.recipient_links:
+                raise ValueError('Recipient link collision')
             self.recipient_links[self.digest(match[1])] = (recipient, self.clock() + 300)
             return link
 
@@ -58,7 +67,7 @@ class IdentifiedGate(Gate):
                 value = self.create_session()
                 self.recipients[self.digest(value)] = recipient
                 return value
-            value = self.links.redeem(code, create)
+            value = self.redeem_link(code, create)
             self.recipient_links.pop(self.digest(code), None)
             self._prune_recipients()
             return value

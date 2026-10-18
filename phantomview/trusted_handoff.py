@@ -139,7 +139,7 @@ def validate_request(document):
     return document
 
 
-def serve_connection(connection, gate, policy):
+def serve_connection(connection, gate, policy, *, actor=None):
     """Process one authenticated peer connection and close it on every path.
 
     `gate` is an IdentifiedGate held by the reader. The signing event uses the
@@ -158,7 +158,7 @@ def serve_connection(connection, gate, policy):
             context = {key: request[key] for key in ('channel', 'sender', 'direct',
                                                      'principal_authenticated', 'scope_id')}
             link = gate.issue_identified(request['authorization'], gate.origin,
-                                         persona=gate.policy['actor'], **context)
+                                         persona=gate.policy['actor'] if actor is None else actor, **context)
             response = {'schema_version': 1, 'link': link}
             success = True
         except (OSError, ValueError, KeyError, TypeError, RecursionError):

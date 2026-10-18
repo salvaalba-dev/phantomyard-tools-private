@@ -20,9 +20,11 @@ import time
 import unittest
 
 from handoff_client import DaemonReaderPolicy, ReaderPolicy, request_access
+from channel_identity import HumanDirectory
 from native_access_command import DirectMessage, NativeAccessCommand, Outcome
 from native_link_client import run as run_native_link_client
 from reader_handoff import ReaderHandoff
+from issuer_routes import validate_routes
 from scoped_backend import ScopedBackend
 from scoped_http import dispatch as scoped_dispatch
 from test_scoped_backend import ProjectionFixture
@@ -107,6 +109,60 @@ class CrossAccountTests(unittest.TestCase):
                               self.fixture.gate.origin, self.authorization,
                               {'channel': 'telegram', 'sender': '101', 'direct': True,
                                'principal_authenticated': True, 'scope_id': 'river-project'})
+
+    def test_multiple_daemons_cannot_exchange_their_kernel_authenticated_routes(self):
+        second_uid = 29004
+        second_path = self.path + '.project'
+        second_key = signatures.PrivateKey()
+        second_identity = second_key.public_key_xonly.format().hex()
+        event = self.fixture.signed() | {'pubkey': second_identity}
+        event['id'] = signatures.access.event_digest(event)
+        event['sig'] = second_key.sign_schnorr(bytes.fromhex(event['id'])).hex()
+        second_authorization = self.fixture.authorization(event)
+        def reader():
+            routes = validate_routes({'actor': 'coordinator', 'identities': [self.fixture.identity],
+                'issuer_uid': ISSUER, 'socket_path': self.path, 'socket_group': ISSUER, 'conversation_socket': None},
+                [{'actor': 'treasurer', 'identities': [second_identity], 'issuer_uid': second_uid,
+                  'socket_path': second_path, 'socket_group': ISSUER, 'conversation_socket': None}])
+            gate = assembled_reader.MultiIssuerGate(signatures.access,
+                {'actor': 'coordinator', 'identities': [self.fixture.identity]}, self.fixture.gate.origin, 8789,
+                routes=routes, directory_loader=lambda: HumanDirectory(scoped_organization()))
+            captured, accepted = [], []
+            original = gate.issue_identified
+            def issue(*args, **kwargs):
+                link = original(*args, **kwargs)
+                captured.append(link)
+                return link
+            gate.issue_identified = issue
+            with bind_listener(self.path, ISSUER) as primary, bind_listener(second_path, ISSUER) as project:
+                primary.settimeout(6)
+                project.settimeout(6)
+                os.write(self.ready_write, b'1')
+                for listener, uid, actor in ((primary, ISSUER, 'coordinator'), (project, second_uid, 'treasurer')):
+                    for _ in range(2):
+                        connection, _ = listener.accept()
+                        accepted.append(serve_connection(connection, gate, DaemonPeerPolicy(uid), actor=actor))
+            recipients = []
+            for link in captured:
+                cookie = gate.redeem(link.split('#c=')[1])
+                recipient, _ = gate.identified_scope({'Cookie': 'phantomview=' + cookie})
+                recipients.append([recipient.human, recipient.persona, recipient.scope_id])
+            return {'accepted': accepted, 'recipients': recipients}
+        server = self.start(reader)
+        attempts = []
+        for uid, path, authorization, sender, scope in (
+                (second_uid, self.path, self.authorization, '101', 'example'),
+                (ISSUER, self.path, self.authorization, '101', 'example'),
+                (ISSUER, second_path, second_authorization, '103', 'river-project'),
+                (second_uid, second_path, second_authorization, '103', 'river-project')):
+            def invoke(path=path, authorization=authorization, sender=sender, scope=scope):
+                return request_access(path, DaemonReaderPolicy(READER), self.fixture.gate.origin, authorization,
+                    {'channel': 'telegram', 'sender': sender, 'direct': True,
+                     'principal_authenticated': True, 'scope_id': scope})
+            attempts.append(finish(spawn(uid, invoke))['ok'])
+        self.assertEqual(attempts, [False, True, False, True])
+        self.assertEqual(finish(server), {'ok': True, 'value': {'accepted': attempts,
+            'recipients': [['owner', 'coordinator', 'example'], ['accountant', 'treasurer', 'river-project']]}})
 
     def test_explicit_daemon_trust_uses_real_kernel_peers_and_signed_recipient_redemption(self):
         def reader():

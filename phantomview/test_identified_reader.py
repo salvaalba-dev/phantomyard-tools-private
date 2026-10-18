@@ -112,13 +112,14 @@ class PublishedReaderTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join(timeout=3)
 
-    def authorization(self):
-        event = {'pubkey': self.key.public_key_xonly.format().hex(), 'created_at': int(time.time()),
+    def authorization(self, key=None):
+        key = key or self.key
+        event = {'pubkey': key.public_key_xonly.format().hex(), 'created_at': int(time.time()),
                  'kind': 27235, 'tags': [['u', self.options['origin'] + '/api/access-link'],
                     ['method', 'POST'], ['payload', hashlib.sha256(b'{}').hexdigest()],
                     ['nonce', uuid.uuid4().hex]], 'content': ''}
         event['id'] = access.event_digest(event)
-        event['sig'] = self.key.sign_schnorr(bytes.fromhex(event['id'])).hex()
+        event['sig'] = key.sign_schnorr(bytes.fromhex(event['id'])).hex()
         return 'Nostr ' + base64.b64encode(json.dumps(event).encode()).decode()
 
     def issue(self, sender='102', persona='administrator'):
@@ -285,6 +286,80 @@ class PublishedReaderTests(unittest.TestCase):
         handoff.close.assert_called_once()
         fake_server.server_close.assert_called_once()
         self.assertEqual(self.application.gate.sessions, {})
+
+    def multiple_options(self, *, conversations=False):
+        self.secondary_key = PrivateKey()
+        key = self.secondary_key.public_key_xonly.format().hex()
+        return self.options | {'socket_path': '/run/example/admin.sock',
+            'conversation_socket': '/run/example/admin-chat.sock' if conversations else None,
+            'additional_issuers': [{'actor': 'treasurer', 'identities': [key], 'issuer_uid': 29004,
+                'socket_path': '/run/example/treasurer.sock', 'socket_group': 29002,
+                'conversation_socket': '/run/example/treasurer-chat.sock' if conversations else None}]}
+
+    def test_multiple_issuers_share_http_gate_and_keep_distinct_conversation_routes(self):
+        # Construction wiring is portable; real Unix transport runs in Linux CI.
+        with patch('persona_conversation.NativePersonaClient',
+                   side_effect=lambda path, uid, actor: Mock(path=path, daemon_uid=uid, persona=actor)):
+            app = reader.PublishedReader(**self.multiple_options(conversations=True))
+        self.addCleanup(app.consultations.close)
+        server = app._make_server()
+        self.addCleanup(server.server_close)
+        self.assertIs(server.gate, app.gate)
+        self.assertIs(app.backend.gate, app.gate)
+        self.assertIs(server.scoped_consultations, app.consultations)
+        executors = app.consultations.assistant.executors
+        self.assertEqual({actor: client.persona for actor, client in executors.items()},
+                         {'administrator': 'administrator', 'treasurer': 'treasurer'})
+        self.assertNotEqual(executors['administrator'].path, executors['treasurer'].path)
+        self.assertEqual(set(app.gate.verifiers), {'administrator', 'treasurer'})
+
+    def test_second_listener_start_failure_closes_every_listener_and_http(self):
+        app = reader.PublishedReader(**self.multiple_options())
+        first, second, server = Mock(), Mock(), Mock()
+        second.start.side_effect = ValueError('synthetic second listener failure')
+        with patch.object(reader, 'DaemonPeerPolicy') as peers, \
+                patch.object(reader, 'ReaderHandoff', side_effect=[first, second]) as listeners, \
+                patch.object(app, '_make_server', return_value=server):
+            with self.assertRaises(ValueError):
+                app.serve()
+        self.assertEqual([call.args[0] for call in peers.call_args_list], [29002, 29004])
+        self.assertEqual([call.kwargs['actor'] for call in listeners.call_args_list], ['administrator', 'treasurer'])
+        self.assertTrue(all(call.args[-1] is app.gate for call in listeners.call_args_list))
+        first.close.assert_called_once()
+        second.close.assert_called_once()
+        server.server_close.assert_called_once()
+        server.serve_forever.assert_not_called()
+
+    def test_two_issuers_redeem_into_different_scopes_on_the_same_http_reader(self):
+        app = reader.PublishedReader(**self.multiple_options())
+        server = app._make_server()
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for key, sender, actor, scope in ((self.key, '102', 'administrator', 'example'),
+                    (self.secondary_key, '103', 'treasurer', 'river-project')):
+                code = app.gate.issue_identified(self.authorization(key), app.gate.origin,
+                    **context(sender, actor, scope_id=scope)).split('#c=')[1]
+                connection = HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+                try:
+                    connection.request('POST', '/api/redeem', json.dumps({'code': code}),
+                                       {'Content-Type': 'application/json'})
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200)
+                    cookie = response.getheader('Set-Cookie')
+                    response.read()
+                    connection.request('GET', '/api/state', headers={'Cookie': cookie})
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 200)
+                    view = json.loads(response.read())
+                    self.assertEqual(view['scope_id'], scope)
+                    self.assertEqual(bool(view['resources']), actor == 'administrator')
+                    recipient = app.gate.identified_scope({'Cookie': cookie})[0]
+                    self.assertEqual(recipient.persona, actor)
+                finally:
+                    connection.close()
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=3)
 
 
 if __name__ == '__main__':

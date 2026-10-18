@@ -5,6 +5,7 @@ import threading
 
 from authority_publication import PublishedAuthority
 from identified_access import IdentifiedGate
+from issuer_routes import validate_routes
 from phantomview import Handler
 from projection_review import PublishedProjection
 from reader_handoff import ReaderHandoff
@@ -48,6 +49,32 @@ class RecipientHandler(Handler):
         super().do_POST()
 
 
+class MultiIssuerGate(RecipientGate):
+    """One session store, with disjoint unchanged protocol verifiers per issuer."""
+    def __init__(self, *args, routes, **kwargs):
+        if not isinstance(routes, list) or not 2 <= len(routes) <= 16:
+            raise ValueError('Multiple protected issuer routes are required')
+        routes = validate_routes(routes[0], routes[1:])
+        super().__init__(*args, **kwargs)
+        primary = routes[0]
+        if primary['actor'] != self.policy['actor'] or primary['identities'] != self.policy['identities']:
+            raise ValueError('Primary issuer route must match the reader policy')
+        self.verifiers = {primary['actor']: self.links}
+        for route in routes[1:]:
+            self.verifiers[route['actor']] = self.access.AccessLinks(route['identities'])
+
+    def issuer_links(self, persona):
+        if not isinstance(persona, str) or persona not in self.verifiers:
+            raise ValueError('No protected route for this issuer')
+        return self.verifiers[persona]
+
+    def redeem_link(self, code, create):
+        bound = self.recipient_links.get(self.digest(code))
+        if bound is None:
+            raise ValueError('An identified recipient link is required')
+        return self.issuer_links(bound[0].persona).redeem(code, create)
+
+
 class PublishedReader:
     """Fixed trusted host composition; construction opens no network listener.
 
@@ -55,7 +82,8 @@ class PublishedReader:
     and an audit ledger. No source discovery, refresh worker or CLI is installed.
     """
     def __init__(self, *, authority, projection_root, actor, identities, origin, port,
-                 issuer_uid, socket_path, socket_group, audit, session_seconds=1800, conversation_socket=None):
+                 issuer_uid, socket_path, socket_group, audit, session_seconds=1800, conversation_socket=None,
+                 additional_issuers=None):
         if (not isinstance(authority, PublishedAuthority) or not isinstance(audit, Ledger)
                 or not isinstance(actor, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', actor)
                 or type(identities) not in (list, tuple) or not 1 <= len(identities) <= 64
@@ -63,20 +91,27 @@ class PublishedReader:
                 or len(set(identities)) != len(identities)
                 or type(port) is not int or not 0 <= port <= 65535):
             raise ValueError('Fixed authority, issuer allowlist, audit and reader binding required')
+        primary = dict(actor=actor, identities=list(identities), issuer_uid=issuer_uid,
+                       socket_path=str(socket_path), socket_group=socket_group,
+                       conversation_socket=str(conversation_socket) if conversation_socket is not None else None)
+        self.routes = ([primary] if additional_issuers is None else validate_routes(primary, additional_issuers))
         self.authority, self.port = authority, port
-        self.gate = RecipientGate(signed_access(), {'actor': actor, 'identities': list(identities)},
+        gate_type = MultiIssuerGate if len(self.routes) > 1 else RecipientGate
+        route_options = {'routes': self.routes} if len(self.routes) > 1 else {}
+        self.gate = gate_type(signed_access(), {'actor': actor, 'identities': list(identities)},
                                   origin, port, directory_loader=authority, audit=audit,
-                                  session_seconds=session_seconds)
+                                  session_seconds=session_seconds, **route_options)
         if not self.gate.origin.startswith('https://'):
             raise ValueError('An explicit HTTPS reader origin is required')
         self.projection = PublishedProjection(projection_root, authority.read, authority.snapshot)
         self.backend = ScopedBackend(self.gate, self.projection.catalog, self.projection.record)
         self.consultations = None
-        if conversation_socket is not None:
+        if any(route['conversation_socket'] is not None for route in self.routes):
             from persona_conversation import NativePersonaClient, PersonaAssistant
             from scoped_consultations import ScopedConsultations
             self.consultations = ScopedConsultations(PersonaAssistant(self.backend,
-                {actor: NativePersonaClient(conversation_socket, issuer_uid, actor)}))
+                {route['actor']: NativePersonaClient(route['conversation_socket'], route['issuer_uid'], route['actor'])
+                 for route in self.routes if route['conversation_socket'] is not None}))
         self.issuer_uid, self.socket_path, self.socket_group = issuer_uid, socket_path, socket_group
         self.server, self.handoff = None, None
         self._started = False
@@ -86,7 +121,7 @@ class PublishedReader:
     def preflight(self):
         directory = self.authority()
         catalog = self.projection.catalog()
-        if (self.gate.policy['actor'] not in directory.scope.policy['personas']
+        if (any(route['actor'] not in directory.scope.policy['personas'] for route in self.routes)
                 or catalog['organization'] != directory.scope.policy['organization']
                 or catalog['authority_revision'] != directory.authority_revision):
             raise ValueError('Reviewed projection and issuing persona must match current authority')
@@ -105,14 +140,19 @@ class PublishedReader:
                 raise ValueError('An identified reader instance cannot be restarted')
             self._started = True
         server = handoff = None
+        handoffs = []
         try:
             # Verify explicit Linux daemon/reader accounts before binding HTTP or IPC.
-            policy = DaemonPeerPolicy(self.issuer_uid)
+            policies = [DaemonPeerPolicy(route['issuer_uid']) for route in self.routes]
             self.preflight()
-            handoff = ReaderHandoff(self.socket_path, self.socket_group, policy, self.gate)
+            for route, policy in zip(self.routes, policies):
+                options = {'actor': route['actor']} if len(self.routes) > 1 else {}
+                handoffs.append(ReaderHandoff(route['socket_path'], route['socket_group'], policy, self.gate, **options))
+            handoff = handoffs[0]
             server = self._make_server()
             self.server, self.handoff = server, handoff
-            handoff.start(server)
+            for listener in handoffs:
+                listener.start(server)
             if stop_event is None:
                 server.serve_forever()
             else:
@@ -122,8 +162,14 @@ class PublishedReader:
                     server.handle_request()
         finally:
             try:
-                if handoff is not None:
-                    handoff.close()
+                failure = None
+                for listener in reversed(handoffs):
+                    try:
+                        listener.close()
+                    except Exception as error:
+                        failure = failure or error
+                if failure is not None:
+                    raise failure
             finally:
                 try:
                     if server is not None:
