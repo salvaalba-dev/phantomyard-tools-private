@@ -59,6 +59,10 @@ unclassified decision template, receipt and an HTML review table. These retain
 installation details and organizational metadata. Keep them outside GitHub; this
 document records aggregate evidence only, not their contents or an access grant.
 
+Follow-up: [detached release preparation](READER_RELEASE_PREPARATION.md) records
+the verified source archive, disk-identity comparison and the actual reader
+account's dependency versions. It does not activate this proposal.
+
 ## Verification
 
 - The existing `deployment_routes.py` command returned
