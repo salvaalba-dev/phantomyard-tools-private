@@ -140,8 +140,16 @@ export async function startPersonaConversations(routes: readonly PersonaConversa
         server.listen(route.socketPath, () => { server.removeListener("error", rejectListen); resolveListen(); });
       });
       stamp = await lstat(route.socketPath);
-      await chown(route.socketPath, -1, route.groupId);
+      if (!stamp.isSocket() || stamp.uid !== route.issuerUid)
+        throw Error("Unexpected native conversation socket owner");
+      // Retain the explicit owner; avoid runtime-dependent handling of uid -1.
+      if (stamp.gid !== route.groupId)
+        await chown(route.socketPath, route.issuerUid, route.groupId);
       await chmod(route.socketPath, 0o660);
+      const secured = await lstat(route.socketPath);
+      if (!secured.isSocket() || secured.dev !== stamp.dev || secured.ino !== stamp.ino
+        || secured.uid !== route.issuerUid || secured.gid !== route.groupId || (secured.mode & 0o777) !== 0o660)
+        throw Error("Native conversation socket permissions were not established");
       ready = true;
       // Operational errors never expose diagnostics or an unauthenticated fallback.
       server.on("error", () => { for (const socket of sockets) socket.destroy(); });
