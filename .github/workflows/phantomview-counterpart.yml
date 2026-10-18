@@ -23,6 +23,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: phantomyard/phantomtools
+          # Reviewed minimal counterpart baseline: all six input SHA-256 values
+          # and the proposal checksum are pinned in phantomorg-counterpart-source.json.
+          # e2c9ac1 belongs to the earlier human-access proposal; 5af2706 is PhantomBot.
           ref: 5e007b4f2864e52ffef1360df86ed6b5267750cb
           path: counterpart-source
           persist-credentials: false
