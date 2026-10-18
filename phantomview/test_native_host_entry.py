@@ -61,6 +61,15 @@ class RouteTests(unittest.TestCase):
             with self.subTest(document=document), self.assertRaises(ValueError):
                 host.validate_routes(document)
 
+    def test_handoff_socket_path_has_the_same_bound_as_conversation_paths(self):
+        self.document['routes'][0]['socketPath'] = '/' + 'a' * 99
+        self.assertEqual(len(host.validate_routes(self.document)[0]['socketPath']), 100)
+        for size in (101, 107, 108):
+            with self.subTest(bytes=size):
+                self.document['routes'][0]['socketPath'] = '/' + 'a' * (size - 1)
+                with self.assertRaisesRegex(ValueError, 'at most 100 bytes'):
+                    host.validate_routes(self.document)
+
     def test_cli_rejects_duplicate_and_oversized_input_without_echoing_it(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'routes.json'

@@ -95,6 +95,8 @@ def validate_routes(document):
                     or '..' in PurePosixPath(path).parts or path == '/'
                     or any(ord(c) <= 32 or ord(c) == 127 for c in path) or '\\' in path):
                 raise ValueError('Fixed normalized Linux paths are required')
+        if len(route['socketPath']) > 100:
+            raise ValueError('Native handoff socket path must be at most 100 bytes')
         if CONVERSATION <= set(route) and (type(route['conversationGroup']) is not int
                 or not 0 < route['conversationGroup'] < 2**32 - 1
                 or len(route['conversationSocketPath']) > 100):
