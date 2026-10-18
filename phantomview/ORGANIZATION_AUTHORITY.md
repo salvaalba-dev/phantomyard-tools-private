@@ -37,9 +37,22 @@ fallback to another source/default persona. Changed identities/policies invalida
 existing recipients through the gate's existing revision checks. A missing,
 unreadable or invalid source fails the current request before extended data reads.
 
-Documents are limited to 4 MiB. JSON duplicate keys/non-finite constants and YAML
-duplicate keys, aliases, merge keys, excessive nesting or excessive parser events
-are rejected. YAML anchors without references do not grant additional semantics.
+### Supported file and YAML subset
+
+Use `.json`, `.yaml` or `.yml` files encoded as UTF-8 (an initial UTF-8 BOM is
+accepted), with at most 4 MiB of input. The YAML preflight permits at most
+100,000 parser events and at most 64 nested mappings/sequences. These event and
+nesting budgets describe the YAML parser, not a separate JSON event parser.
+Duplicate mapping keys and non-finite numeric values are rejected by parsing
+and authority validation.
+
+The supported YAML authoring subset contains no anchors, aliases or merge keys
+(`&name`, `*name`, `<<`). Expand anchors and merge mappings into explicit literal
+values before loading an organization file. Aliases are deliberately rejected
+as `AliasEvent` before construction; merge keys are unsupported. An unused
+anchor may currently parse as an ordinary literal node, but is not a supported
+authoring feature and supplies no additional semantics. Do not rely on it.
+The loader does not expand aliases or relax its limits to accept such files.
 Invalid input is reported without source snippets or private identity values.
 
 Regular single-link files are required. Linked/reparse path components are
