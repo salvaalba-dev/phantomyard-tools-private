@@ -8,8 +8,9 @@ import sys
 
 import native_channel_patch as reviewed
 import native_ingress_patch as provenance
+import private_control_preparation as control
 
-INPUTS = reviewed.INPUTS | {
+INPUTS = reviewed.INPUTS | control.INPUTS | {
     'src/channels/commands.ts': 'd69a2953e7ecd4fa23868ffa47336285b39b5d410a3dd062d33adb6d0f7b2f22',
     'src/cli/run.ts': 'dd4463ad141598fe86f54fb1dd67ea0f9468c5a21ecf2c788f795ed557636122',
 }
@@ -33,6 +34,12 @@ It validates the registry before configuration loading and resolves each listene
 by its actual channel and persona. The immutable registry has no default route,
 rejects duplicates and never reads browser, model, environment or JSON claims.
 This is a programmatic startup API, not CLI auto-discovery or an installed plugin.
+
+Both transports expose an optional non-recording private control send. Telegram
+checks an explicit private-chat API acknowledgement. PhantomChat uses existing
+native encrypted wrapping and relay acceptance without reaction correlation or message
+rewrap retries. Acceptance is not proof of human receipt. Cancellation bounds
+waiting but cannot undo a dispatched network message. Ordinary sends are unchanged.
 
 The callback is trusted native embedding, never a model tool or browser identity
 API. PhantomChat context uses its verified native hexadecimal sender ID; an
@@ -59,13 +66,15 @@ def patch(root):
         if hashlib.sha256(source.encode()).hexdigest() != expected:
             raise ValueError('Unsupported native source; no command seam prepared')
         sources[name] = source
-    for name in (HELPER, REGISTRY, provenance.HELPER, reviewed.HELPER):
+    for name in (HELPER, REGISTRY, control.HELPER, provenance.HELPER, reviewed.HELPER):
         if (root / name).exists() or (root / name).is_symlink():
             raise ValueError('Existing native helper; use a fresh disposable checkout')
     helper = Path(__file__).with_name('authenticated_command.ts').read_text(encoding='utf-8')
     registry = Path(__file__).with_name('authenticated_command_registry.ts').read_text(encoding='utf-8')
     registry = provenance.replace_exact(registry, '"./authenticated_command.ts"',
                                         '"./authenticatedCommand.ts"')
+    private_control = Path(__file__).with_name('private_control.ts').read_text(encoding='utf-8')
+    sources.update(control.prepare(sources))
     for name in reviewed.INPUTS:
         source = sources[name]
         telegram = name.endswith('engine.ts')
@@ -115,11 +124,12 @@ def patch(root):
         'from "../channels/core/authenticatedCommandRegistry.ts";\n' + entry)
     # All hashes, absent helpers and hook anchors are checked before any writes.
     provenance.patch(root)
-    for name in reviewed.INPUTS:
+    for name in reviewed.INPUTS | control.INPUTS:
         (root / name).write_text(sources[name], encoding='utf-8', newline='\n')
     (root / 'src/cli/run.ts').write_text(sources['src/cli/run.ts'], encoding='utf-8', newline='\n')
     (root / HELPER).write_text(helper, encoding='utf-8', newline='\n')
     (root / REGISTRY).write_text(registry, encoding='utf-8', newline='\n')
+    (root / control.HELPER).write_text(private_control, encoding='utf-8', newline='\n')
     for name in ('README.md', 'AGENTS.md'):
         target = root / name
         target.write_text(target.read_text(encoding='utf-8') + NOTE, encoding='utf-8', newline='\n')

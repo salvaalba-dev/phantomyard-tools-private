@@ -45,6 +45,13 @@ class AuthenticatedCommandPatchTests(unittest.TestCase):
         self.assertIn('input.authenticatedCommands?.resolve("telegram", l.persona)', startup)
         self.assertIn('input.authenticatedCommands?.resolve("phantomchat", spec.persona)', startup)
         self.assertTrue((self.root / native.REGISTRY).is_file())
+        self.assertTrue((self.root / native.control.HELPER).is_file())
+        for name in native.control.INPUTS:
+            transport = (self.root / name).read_text(encoding='utf-8')
+            self.assertIn('async sendPrivateControlMessage', transport)
+            original = (SOURCE / name).read_text(encoding='utf-8')
+            anchor = '  async sendMessage(conversationId: string, text: string): Promise<void> {'
+            self.assertEqual(transport[transport.index(anchor):], original[original.index(anchor):])
 
     def test_drift_or_reapplication_refuses_before_writing(self):
         path = self.root / 'src/channels/phantomchat/server.ts'
@@ -101,6 +108,6 @@ class AuthenticatedCommandRuntimeTests(unittest.TestCase):
         if int(version.stdout.strip().lstrip('v').split('.')[0]) < 24:
             self.skipTest('Node 24 TypeScript stripping is required for standalone tests')
         result = subprocess.run(['node', '--test', 'test_authenticated_command.cjs',
-                                 'test_authenticated_command_registry.cjs'],
+                                 'test_authenticated_command_registry.cjs', 'test_private_control.cjs'],
             cwd=Path(__file__).parent, capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
