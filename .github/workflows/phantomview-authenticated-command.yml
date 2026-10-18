@@ -5,6 +5,8 @@ on:
     paths:
       - 'phantomview/authenticated_command*'
       - 'phantomview/native_link*'
+      - 'phantomview/native_listener_runtime.ts'
+      - 'phantomview/native_startup_binding*'
       - 'phantomview/private_control*'
       - 'phantomview/test_private_control*'
       - 'phantomview/test_authenticated_command*'
@@ -15,6 +17,8 @@ on:
     paths:
       - 'phantomview/authenticated_command*'
       - 'phantomview/native_link*'
+      - 'phantomview/native_listener_runtime.ts'
+      - 'phantomview/native_startup_binding*'
       - 'phantomview/private_control*'
       - 'phantomview/test_private_control*'
       - 'phantomview/test_authenticated_command*'
@@ -65,6 +69,7 @@ jobs:
           cp phantomview/private_control_runtime.test.ts native-source/tests/phantomview-private-control.test.ts
           cp phantomview/native_link_callback.test.ts native-source/tests/phantomview-native-link.test.ts
           cp phantomview/native_link_signer.test.ts native-source/tests/phantomview-native-signer.test.ts
+          cp phantomview/native_startup_binding.test.ts native-source/tests/phantomview-runtime-binding.test.ts
           cp phantomview/native_ingress_runtime.test.ts native-source/tests/phantomview-ingress.test.ts
       - name: Install locked native dependencies
         working-directory: native-source
@@ -74,7 +79,7 @@ jobs:
         run: bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-native-link.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
       - name: Verify daemon startup registration and existing startup regressions
         working-directory: native-source
-        run: bun test tests/phantomview-command-startup.test.ts tests/cli-run.test.ts
+        run: bun test tests/phantomview-command-startup.test.ts tests/phantomview-runtime-binding.test.ts tests/cli-run.test.ts
       - name: Compile the reviewed source proposal
         working-directory: native-source
         run: bun run build:x64
