@@ -24,8 +24,9 @@ configuration. The operator supplies a reviewed non-secret deployment document
 with exact persona/channel, scope, canonical HTTPS origin, distinct nonroot daemon
 and reader UIDs and normalized Linux client/socket paths. It contains no keys,
 human identities, categories or grants. A host build uses one daemon UID. Repeated
-channel/persona routes are refused; several persona routes also require matching
-reader endpoints/gates, because the existing identified gate is single-issuer.
+channel/persona routes are refused; several persona routes require matching
+protected [reader issuer routes](MULTI_ISSUER_READER.md). Run the offline
+[deployment route pairing](DEPLOYMENT_ROUTES.md) before preparing a build.
 
 Routes become a frozen TypeScript constant at build time. The daemon does not
 load this JSON or an arbitrary plugin at runtime. Only the CLI `run` invocation

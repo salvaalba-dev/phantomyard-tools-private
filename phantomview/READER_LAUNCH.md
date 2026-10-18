@@ -24,6 +24,8 @@ the reader's handoff listener, not the conversation socket group.
 The native build descriptor must agree with the reader's persona, HTTPS origin,
 daemon/reader UIDs and handoff path. Its optional conversation descriptor must
 name this reader's `conversation_socket`, with a group allowing this reader.
+Use the offline [deployment route pairing](DEPLOYMENT_ROUTES.md) to compare all
+native host documents with this launch file before preparing their builds.
 Review group membership explicitly: every account able to reach the native
 conversation socket is trusted to submit persona questions. No group membership
 or filesystem permission is changed by this launcher.
