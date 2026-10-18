@@ -59,3 +59,26 @@ PhantomOrg publication and filtered backend, and record exact artifacts and
 rollback. This source change starts no service, grants no live socket access and
 does not enable the native assistant. The legacy isolated mode remains available
 for installations that independently require that stronger boundary.
+
+## AU read-only follow-up, 2026-10-18
+
+The selected administrative terminal was checked separately from the unrelated
+domain terminal. No configuration, permissions, process or service was changed.
+The installed PhantomBot reports `1.1.433`; its selected service is active under
+`pb-paco`. The existing viewer is active under `aunited`. Those existing separate
+accounts fit daemon/reader verification without adding model execution accounts.
+
+The reader entrypoint still has SHA-256
+`5c501b508f842b05afa02242d341af9db4d5a9a32de1f2feb55eacc8b60f5d2c`.
+The authoritative source still has the approved declaration hash
+`29052cfb4ae57dffb9dc0db6d882e8ce02d247b3ea1eb6702d5e54961566697a`;
+the private publication reports matching organization revision
+`4af4987bc07e01980efdf6b422c4339df96f86aeebd2c9df630c8b415085ae43`.
+The collection timer is active; its oneshot collector was inactive between runs.
+These observations alone do not establish publication freshness or callback wiring.
+
+The tested native patch targets revision
+`5af27060327ee8c53fe730dd8b98b6b305c62add`; a version string does not prove that
+the installed binary matches that source. Assemble and review a compatible host
+artifact before changing the running daemon. This follow-up is compatibility
+evidence, not a deployment or identified-assistant acceptance test.
