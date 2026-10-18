@@ -60,6 +60,20 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.reader()
 
+    def test_snapshot_loader_uses_the_same_publication_lease_and_index_binding(self):
+        self.publish()
+        self.assertEqual(self.reader.snapshot(), self.state['snapshot'])
+        index = json.loads(self.index.read_text(encoding='utf-8'))
+        index['snapshot']['digest'] = 'f' * 64
+        self.index.write_text(json.dumps(index), encoding='utf-8')
+        self.index.chmod(0o640)
+        with self.assertRaises(ValueError):
+            self.reader.snapshot()
+        self.publish()
+        self.ticks[0] = 130
+        with self.assertRaises(ValueError):
+            self.reader.snapshot()
+
     def test_reader_does_not_open_the_original_source(self):
         self.publish()
         self.source.unlink()

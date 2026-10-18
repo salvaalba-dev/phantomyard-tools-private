@@ -26,6 +26,8 @@ from reader_handoff import ReaderHandoff
 from scoped_backend import ScopedBackend
 from scoped_http import dispatch as scoped_dispatch
 from test_scoped_backend import ProjectionFixture
+import test_identified_reader as assembled_fixtures
+import identified_reader as assembled_reader
 import phantomview as pv
 import test_signed_recipient as signatures
 from test_view_permissions import scoped_organization
@@ -146,6 +148,78 @@ class CrossAccountTests(unittest.TestCase):
         self.assertEqual(trusted, {'ok': True, 'value': {'status': 0, 'link': True}})
         self.assertEqual(result, {'ok': True, 'value': {'accepted': [False, True], 'human': 'owner',
                                                      'persona': 'coordinator', 'scope': 'river-project'}})
+
+    def test_published_reader_assembly_joins_real_daemon_ipc_to_filtered_http(self):
+        def reader():
+            fixture = assembled_fixtures.PublishedReaderTests()
+            fixture.setUp()
+            app = assembled_reader.PublishedReader(**(fixture.options | {
+                'identities': [self.fixture.identity], 'socket_path': self.path, 'socket_group': ISSUER}))
+            errors = []
+            def run():
+                try:
+                    app.serve()
+                except BaseException as error:
+                    errors.append(type(error).__name__)
+            thread = threading.Thread(target=run, daemon=True)
+            thread.start()
+            try:
+                deadline = time.monotonic() + 6
+                while not (app.handoff and app.handoff.healthy):
+                    if errors or time.monotonic() >= deadline:
+                        raise AssertionError('Assembled reader did not start')
+                    time.sleep(0.01)
+                os.write(self.ready_write, b'1')
+                if not select.select([self.done_read], [], [], 8)[0]:
+                    raise AssertionError('Native client did not finish')
+                code = os.read(self.done_read, 128).decode()
+                connection = HTTPConnection('127.0.0.1', app.server.server_port, timeout=3)
+                try:
+                    body = json.dumps({'code': code})
+                    connection.request('POST', '/api/redeem', body, {'Content-Type': 'application/json'})
+                    response = connection.getresponse()
+                    if response.status != 200:
+                        raise AssertionError('Assembled HTTP redemption failed')
+                    cookie = SimpleCookie(response.getheader('Set-Cookie'))['phantomview'].value
+                    response.read()
+                    headers = {'Cookie': 'phantomview=' + cookie}
+                    recipient, _ = app.gate.identified_scope(headers)
+                    connection.request('GET', '/api/state', headers=headers)
+                    response = connection.getresponse()
+                    if response.status != 200:
+                        raise AssertionError('Assembled HTTP projection failed')
+                    view = json.loads(response.read())
+                    filtered = fixture.hidden not in json.dumps(view) and bool(view['resources'])
+                    connection.request('POST', '/api/redeem', body, {'Content-Type': 'application/json'})
+                    response = connection.getresponse()
+                    replay = response.status == 401
+                    response.read()
+                finally:
+                    connection.close()
+            finally:
+                if app.server:
+                    app.server.shutdown()
+                thread.join(timeout=5)
+                fixture.doCleanups()
+            if thread.is_alive() or errors:
+                raise AssertionError('Assembled reader did not stop cleanly')
+            return {'human': recipient.human, 'persona': recipient.persona, 'filtered': filtered,
+                    'replay_denied': replay, 'socket_removed': not Path(self.path).exists(),
+                    'sessions_discarded': not app.gate.sessions}
+
+        context = {'channel': 'telegram', 'sender': '102', 'direct': True,
+                   'principal_authenticated': True, 'scope_id': 'example'}
+        server = self.start(reader)
+        attacker = finish(spawn(MODEL, lambda: request_access(self.path, DaemonReaderPolicy(READER),
+            self.fixture.gate.origin, self.authorization, context)))
+        trusted = finish(spawn(ISSUER, lambda: request_access(self.path, DaemonReaderPolicy(READER),
+            self.fixture.gate.origin, self.authorization, context)))
+        self.assertFalse(attacker['ok'])
+        self.assertTrue(trusted['ok'])
+        os.write(self.done_write, trusted['value'].split('#c=')[1].encode())
+        self.assertEqual(finish(server), {'ok': True, 'value': {
+            'human': 'secretary', 'persona': 'administrator', 'filtered': True,
+            'replay_denied': True, 'socket_removed': True, 'sessions_discarded': True}})
 
     def native_command(self):
         delivered = []

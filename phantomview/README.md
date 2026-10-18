@@ -1,10 +1,16 @@
 # PhantomView
 
+The private [published identified reader assembly](IDENTIFIED_READER.md) now
+connects current PhantomOrg publication, reviewed visual data and native signed
+handoff to one HTTP session gate. It rejects unidentified legacy grants and
+keeps raw legacy APIs closed. This is local/source integration; native conversation
+transport and AU cutover remain pending.
+
 Private [offline native host preparation](NATIVE_HOST_ENTRY.md) now composes fixed
 reviewed link-command routes into the existing native CLI run path. It preserves
 the original credential bootstrap and uses no additional service or runtime
-plugin loader. The variant is inactive; reader/assistant assembly and AU cutover
-remain pending. Stock native updates require a new review/build of this optional
+plugin loader. The variant is inactive; production reader/assistant wiring and AU
+cutover remain pending. Stock native updates require a new review/build of this optional
 hook rather than an assumption of automatic compatibility.
 
 Current direction: a standard visual interface to PhantomOrg-authorized information

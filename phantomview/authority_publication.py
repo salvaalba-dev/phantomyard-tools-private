@@ -132,7 +132,7 @@ class PublishedAuthority:
             raise ValueError('Explicit authority lease between 1 and 3600 seconds required')
         self.organization, self.max_age, self.clock = organization, max_age, clock
 
-    def read(self):
+    def _current(self):
         try:
             org = OrganizationAuthority(self.path, self.organization).read()
             metadata = org.pop(META)
@@ -158,9 +158,16 @@ class PublishedAuthority:
                     or [(row.get('id'), row.get('source')) for row in snapshot.get('organizations', [])]
                     != [(self.organization, metadata['snapshot_source'])]):
                 raise ValueError('Current index does not match authority publication')
-            return org
+            return org, snapshot
         except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError, yaml.YAMLError):
             raise ValueError('Current private organization publication is unavailable') from None
+
+    def read(self):
+        return self._current()[0]
+
+    def snapshot(self):
+        """Return only the snapshot checked against the same fresh publication read."""
+        return self._current()[1]
 
     def __call__(self):
         return HumanDirectory(self.read())

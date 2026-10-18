@@ -197,6 +197,13 @@ and assistant assembly, content review and reversible AU cutover remain pending.
 Stock native updates do not preserve this optional private hook and require a
 new source review/build before reactivation.
 
+The [published reader assembly](IDENTIFIED_READER.md) now binds fresh private
+authority and approved source projections to one identified HTTP/handoff gate.
+It adds no collector or inference service, rejects legacy unidentified grants,
+and keeps legacy raw APIs closed. Local real-signature HTTP tests and disposable
+Linux peer-account coverage establish component integration, not live channel
+activation. Issuing-persona conversation transport and AU cutover remain pending.
+
 ### P2. Align PhantomOrg declarations and resource metadata
 
 Installed-path review: [AU compatibility evidence](AU_PHANTOMORG_COMPATIBILITY.md)
