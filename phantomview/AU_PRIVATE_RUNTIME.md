@@ -61,10 +61,11 @@ archive has not been uploaded, unpacked or selected by any AU service.
 Future reviewed native descriptors must use this environment's `bin/python`
 instead of the system interpreter, and the reader launch command must select
 the same compatible environment. Repeat descriptor pairing after that edit.
-The earlier detached proposal still names the system interpreter: its local
-update could not be completed because the local file/command helper failed even
-after specific filesystem access was granted. Do not claim that proposal was
-updated or that its native build is ready.
+A new detached native proposal now names this private interpreter on both
+channels; only that coordinate changed. Descriptor pairing was repeated and
+returned `route-descriptors-matched` with `activation_ready: false`. The earlier
+proposal is preserved. Neither proposal has been compiled into a native build
+or selected by an AU service.
 
 This resolves the dependency-version preparation step only. Combined reader
 imports and signed-link tests on AU still require the reviewed reader archive.
