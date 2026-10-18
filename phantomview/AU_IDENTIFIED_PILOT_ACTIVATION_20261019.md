@@ -86,6 +86,19 @@ collector cadence, public widget, other setups and additional issuers were not
 changed. Whole-daemon trust remains the agreed boundary; this is not a claim of
 model/tool isolation inside the daemon.
 
+## Boot ordering and recovery configuration
+
+The reader override orders startup after the existing Paco service and sets
+`RestartSec=10s`, preserving its existing `Restart=on-failure`. The former
+100-millisecond retry could exhaust the five-attempt startup limit before the
+native socket was ready. The effective ordering and interval were checked with
+`systemctl show` after a daemon reload; the reader PID remained unchanged.
+This configuration was verified without rebooting the VPS.
+
+The introduced-file recovery manifest was updated to bind this exact override,
+while the preceding override and manifest were retained privately. The existing
+root-only configuration directory remains mode 0700.
+
 ## Remaining acceptance checks
 
 The human must request `/phantomview` from Paco in their existing private Telegram
