@@ -118,3 +118,11 @@ Native startup registration with the existing signer/private channel transport,
 identified reader assembly, assistant transport and reversible cutover still
 remain before end-to-end activation. This check does not reinstate the retired
 issuer/model account split.
+
+## Native runtime binding
+
+[NATIVE_STARTUP_BINDING.md](NATIVE_STARTUP_BINDING.md) describes the optional
+runtime registration that now connects the actual native listener's loaded
+identity and private transport to the callback. It adds no credential discovery
+or channel consumer. A concrete host entry with reviewed routes, reader/assistant
+assembly and AU cutover remain pending; stock CLI startup is unchanged.

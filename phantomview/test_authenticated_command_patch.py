@@ -42,10 +42,15 @@ class AuthenticatedCommandPatchTests(unittest.TestCase):
         startup = (self.root / 'src/cli/run.ts').read_text(encoding='utf-8')
         self.assertLess(startup.index('verifyAuthenticatedCommandRegistry(input.authenticatedCommands)'),
                         startup.index('let config = input.config'))
-        self.assertIn('input.authenticatedCommands?.resolve("telegram", l.persona)', startup)
-        self.assertIn('input.authenticatedCommands?.resolve("phantomchat", spec.persona)', startup)
+        self.assertIn('input.authenticatedCommands?.bind("telegram", l.persona, () =>', startup)
+        self.assertIn('input.authenticatedCommands?.bind("phantomchat", spec.persona, () =>', startup)
+        self.assertIn('nativeListenerRuntime(transport, identity)', startup)
+        self.assertIn('allPhantomchatPersonas.find(spec => spec.persona === l.persona)?.config.identity', startup)
+        self.assertEqual(startup.count('new HttpTelegramTransport(l.account.token)'), 1)
         self.assertTrue((self.root / native.REGISTRY).is_file())
         self.assertTrue((self.root / native.SIGNER).is_file())
+        for name in (native.CALLBACK, native.STARTUP, native.RUNTIME):
+            self.assertTrue((self.root / name).is_file())
         self.assertTrue((self.root / native.control.HELPER).is_file())
         for name in native.control.INPUTS:
             transport = (self.root / name).read_text(encoding='utf-8')

@@ -17,6 +17,9 @@ INPUTS = reviewed.INPUTS | control.INPUTS | {
 HELPER = 'src/channels/core/authenticatedCommand.ts'
 REGISTRY = 'src/channels/core/authenticatedCommandRegistry.ts'
 SIGNER = 'src/channels/core/nativeLinkSigner.ts'
+CALLBACK = 'src/channels/core/nativeLinkCallback.ts'
+STARTUP = 'src/channels/core/phantomViewStartup.ts'
+RUNTIME = 'src/channels/core/nativeListenerRuntime.ts'
 NOTE = """
 
 ## Private optional authenticated direct-command seam
@@ -35,6 +38,15 @@ It validates the registry before configuration loading and resolves each listene
 by its actual channel and persona. The immutable registry has no default route,
 rejects duplicates and never reads browser, model, environment or JSON claims.
 This is a programmatic startup API, not CLI auto-discovery or an installed plugin.
+
+An explicit runtime registration can bind once after the native listener has
+constructed its real transport. It receives a public key, a signing closure over
+that persona's already loaded identity, and the same private transport capability.
+It never receives secret key bytes or creates a second channel consumer. Telegram
+uses only the exact persona's existing PhantomChat identity when available; a
+configured route without that identity fails rather than borrowing the default.
+`phantomViewStartupCommands` composes these capabilities with explicit daemon
+trust and the existing signed-link callback. No host route is auto-registered.
 
 Both transports expose an optional non-recording private control send. Telegram
 checks an explicit private-chat API acknowledgement. PhantomChat uses existing
@@ -73,15 +85,29 @@ def patch(root):
         if hashlib.sha256(source.encode()).hexdigest() != expected:
             raise ValueError('Unsupported native source; no command seam prepared')
         sources[name] = source
-    for name in (HELPER, REGISTRY, SIGNER, control.HELPER, provenance.HELPER, reviewed.HELPER):
+    for name in (HELPER, REGISTRY, SIGNER, CALLBACK, STARTUP, RUNTIME,
+                 control.HELPER, provenance.HELPER, reviewed.HELPER):
         if (root / name).exists() or (root / name).is_symlink():
             raise ValueError('Existing native helper; use a fresh disposable checkout')
     helper = Path(__file__).with_name('authenticated_command.ts').read_text(encoding='utf-8')
     registry = Path(__file__).with_name('authenticated_command_registry.ts').read_text(encoding='utf-8')
     registry = provenance.replace_exact(registry, '"./authenticated_command.ts"',
                                         '"./authenticatedCommand.ts"')
+    registry = provenance.replace_exact(registry, '"./native_link_signer.ts"',
+                                        '"./nativeLinkSigner.ts"')
+    registry = provenance.replace_exact(registry, '"./private_control.ts"', '"./privateControl.ts"')
     private_control = Path(__file__).with_name('private_control.ts').read_text(encoding='utf-8')
     signer = Path(__file__).with_name('native_link_signer.ts').read_text(encoding='utf-8')
+    callback = Path(__file__).with_name('native_link_callback.ts').read_text(encoding='utf-8')
+    callback = provenance.replace_exact(callback, '"./authenticated_command.ts"',
+                                       '"./authenticatedCommand.ts"')
+    startup = Path(__file__).with_name('native_startup_binding.ts').read_text(encoding='utf-8')
+    for original, generated in (('authenticated_command_registry', 'authenticatedCommandRegistry'),
+                                ('native_link_signer', 'nativeLinkSigner'),
+                                ('native_link_callback', 'nativeLinkCallback'),
+                                ('private_control', 'privateControl')):
+        startup = provenance.replace_exact(startup, f'"./{original}.ts"', f'"./{generated}.ts"')
+    runtime = Path(__file__).with_name('native_listener_runtime.ts').read_text(encoding='utf-8')
     sources.update(control.prepare(sources))
     for name in reviewed.INPUTS:
         source = sources[name]
@@ -122,14 +148,27 @@ def patch(root):
         '  verifyAuthenticatedCommandRegistry(input.authenticatedCommands);')
     entry = provenance.replace_exact(entry, '        persona: l.persona,',
         '        persona: l.persona,\n'
-        '        authenticatedCommand: input.authenticatedCommands?.resolve("telegram", l.persona),')
+        '        authenticatedCommand: input.authenticatedCommands?.bind("telegram", l.persona, () =>\n'
+        '          nativeListenerRuntime(transport, allPhantomchatPersonas.find(spec => spec.persona === l.persona)?.config.identity)),')
     entry = provenance.replace_exact(entry, '            persona: spec.persona,\n            runningPersonas,',
         '            persona: spec.persona,\n'
-        '            authenticatedCommand: input.authenticatedCommands?.resolve("phantomchat", spec.persona),\n'
+        '            authenticatedCommand: input.authenticatedCommands?.bind("phantomchat", spec.persona, () =>\n'
+        '              nativeListenerRuntime(transport, identity)),\n'
         '            runningPersonas,')
+    entry = provenance.replace_exact(entry,
+        '    const tasks = telegramListeners.map((l) =>\n      startTelegram({',
+        '    const tasks = telegramListeners.map((l) => {\n'
+        '      const transport = new HttpTelegramTransport(l.account.token);\n'
+        '      return startTelegram({')
+    entry = provenance.replace_exact(entry,
+        '        transport: new HttpTelegramTransport(l.account.token),', '        transport,')
+    entry = provenance.replace_exact(entry,
+        '      }),\n    );\n\n    // phantomchat (Nostr NIP-17 DM) listeners',
+        '      });\n    });\n\n    // phantomchat (Nostr NIP-17 DM) listeners')
     sources['src/cli/run.ts'] = (
         'import { AuthenticatedCommandRegistry, verifyAuthenticatedCommandRegistry } '
-        'from "../channels/core/authenticatedCommandRegistry.ts";\n' + entry)
+        'from "../channels/core/authenticatedCommandRegistry.ts";\n'
+        'import { nativeListenerRuntime } from "../channels/core/nativeListenerRuntime.ts";\n' + entry)
     # All hashes, absent helpers and hook anchors are checked before any writes.
     provenance.patch(root)
     for name in reviewed.INPUTS | control.INPUTS:
@@ -139,6 +178,8 @@ def patch(root):
     (root / REGISTRY).write_text(registry, encoding='utf-8', newline='\n')
     (root / control.HELPER).write_text(private_control, encoding='utf-8', newline='\n')
     (root / SIGNER).write_text(signer, encoding='utf-8', newline='\n')
+    for name, source in ((CALLBACK, callback), (STARTUP, startup), (RUNTIME, runtime)):
+        (root / name).write_text(source, encoding='utf-8', newline='\n')
     for name in ('README.md', 'AGENTS.md'):
         target = root / name
         target.write_text(target.read_text(encoding='utf-8') + NOTE, encoding='utf-8', newline='\n')
