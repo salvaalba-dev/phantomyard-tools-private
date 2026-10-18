@@ -57,3 +57,13 @@ test('model HTML remains plain response text and is never interpreted by the cli
 test('unconfigured or mismatched capabilities cannot enable a consultation',async()=>{
   const f=fixture(async()=>complete());f.chat.enable({available:true,persona:'guide',scope_id:'other'},view);await f.chat.send('Explain');assert.equal(f.calls.length,0);
 });
+
+test('existing-persona mode requires its own response provenance',async()=>{
+  const f=fixture(async()=>complete('Native answer',{mode:'persona-conversation',native_context:'existing-persona'}));
+  f.chat.enable({available:true,persona:'project-guide',scope_id:view.scope_id,mode:'persona-conversation'},view);
+  await f.chat.send('Explain the institution');assert.equal(f.chat.state.text,'Native answer');
+  assert.equal(f.frames.at(-1).mode,'persona-conversation');
+  const wrong=fixture(async()=>complete('Wrong provenance'));
+  wrong.chat.enable({available:true,persona:'project-guide',scope_id:view.scope_id,mode:'persona-conversation'},view);
+  await wrong.chat.send('Explain');assert.equal(wrong.invalid.length,1);assert.equal(wrong.chat.state.text,'');
+});

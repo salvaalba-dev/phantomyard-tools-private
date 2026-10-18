@@ -8,6 +8,9 @@ on:
       - 'phantomview/native_listener_runtime.ts'
       - 'phantomview/native_startup_binding*'
       - 'phantomview/native_host_entry.py'
+      - 'phantomview/persona_conversation*'
+      - 'phantomview/test_persona_conversation.py'
+      - 'phantomview/identified_reader.py'
       - 'phantomview/native-host-example.json'
       - 'phantomview/test_native_host_entry.py'
       - 'phantomview/runtime_default.py'
@@ -25,6 +28,9 @@ on:
       - 'phantomview/native_listener_runtime.ts'
       - 'phantomview/native_startup_binding*'
       - 'phantomview/native_host_entry.py'
+      - 'phantomview/persona_conversation*'
+      - 'phantomview/test_persona_conversation.py'
+      - 'phantomview/identified_reader.py'
       - 'phantomview/native-host-example.json'
       - 'phantomview/test_native_host_entry.py'
       - 'phantomview/runtime_default.py'
@@ -81,6 +87,7 @@ jobs:
           cp phantomview/native_link_signer.test.ts native-source/tests/phantomview-native-signer.test.ts
           cp phantomview/native_startup_binding.test.ts native-source/tests/phantomview-runtime-binding.test.ts
           cp phantomview/native_ingress_runtime.test.ts native-source/tests/phantomview-ingress.test.ts
+          cp phantomview/persona_conversation_runtime.test.ts native-source/tests/phantomview-persona-conversation.test.ts
       - name: Install locked native dependencies
         working-directory: native-source
         run: bun install --frozen-lockfile
@@ -93,6 +100,12 @@ jobs:
       - name: Compile the reviewed source proposal
         working-directory: native-source
         run: bun run build:x64
+      - name: Verify existing-persona conversation and the real Python socket client
+        working-directory: native-source
+        env:
+          PHANTOMVIEW_SIGNER_PYTHON: ${{ github.workspace }}/signer-venv/bin/python
+          PHANTOMVIEW_SOURCE: ${{ github.workspace }}/phantomview
+        run: bun test tests/phantomview-persona-conversation.test.ts tests/cli-ask.test.ts
       - name: Verify private control delivery with mocked IO
         working-directory: native-source
         run: bun test tests/phantomview-private-control.test.ts

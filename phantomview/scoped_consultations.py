@@ -20,7 +20,7 @@ def identifier(value):
 
 class ScopedConsultations:
     def __init__(self, assistant, *, clock=time.monotonic):
-        if (not isinstance(assistant, ScopedAssistant)
+        if (not isinstance(assistant, ScopedAssistant) or assistant.mode not in {'scoped-consultation', 'persona-conversation'}
                 or any(not callable(getattr(executor, 'run', None)) for executor in assistant.executors.values())):
             raise ValueError('A scoped assistant with explicitly cancellable executors is required')
         self.assistant, self.backend, self.gate, self.clock = assistant, assistant.backend, assistant.gate, clock
@@ -84,7 +84,7 @@ class ScopedConsultations:
                 return 429, {'error': 'Consultation limit reached; try later'}
             now, ident = self.clock(), str(uuid.uuid4())
             self.gate.audit_event(headers, 'scoped_assistant_queued', request_id=request_id, job_id=ident,
-                                  status='queued', mode='scoped-consultation')
+                                  status='queued', mode=self.assistant.mode)
             row = {'id': ident, 'owner': owner, 'recipient': recipient, 'request_id': request_id,
                    'fingerprint': fingerprint, 'view_revision': view['view_revision'], 'body': body,
                    'headers': {'Cookie': headers.get('Cookie', '')}, 'status': 'queued', 'result': None,
@@ -115,7 +115,7 @@ class ScopedConsultations:
                 has_result = row['result'] is not None
             if has_result:
                 self.gate.audit_event(headers, 'scoped_assistant_delivered', request_id=row['request_id'],
-                    job_id=row['id'], status=row['status'], mode='scoped-consultation')
+                    job_id=row['id'], status=row['status'], mode=self.assistant.mode)
             self.assistant._current(headers, row['recipient'], row['view_revision'])
         except (ValueError, OSError):
             with self.lock:
@@ -136,7 +136,7 @@ class ScopedConsultations:
                 if self.gate.audit is not self.assistant.audit:
                     raise OSError('The protected consultation audit changed')
                 self.gate.audit_event(headers, 'scoped_assistant_cancelled', request_id=row['request_id'],
-                                      job_id=ident, status='cancelled', mode='scoped-consultation')
+                                      job_id=ident, status='cancelled', mode=self.assistant.mode)
             finally:
                 row['cancelled'].set()
                 row['status'], row['result'] = 'cancelled', None

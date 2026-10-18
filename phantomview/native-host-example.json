@@ -10,7 +10,9 @@
       "readerUid": 12002,
       "python": "/usr/bin/python3",
       "clientScript": "/opt/phantomview/native_link_client.py",
-      "socketPath": "/run/phantomview/reader.sock"
+      "socketPath": "/run/phantomview/reader.sock",
+      "conversationSocketPath": "/run/phantomview/persona.sock",
+      "conversationGroup": 12002
     },
     {
       "persona": "coordinator",
@@ -21,7 +23,9 @@
       "readerUid": 12002,
       "python": "/usr/bin/python3",
       "clientScript": "/opt/phantomview/native_link_client.py",
-      "socketPath": "/run/phantomview/reader.sock"
+      "socketPath": "/run/phantomview/reader.sock",
+      "conversationSocketPath": "/run/phantomview/persona.sock",
+      "conversationGroup": 12002
     }
   ]
 }

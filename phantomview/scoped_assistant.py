@@ -26,6 +26,7 @@ def encode(value):
 
 
 class ScopedAssistant:
+    mode = 'scoped-consultation'
     def __init__(self, backend, executors):
         if (not isinstance(backend, ScopedBackend) or not isinstance(backend.gate.audit, Ledger)
                 or not isinstance(executors, dict) or not executors

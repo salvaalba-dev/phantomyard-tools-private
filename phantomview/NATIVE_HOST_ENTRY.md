@@ -33,6 +33,12 @@ constructs its registry; programmatic `runRun()` retains explicit opt-in behavio
 The original `src/index.ts` is unchanged, preserving native credential bootstrap,
 embedded harness startup and dispatch of the other CLI commands. The existing
 process lock and `--if-not-running` behavior remain in the native run path.
+
+Optional `conversationSocketPath`/`conversationGroup` fields additionally prepare
+the [existing-persona transport](PERSONA_CONVERSATION.md). Channels for one persona
+must agree on this descriptor. The listener starts inside the existing daemon
+only after its run lock; native ask completion metadata is exposed without a
+trusted-input bypass. Omission preserves the earlier link-only build behavior.
 Signing uses the exact receiving listener's already loaded identity. Private
 delivery uses that listener's existing transport. No service, poller, credential
 store or replacement persona is created.

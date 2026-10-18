@@ -1,5 +1,11 @@
 # PhantomView
 
+An optional [existing-persona conversation transport](PERSONA_CONVERSATION.md)
+now connects the identified reader to the issuing persona inside the existing
+native daemon. It preserves native configuration, knowledge, history, tools and
+JEV screening, and labels this separately from projection-only consultation.
+Private socket access and AU deployment remain operator-reviewed setup steps.
+
 The private [published identified reader assembly](IDENTIFIED_READER.md) now
 connects current PhantomOrg publication, reviewed visual data and native signed
 handoff to one HTTP session gate. It rejects unidentified legacy grants and

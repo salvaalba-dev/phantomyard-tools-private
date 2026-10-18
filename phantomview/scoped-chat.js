@@ -10,7 +10,7 @@ class ScopedChat {
   }
   emit(status,text='',question='') {
     this.state={status,text,question};this.render({...this.state,busy:this.busy,retry:!!this.retryBody,
-      persona:this.info?.persona||'',focus:this.focus?.title||'',available:!!this.view});
+      persona:this.info?.persona||'',mode:this.info?.mode||'scoped-consultation',focus:this.focus?.title||'',available:!!this.view});
   }
   async discard(id) {try{await this.request('DELETE',CHAT_JOBS+'/'+id);}catch{/* Best effort; server expiry remains enforced. */}}
   reset(disable=true) {
@@ -21,7 +21,8 @@ class ScopedChat {
     this.reset();
     if(info?.available!==true||typeof info.persona!=='string'||!info.persona||info.scope_id!==view.scope_id
         ||typeof view.view_revision!=='string'||!/^[a-f0-9]{64}$/.test(view.view_revision))return;
-    this.info={persona:info.persona};this.view={scope_id:view.scope_id,view_revision:view.view_revision};this.emit('ready');
+    if(info.mode!==undefined&&!['scoped-consultation','persona-conversation'].includes(info.mode))return;
+    this.info={persona:info.persona,mode:info.mode||'scoped-consultation'};this.view={scope_id:view.scope_id,view_revision:view.view_revision};this.emit('ready');
   }
   setFocus(record) {
     if(!this.view)return;this.reset(false);
@@ -49,6 +50,7 @@ class ScopedChat {
           if(job.status==='complete') {
             const result=job.result;
             if(!result||result.status!=='complete'||result.request_id!==body.request_id||result.complete_corpus!==false
+                ||(this.info.mode==='persona-conversation'&&(result.mode!=='persona-conversation'||result.native_context!=='existing-persona'))
                 ||result.persona!==this.info.persona||result.scope_id!==this.view.scope_id||result.view_revision!==this.view.view_revision
                 ||typeof result.text!=='string'||new TextEncoder().encode(result.text).length>64000)throw chatProtocolError();
             answer=result.text;

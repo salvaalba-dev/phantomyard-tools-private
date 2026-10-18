@@ -55,7 +55,7 @@ class Ledger:
                     raise ValueError("Invalid correlation identifier")
             elif key == "status" and value not in self.STATUSES:
                 raise ValueError("Invalid audit status")
-            elif key == "mode" and value not in {"dashboard-analysis", "scoped-consultation"}:
+            elif key == "mode" and value not in {"dashboard-analysis", "scoped-consultation", "persona-conversation"}:
                 raise ValueError("Unverified assistant mode")
             elif key in {"review_revision", "approval_revision"}:
                 if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value):

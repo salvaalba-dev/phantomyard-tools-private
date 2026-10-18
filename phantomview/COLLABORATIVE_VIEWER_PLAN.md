@@ -317,6 +317,13 @@ its existing configuration and memory; changing host defaults cannot redirect it
 Session ownership, revocation and native outcomes are tested end to end. No claim
 of a separately sandboxed native knowledge subset is made.
 
+P4 source follow-up: [existing-persona conversation](PERSONA_CONVERSATION.md) now
+reuses the native daemon's `runAsk`, configuration, memory and tools through an
+optional fixed local socket. Its completion observer preserves JEV holds; no
+trusted flag or replacement worker is introduced. The identified queue validates
+session/evidence at dispatch and delivery and the UI reports native-persona mode.
+Socket group membership, current content approvals and AU cutover remain pending.
+
 ### P5. Add explicit optional module lifecycle
 
 Implemented foundation: the [optional role briefing adapter](ROLE_BRIEFING_ADAPTER.md)

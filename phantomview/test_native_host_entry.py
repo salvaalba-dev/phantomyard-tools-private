@@ -74,6 +74,20 @@ class RouteTests(unittest.TestCase):
                 self.assertNotIn('private-source-marker', error.getvalue())
                 self.assertNotIn(str(path), error.getvalue())
 
+    def test_conversation_routes_require_matching_channels_and_unique_private_sockets(self):
+        for field, value in (('conversationGroup', 0), ('conversationGroup', True),
+                             ('conversationSocketPath', '/run/phantomview/reader.sock'),
+                             ('conversationSocketPath', 'relative')):
+            document = copy.deepcopy(self.document)
+            document['routes'][0][field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                host.validate_routes(document)
+        document = copy.deepcopy(self.document)
+        document['routes'][1]['conversationGroup'] += 1
+        with self.assertRaises(ValueError):
+            host.validate_routes(document)
+        self.assertEqual(len(host.conversation_routes(host.validate_routes(self.document))), 1)
+
 
 @unittest.skipUnless(SOURCE.is_dir(), 'Pinned native source checkout is required')
 class HostEntryTests(unittest.TestCase):
@@ -100,10 +114,15 @@ class HostEntryTests(unittest.TestCase):
         self.assertFalse(report['activation_ready'])
         self.assertEqual(report['route_count'], 2)
         entry = after[host.ENTRY].decode()
-        self.assertIn(host.REPLACEMENT, entry)
+        self.assertIn('authenticatedCommands: phantomViewStartupCommands(phantomViewHostRoutes)', entry)
         self.assertEqual(entry.count('phantomViewStartupCommands(phantomViewHostRoutes)'), 1)
         self.assertIn('ifNotRunning: Boolean(args["if-not-running"])', entry)
         self.assertIn('Object.freeze(', after[host.ROUTES].decode())
+        self.assertLess(entry.index('const lock = acquireRunLock'), entry.index('await startPersonaConversations'))
+        self.assertIn('await personaRuntime?.close()', entry)
+        self.assertIn('onCompletion?:', after['src/cli/ask.ts'].decode())
+        self.assertIn('screenedHold: chunk.meta?.screenedHold === true', after['src/cli/ask.ts'].decode())
+        self.assertTrue((self.root / host.CONVERSATION_HELPER).is_file())
         for name in ('README.md', 'AGENTS.md'):
             self.assertIn(host.NOTE, after[name].decode())
         with self.assertRaises(ValueError):
@@ -131,6 +150,16 @@ class HostEntryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             host.prepare(self.root, self.document)
         self.assertEqual(before, self.snapshot())
+
+    def test_omitted_conversation_routes_keep_native_ask_and_lifecycle_unchanged(self):
+        for route in self.document['routes']:
+            for field in host.CONVERSATION:
+                route.pop(field)
+        original = (self.root / 'src/cli/ask.ts').read_bytes()
+        host.prepare(self.root, self.document)
+        self.assertEqual((self.root / 'src/cli/ask.ts').read_bytes(), original)
+        self.assertFalse((self.root / host.CONVERSATION_HELPER).exists())
+        self.assertNotIn('startPersonaConversations', (self.root / host.ENTRY).read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':

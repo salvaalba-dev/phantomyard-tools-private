@@ -131,6 +131,13 @@ async function startScopedWorkspace() {
         queued:'Queued for your persona…',running:'Your persona is reviewing the evidence…',complete:'Answer based on selected authorized evidence.',
         held:'Screening held this request. No answer was released.',failed:'The consultation could not finish.',cancelled:'Cleared. Cancellation requested.',
         limited:'Consultation limit reached. Retry later.',error:'Connection interrupted. Retry the same request or cancel.'};
+      if(state.mode==='persona-conversation'){
+        labels.ready='Ask your existing persona. Its native knowledge and tools apply.';
+        labels.running='Your persona is answering through PhantomBot…';
+        labels.complete='Reply from your existing persona; selected viewer context is supplemental.';
+      }
+      const note=document.querySelector('.session-note');
+      if(note)note.textContent=state.mode==='persona-conversation'?'Read-only viewer · Native persona permissions apply':'Private · Read-only session';
       $('assistant-status').textContent=labels[state.status]||labels.unavailable;
       $('assistant-persona').textContent=state.persona;$('assistant-answer').textContent=state.text;$('assistant-answer').hidden=!state.text;
       $('assistant-question').textContent=state.question;$('assistant-question').hidden=!state.question;

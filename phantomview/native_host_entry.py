@@ -16,6 +16,8 @@ REPLACEMENT = '''    const code = await runRun({ ifNotRunning: Boolean(args["if-
       authenticatedCommands: phantomViewStartupCommands(phantomViewHostRoutes) });'''
 FIELDS = {'persona', 'channel', 'scopeId', 'origin', 'issuerUid', 'readerUid',
           'python', 'clientScript', 'socketPath'}
+CONVERSATION = {'conversationSocketPath', 'conversationGroup'}
+CONVERSATION_HELPER = 'src/lib/phantomViewPersonaConversation.ts'
 NOTE = '''
 
 ## Fixed private PhantomView host routes
@@ -33,6 +35,19 @@ native update does not preserve the optional hook. Do not claim automatic upgrad
 compatibility: review/rebuild this variant before an update or keep it inactive.
 Preparing or compiling it does not install a reader or activate an assistant.
 '''
+CONVERSATION_NOTE = '''
+
+## Optional existing-persona conversation transport
+
+Fixed conversation routes start inside the existing daemon after its run lock,
+and close before native cleanup. Socket group permissions authorize the reader;
+this is not native per-UID peer attestation. The reader must verify the daemon's
+kernel UID and apply current PhantomOrg session authority on every request.
+The existing runAsk path uses the fixed persona's configuration, memory and tools,
+with its normal untrusted/JEV screen. Native completion metadata distinguishes
+holds from generated text. No credential copy or extra inference service exists.
+This does not add record-level native ACL isolation or undo actions on cancellation.
+'''
 
 
 def validate_routes(document):
@@ -43,7 +58,7 @@ def validate_routes(document):
         raise ValueError('A versioned, nonempty fixed route list is required')
     result, seen, issuers = [], set(), set()
     for route in document['routes']:
-        if type(route) is not dict or set(route) != FIELDS:
+        if type(route) is not dict or set(route) - FIELDS not in (set(), CONVERSATION) or not FIELDS <= set(route):
             raise ValueError('Only fixed native deployment fields are supported')
         if (type(route['persona']) is not str
                 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', route['persona'])
@@ -73,13 +88,17 @@ def validate_routes(document):
         expected = 'https://' + canonical_host + (f':{port}' if port is not None else '')
         if origin != expected:
             raise ValueError('An origin cannot contain credentials, paths, queries or fragments')
-        for key in ('python', 'clientScript', 'socketPath'):
+        for key in ('python', 'clientScript', 'socketPath') + (('conversationSocketPath',) if CONVERSATION <= set(route) else ()):
             path = route[key]
             if (type(path) is not str or not path.isascii() or not path.startswith('/')
                     or path.startswith('//') or PurePosixPath(path).as_posix() != path
                     or '..' in PurePosixPath(path).parts or path == '/'
                     or any(ord(c) <= 32 or ord(c) == 127 for c in path) or '\\' in path):
                 raise ValueError('Fixed normalized Linux paths are required')
+        if CONVERSATION <= set(route) and (type(route['conversationGroup']) is not int
+                or not 0 < route['conversationGroup'] < 2**32 - 1
+                or len(route['conversationSocketPath']) > 100):
+            raise ValueError('An explicit conversation socket group and bounded path are required')
         key = route['channel'], route['persona']
         if key in seen:
             raise ValueError('Duplicate native listener routes are unsupported')
@@ -88,7 +107,43 @@ def validate_routes(document):
         result.append(dict(route))
     if len(issuers) != 1:
         raise ValueError('One native daemon account is required per host build')
+    conversation_routes(result)
     return result
+
+
+def conversation_routes(routes):
+    selected = {}
+    paths = {route['socketPath'] for route in routes}
+    for route in routes:
+        if CONVERSATION <= set(route):
+            value = {'persona': route['persona'], 'socketPath': route['conversationSocketPath'],
+                     'groupId': route['conversationGroup'], 'issuerUid': route['issuerUid']}
+            if route['persona'] in selected and selected[route['persona']] != value:
+                raise ValueError('Channels must share one fixed conversation route for their persona')
+            if route['persona'] not in selected and value['socketPath'] in paths:
+                raise ValueError('Conversation sockets cannot alias another native route')
+            selected[route['persona']] = value
+            paths.add(value['socketPath'])
+    return list(selected.values())
+
+
+def conversation_entry(source):
+    source = command.provenance.replace_exact(source, 'export interface RunInput {',
+        'export interface RunInput {\n  personaConversations?: readonly PersonaConversationRoute[];')
+    source = command.provenance.replace_exact(source, '  try {\n    // Fan-out: one listener per (persona, account).',
+        '  let personaRuntime: Awaited<ReturnType<typeof startPersonaConversations>> | undefined;\n'
+        '  try {\n'
+        '    if (input.personaConversations?.some(route => !servedPersonasOf(config).includes(route.persona)))\n'
+        '      throw new Error("Conversation persona is not served by this daemon");\n'
+        '    personaRuntime = await startPersonaConversations(input.personaConversations ?? []);\n'
+        '    // Fan-out: one listener per (persona, account).')
+    source = command.provenance.replace_exact(source, '  } finally {\n    process.off("SIGINT", onSig);',
+        '  } finally {\n    try { await personaRuntime?.close(); } finally {\n'
+        '    process.off("SIGINT", onSig);')
+    source = command.provenance.replace_exact(source, '    lock.release();\n  }\n  return 0;',
+        '    lock.release();\n    }\n  }\n  return 0;')
+    return ('import { startPersonaConversations, type PersonaConversationRoute } '
+            'from "../lib/phantomViewPersonaConversation.ts";\n' + source)
 
 
 def prepare(root, document):
@@ -101,21 +156,44 @@ def prepare(root, document):
     # Check the additional CLI anchor before the generic preparation writes files.
     original = (root / ENTRY).read_text(encoding='utf-8')
     command.provenance.replace_exact(original, ANCHOR, REPLACEMENT)
+    conversations = conversation_routes(routes)
+    ask = helper = None
+    if conversations:
+        conversation_entry(original)  # Verify every lifecycle anchor before writing.
+        ask = (root / 'src/cli/ask.ts').read_text(encoding='utf-8')
+        ask = command.provenance.replace_exact(ask, '  /** Test injection points. */',
+            '  /** Observe native completion metadata; never changes screening or trust. */\n'
+            '  onCompletion?: (value: { readonly screenedHold: boolean }) => void;\n'
+            '  /** Test injection points. */')
+        ask = command.provenance.replace_exact(ask, '        harnessFinal = chunk.finalText;',
+            '        input.onCompletion?.({ screenedHold: chunk.meta?.screenedHold === true });\n'
+            '        harnessFinal = chunk.finalText;')
+        helper = Path(__file__).with_name('persona_conversation_runtime.ts').read_text(encoding='utf-8')
     source = '/** Fixed non-secret routes generated during offline host preparation. */\n'
     source += 'export const phantomViewHostRoutes = Object.freeze([\n'
     source += ',\n'.join('  Object.freeze(' + json.dumps(route, sort_keys=True) + ' as const)'
                          for route in routes)
     source += '\n]);\n'
+    if conversations:
+        source += 'export const phantomViewHostConversations = Object.freeze(' + json.dumps(conversations) + ' as const);\n'
     command.patch(root)
     entry = command.provenance.replace_exact((root / ENTRY).read_text(encoding='utf-8'),
                                              ANCHOR, REPLACEMENT)
     entry = ('import { phantomViewStartupCommands } from "../channels/core/phantomViewStartup.ts";\n'
              'import { phantomViewHostRoutes } from "../channels/core/phantomViewHostRoutes.ts";\n' + entry)
+    if conversations:
+        entry = conversation_entry(entry)
+        entry = 'import { phantomViewHostConversations } from "../channels/core/phantomViewHostRoutes.ts";\n' + entry
+        entry = command.provenance.replace_exact(entry, REPLACEMENT,
+            REPLACEMENT.replace('authenticatedCommands:', 'personaConversations: phantomViewHostConversations,\n      authenticatedCommands:'))
+        (root / CONVERSATION_HELPER).write_text(helper, encoding='utf-8', newline='\n')
+        (root / 'src/cli/ask.ts').write_text(ask, encoding='utf-8', newline='\n')
     target.write_text(source, encoding='utf-8', newline='\n')
     (root / ENTRY).write_text(entry, encoding='utf-8', newline='\n')
     for name in ('README.md', 'AGENTS.md'):
         path = root / name
-        path.write_text(path.read_text(encoding='utf-8') + NOTE, encoding='utf-8', newline='\n')
+        path.write_text(path.read_text(encoding='utf-8') + NOTE + (CONVERSATION_NOTE if conversations else ''),
+                        encoding='utf-8', newline='\n')
     return {'source_revision': reviewed.SOURCE_REVISION, 'route_count': len(routes),
             'trust_boundary': 'daemon', 'activation_ready': False}
 

@@ -49,8 +49,11 @@ def dispatch(handler, method):
             recipient = backend.gate.identified_scope(handler.headers)[0]
             if backend.gate.audit is not consultations.assistant.audit:
                 raise ValueError('The protected consultation audit changed')
-            handler.send(200, {'available': recipient.persona in consultations.assistant.executors,
-                               'persona': recipient.persona, 'scope_id': recipient.scope_id})
+            info = {'available': recipient.persona in consultations.assistant.executors,
+                    'persona': recipient.persona, 'scope_id': recipient.scope_id}
+            if consultations.assistant.mode == 'persona-conversation':
+                info['mode'] = 'persona-conversation'
+            handler.send(200, info)
         elif method in {'GET', 'DELETE'} and parsed.path.startswith(ASSISTANT_JOBS + '/') and consultations:
             operation = consultations.get if method == 'GET' else consultations.cancel
             handler.send(*operation(handler.headers, parsed.path.removeprefix(ASSISTANT_JOBS + '/')))

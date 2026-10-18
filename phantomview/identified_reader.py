@@ -55,7 +55,7 @@ class PublishedReader:
     and an audit ledger. No source discovery, refresh worker or CLI is installed.
     """
     def __init__(self, *, authority, projection_root, actor, identities, origin, port,
-                 issuer_uid, socket_path, socket_group, audit, session_seconds=1800):
+                 issuer_uid, socket_path, socket_group, audit, session_seconds=1800, conversation_socket=None):
         if (not isinstance(authority, PublishedAuthority) or not isinstance(audit, Ledger)
                 or not isinstance(actor, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', actor)
                 or type(identities) not in (list, tuple) or not 1 <= len(identities) <= 64
@@ -71,6 +71,12 @@ class PublishedReader:
             raise ValueError('An explicit HTTPS reader origin is required')
         self.projection = PublishedProjection(projection_root, authority.read, authority.snapshot)
         self.backend = ScopedBackend(self.gate, self.projection.catalog, self.projection.record)
+        self.consultations = None
+        if conversation_socket is not None:
+            from persona_conversation import NativePersonaClient, PersonaAssistant
+            from scoped_consultations import ScopedConsultations
+            self.consultations = ScopedConsultations(PersonaAssistant(self.backend,
+                {actor: NativePersonaClient(conversation_socket, issuer_uid, actor)}))
         self.issuer_uid, self.socket_path, self.socket_group = issuer_uid, socket_path, socket_group
         self.server, self.handoff = None, None
         self._started = False
@@ -89,7 +95,7 @@ class PublishedReader:
         server = ThreadingHTTPServer(('127.0.0.1', self.port), RecipientHandler)
         server.gate, server.scoped_backend = self.gate, self.backend
         server.access_errors = (ValueError, self.gate.access.core.Invalid)
-        server.scoped_consultations = None
+        server.scoped_consultations = self.consultations
         server.review_service = None
         return server
 
@@ -117,6 +123,8 @@ class PublishedReader:
                     if server is not None:
                         server.server_close()
                 finally:
+                    if self.consultations is not None:
+                        self.consultations.close()
                     with self.gate.recipient_lock, self.gate.lock:
                         self.gate.sessions.clear()
                         self.gate.session_ids.clear()

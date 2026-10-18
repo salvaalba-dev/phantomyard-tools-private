@@ -79,3 +79,8 @@ The assistant transport, extra modules, content classification approval and AU
 deployment remain separate. This increment exposes issuer routing metadata but
 does not claim a connected conversation or enable the historical restricted
 assistant worker. It does not modify the stock native CLI or any live setup.
+
+Follow-up: the optional [existing-persona transport](PERSONA_CONVERSATION.md) now
+connects through an explicit `conversation_socket` host argument. The default
+reader still starts without an assistant. This source follow-up does not activate
+AU or relax publication/classification prerequisites.
