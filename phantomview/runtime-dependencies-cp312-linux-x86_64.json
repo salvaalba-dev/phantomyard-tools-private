@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "target": "CPython 3.12 / Linux x86_64",
+  "artifacts": [
+    {
+      "project": "PyYAML",
+      "version": "6.0.3",
+      "filename": "pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/8b/9d/b3589d3877982d4f2329302ef98a8026e7f4443c765c46cfecc8858c6b4b/pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc",
+      "pypi_metadata": "https://pypi.org/pypi/PyYAML/6.0.3/json"
+    },
+    {
+      "project": "coincurve",
+      "version": "21.0.0",
+      "filename": "coincurve-21.0.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/b7/75/050b6fd08978de85a7b480f0f220ab6a30967c0910119f3096a8dd40befc/coincurve-21.0.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "1b04778b75339c6e46deb9ae3bcfc2250fbe48d1324153e4310fc4996e135715",
+      "pypi_metadata": "https://pypi.org/pypi/coincurve/21.0.0/json"
+    }
+  ]
+}

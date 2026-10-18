@@ -79,3 +79,9 @@ native host build, protected IPC/filesystem provisioning, explicit metadata
 decisions and publication, Linux preflight and approved reversible cutover.
 Verify actual channel issuance and current authority after startup. The earlier
 122 metadata candidates remain unclassified; KB content remains excluded.
+
+## Runtime preparation follow-up
+
+The [AU private runtime preparation](AU_PRIVATE_RUNTIME.md) records a separate
+root-owned environment with the pinned dependencies and actual account probes.
+The reader archive, native build and information access remain inactive.
