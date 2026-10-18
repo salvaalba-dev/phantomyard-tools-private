@@ -47,6 +47,7 @@ jobs:
         run: |
           python3 phantomview/authenticated_command_patch.py native-source
           cp phantomview/authenticated_command_runtime.test.ts native-source/tests/phantomview-authenticated-command.test.ts
+          cp phantomview/authenticated_command_startup.test.ts native-source/tests/phantomview-command-startup.test.ts
           cp phantomview/native_link_callback.test.ts native-source/tests/phantomview-native-link.test.ts
           cp phantomview/native_ingress_runtime.test.ts native-source/tests/phantomview-ingress.test.ts
       - name: Install locked native dependencies
@@ -55,6 +56,9 @@ jobs:
       - name: Verify actual native dispatch, gift-wrap authentication and unchanged channel behavior
         working-directory: native-source
         run: bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-native-link.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
+      - name: Verify daemon startup registration and existing startup regressions
+        working-directory: native-source
+        run: bun test tests/phantomview-command-startup.test.ts tests/cli-run.test.ts
       - name: Compile the reviewed source proposal
         working-directory: native-source
         run: bun run build:x64
