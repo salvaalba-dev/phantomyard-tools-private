@@ -189,6 +189,14 @@ source proposal. This does not register production handlers, resolve the shared
 host/old callback boundary or activate AU; verified issuance through the actual
 reader remains the P1 acceptance requirement.
 
+The [offline host entry preparation](NATIVE_HOST_ENTRY.md) now validates fixed
+deployment routes and registers them in the existing CLI run command of a
+disposable reviewed source variant. The original CLI bootstrap and other commands
+remain unchanged. This closes build-time registration, not live issuance: reader
+and assistant assembly, content review and reversible AU cutover remain pending.
+Stock native updates do not preserve this optional private hook and require a
+new source review/build before reactivation.
+
 ### P2. Align PhantomOrg declarations and resource metadata
 
 Installed-path review: [AU compatibility evidence](AU_PHANTOMORG_COMPATIBILITY.md)

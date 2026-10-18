@@ -7,6 +7,9 @@ on:
       - 'phantomview/native_link*'
       - 'phantomview/native_listener_runtime.ts'
       - 'phantomview/native_startup_binding*'
+      - 'phantomview/native_host_entry.py'
+      - 'phantomview/native-host-example.json'
+      - 'phantomview/test_native_host_entry.py'
       - 'phantomview/runtime_default.py'
       - 'phantomview/test_runtime_default.py'
       - 'phantomview/private_control*'
@@ -21,6 +24,9 @@ on:
       - 'phantomview/native_link*'
       - 'phantomview/native_listener_runtime.ts'
       - 'phantomview/native_startup_binding*'
+      - 'phantomview/native_host_entry.py'
+      - 'phantomview/native-host-example.json'
+      - 'phantomview/test_native_host_entry.py'
       - 'phantomview/runtime_default.py'
       - 'phantomview/test_runtime_default.py'
       - 'phantomview/private_control*'
@@ -64,10 +70,10 @@ jobs:
         working-directory: phantomview
         env:
           PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/native-source
-        run: python3 -m unittest test_authenticated_command_patch -v
-      - name: Prepare only the generic command proposal
+        run: python3 -m unittest test_authenticated_command_patch test_native_host_entry -v
+      - name: Prepare fixed synthetic host routes in the reviewed CLI
         run: |
-          python3 phantomview/authenticated_command_patch.py native-source
+          python3 phantomview/native_host_entry.py native-source phantomview/native-host-example.json
           cp phantomview/authenticated_command_runtime.test.ts native-source/tests/phantomview-authenticated-command.test.ts
           cp phantomview/authenticated_command_startup.test.ts native-source/tests/phantomview-command-startup.test.ts
           cp phantomview/private_control_runtime.test.ts native-source/tests/phantomview-private-control.test.ts

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "routes": [
+    {
+      "persona": "coordinator",
+      "channel": "telegram",
+      "scopeId": "river-project",
+      "origin": "https://view.example:8790",
+      "issuerUid": 12001,
+      "readerUid": 12002,
+      "python": "/usr/bin/python3",
+      "clientScript": "/opt/phantomview/native_link_client.py",
+      "socketPath": "/run/phantomview/reader.sock"
+    },
+    {
+      "persona": "coordinator",
+      "channel": "phantomchat",
+      "scopeId": "river-project",
+      "origin": "https://view.example:8790",
+      "issuerUid": 12001,
+      "readerUid": 12002,
+      "python": "/usr/bin/python3",
+      "clientScript": "/opt/phantomview/native_link_client.py",
+      "socketPath": "/run/phantomview/reader.sock"
+    }
+  ]
+}

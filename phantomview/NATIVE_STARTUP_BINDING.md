@@ -47,11 +47,12 @@ import { phantomViewStartupCommands } from "./src/channels/core/phantomViewStart
 await runRun({ authenticatedCommands: phantomViewStartupCommands(reviewedRoutes) });
 ```
 
-This deliberately does not register routes in the stock CLI or load an arbitrary
-module/configuration file at runtime. Building and reviewing that concrete host
-entry, assembling the identified reader/assistant transport and preparing a
-reversible AU cutover remain required. A compiled stock entry still has no
-registered PhantomView callback.
+This library does not register routes in the stock CLI or load an arbitrary
+module/configuration file at runtime. The separate [offline host entry
+preparation](NATIVE_HOST_ENTRY.md) now registers fixed reviewed build-time routes
+in a disposable CLI variant while preserving its original bootstrap. The stock
+binary remains unchanged. Identified reader/assistant assembly and a reversible
+AU cutover remain required; source preparation does not activate AU.
 
 ## Validation
 

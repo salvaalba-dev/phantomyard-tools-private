@@ -1,5 +1,12 @@
 # PhantomView
 
+Private [offline native host preparation](NATIVE_HOST_ENTRY.md) now composes fixed
+reviewed link-command routes into the existing native CLI run path. It preserves
+the original credential bootstrap and uses no additional service or runtime
+plugin loader. The variant is inactive; reader/assistant assembly and AU cutover
+remain pending. Stock native updates require a new review/build of this optional
+hook rather than an assumption of automatic compatibility.
+
 Current direction: a standard visual interface to PhantomOrg-authorized information
 and the existing collaborative persona that issued the identified access link.
 The [collaborative viewer plan](COLLABORATIVE_VIEWER_PLAN.md) is authoritative for
