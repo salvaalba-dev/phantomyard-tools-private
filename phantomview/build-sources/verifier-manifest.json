@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "repository": "salvaalba-dev/phantomyard-tools",
+  "revision": "4147924afad85b1db6752b709c29b78d6f56774c",
+  "archive": "phantomblog-verifier-4147924.zip",
+  "files": {
+    "LICENSE": {
+      "sha256": "26480b492fb4335a54dcded83466c169ebd9e777517109c36d1f568cb9f1c89e",
+      "git_blob": "764afb536c95cafee01f2e76de7ca57624b9d985",
+      "bytes": 1068
+    },
+    "phantomblog/__init__.py": {
+      "sha256": "61a86747f3cf831d5405f1b191290e48977de261e3aa89de9dac347b7da56670",
+      "git_blob": "b9c307ac2e15854403a5688a6c512f7544671f3d",
+      "bytes": 102
+    },
+    "phantomblog/access.py": {
+      "sha256": "d9dab7b0ed19311ddaaa99861ef8c3370c428ec8d751df637463e00495688dea",
+      "git_blob": "fc191f991f7931a579d37d8d4535e46feec7ce2f",
+      "bytes": 11500
+    },
+    "phantomblog/core.py": {
+      "sha256": "2b839e4967171d981d239f1eb6f76a4fa8dc4e3c1f041293a1180c69fde06b57",
+      "git_blob": "c4b599e7e2ff8a191f7d7756f0298ce97a1437b1",
+      "bytes": 41602
+    }
+  },
+  "archive_sha256": "58795124c4994dd3ec47d9555d88cf9d5ef0e949513bd3f2938574a9d2909108"
+}

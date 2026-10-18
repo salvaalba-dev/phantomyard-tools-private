@@ -1,13 +1,11 @@
-# Operator build only: accepts non-secret fixed deployment coordinates.
-# Never supply keys, human contacts, tokens, transcripts or organization payloads.
-# Produces a private, short-lived artifact; cannot deploy or activate any host.
+# Manual, AU-independent build only. Inputs contain non-secret deployment coordinates.
 name: PhantomView operator native build
 
 on:
   workflow_dispatch:
     inputs:
       native_host_json:
-        description: Reviewed non-secret native host routes JSON (no credentials or human identifiers)
+        description: Reviewed non-secret routes JSON (no credentials or human identifiers)
         required: true
         type: string
 
@@ -16,63 +14,59 @@ permissions:
 
 jobs:
   build:
-    if: github.repository == 'salvaalba-dev/phantomyard-tools-private' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      NATIVE_SOURCE_REVISION: 5af27060327ee8c53fe730dd8b98b6b305c62add
+      NATIVE_RELEASE_TAG: v1.1.433
+      BUILD_BUN_VERSION: '1.3.11'
+      BUILD_PYTHON_VERSION: '3.12.15'
     steps:
+      - name: Reject unsupported repository or ref explicitly
+        run: |
+          if [ "$GITHUB_REPOSITORY" != "salvaalba-dev/phantomyard-tools-private" ] || [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Build refused: dispatch this workflow from main in salvaalba-dev/phantomyard-tools-private."
+            exit 1
+          fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Validate operator input as data before native preparation
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ env.BUILD_PYTHON_VERSION }}
+      - name: Validate and store the normalized operator input
         env:
           NATIVE_HOST_JSON: ${{ inputs.native_host_json }}
-        run: |
-          python3 - <<'PY'
-          import hashlib, json, os, sys
-          from pathlib import Path
-          sys.path.insert(0, 'phantomview')
-          from native_host_entry import _unique, validate_routes
-          raw = os.environ.pop('NATIVE_HOST_JSON')
-          if len(raw.encode('utf-8')) > 65536:
-              raise ValueError('Build input exceeds its bound')
-          document = json.loads(raw, object_pairs_hook=_unique)
-          validate_routes(document)
-          directory = Path('operator-build')
-          directory.mkdir(mode=0o700)
-          canonical = json.dumps(document, sort_keys=True, separators=(',', ':')).encode()
-          with (directory / 'routes.json').open('xb') as stream:
-              stream.write(canonical)
-          (directory / 'routes.json').chmod(0o600)
-          (directory / 'routes.sha256').write_text(hashlib.sha256(canonical).hexdigest())
-          print('Validated fixed native deployment coordinates; no access grants created')
-          PY
+        run: python phantomview/native_build.py routes
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: phantomyard/phantombot
-          ref: 5af27060327ee8c53fe730dd8b98b6b305c62add
+          ref: ${{ env.NATIVE_SOURCE_REVISION }}
           path: native-source
           persist-credentials: false
+      - name: Bind the upstream release tag to the exact reviewed commit
+        run: |
+          git -C native-source fetch --no-tags origin "refs/tags/$NATIVE_RELEASE_TAG:refs/tags/phantomview-reviewed-native"
+          python phantomview/native_build.py source
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: '1.3.11'
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          repository: salvaalba-dev/phantomyard-tools
-          ref: 4147924afad85b1db6752b709c29b78d6f56774c
-          path: signing-source
-          persist-credentials: false
-      - name: Install the reviewed real verifier in a disposable environment
+          bun-version: ${{ env.BUILD_BUN_VERSION }}
+      - name: Install hash-locked binary wheels and the archived reviewed verifier
         run: |
-          python3 -m venv signer-venv
-          signer-venv/bin/python -m pip install -r phantomview/requirements.txt './signing-source/phantomblog[access]'
+          python -m venv signer-venv
+          signer-venv/bin/python -m pip install --require-hashes --only-binary=:all: -r phantomview/native-build-requirements.lock
+          SITE_DIRECTORY="$(signer-venv/bin/python -c 'import site; print(site.getsitepackages()[0])')"
+          python phantomview/native_build.py verifier --site-directory "$SITE_DIRECTORY"
+          signer-venv/bin/python -m pip check
       - name: Verify exact-source preparation and refusal tests
+        id: preparation
         working-directory: phantomview
         env:
           PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/native-source
-        run: python3 -m unittest test_authenticated_command_patch test_native_host_entry -v
+        run: ../signer-venv/bin/python -m unittest test_authenticated_command_patch test_native_host_entry test_native_build -v
       - name: Prepare reviewed operator routes without changing upstream
         run: |
-          python3 phantomview/native_host_entry.py native-source operator-build/routes.json
+          python phantomview/native_host_entry.py native-source operator-build/routes.json
           cp phantomview/authenticated_command_runtime.test.ts native-source/tests/phantomview-authenticated-command.test.ts
           cp phantomview/authenticated_command_startup.test.ts native-source/tests/phantomview-command-startup.test.ts
           cp phantomview/private_control_runtime.test.ts native-source/tests/phantomview-private-control.test.ts
@@ -85,11 +79,13 @@ jobs:
         working-directory: native-source
         run: bun install --frozen-lockfile
       - name: Verify native dispatch, authenticated channels and startup
+        id: channels
         working-directory: native-source
         run: |
           bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-native-link.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
           bun test tests/phantomview-command-startup.test.ts tests/phantomview-runtime-binding.test.ts tests/cli-run.test.ts
       - name: Verify existing-persona transport, private controls and real signing
+        id: persona
         working-directory: native-source
         env:
           PHANTOMVIEW_SIGNER_PYTHON: ${{ github.workspace }}/signer-venv/bin/python
@@ -97,70 +93,39 @@ jobs:
         run: |
           bun test tests/phantomview-persona-conversation.test.ts tests/cli-ask.test.ts
           bun test tests/phantomview-private-control.test.ts tests/phantomview-native-signer.test.ts
-      - name: Stamp the private variant and rebuild original embedded editor assets
-        working-directory: native-source
-        env:
-          PHANTOMBOT_EXT_VERSION: '1.1.433'
+      - name: Stamp the tag-verified private version and original embedded editor assets
         run: |
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          version = '1.1.433-phantomview.' + os.environ['GITHUB_SHA'][:7]
-          path = Path('src/version.ts')
-          source = path.read_text()
-          original = 'export const VERSION = "0.1.0-dev";'
-          if source.count(original) != 1:
-              raise ValueError('Reviewed native version placeholder changed')
-          path.write_text(source.replace(original, 'export const VERSION = "' + version + '";'))
-          PY
+          python phantomview/native_build.py stamp
+          export PHANTOMBOT_EXT_VERSION="$(python -c 'import json; print(json.load(open("operator-build/source.json"))["release_version"])')"
+          cd native-source
           bun run gen:vscode-vsix
-          python3 - <<'PY'
-          from pathlib import Path
-          if 'VSCODE_EXTENSION_VERSION = "1.1.433"' not in Path('src/lib/vscodeExtensionAsset.generated.ts').read_text():
-              raise ValueError('Embedded editor version stamp failed')
-          PY
+          cd ..
+          python phantomview/native_build.py embedded
       - name: Compile Linux x64 baseline binary
         working-directory: native-source
         run: bun run build:x64
-      - name: Record exact artifact provenance without copying route data
+      - name: Record verified source, tests, toolchain, runner and ELF provenance
+        env:
+          TEST_PREPARATION: ${{ steps.preparation.outcome }}
+          TEST_CHANNELS: ${{ steps.channels.outcome }}
+          TEST_PERSONA: ${{ steps.persona.outcome }}
         run: |
-          python3 - <<'PY'
-          import hashlib, json, os, shutil, subprocess
-          from pathlib import Path
-          root = Path('operator-build')
-          output = root / 'artifact'
-          output.mkdir(mode=0o700)
-          binary = output / 'phantombot'
-          shutil.copyfile('native-source/dist/phantombot', binary)
-          binary.chmod(0o755)
-          version = '1.1.433-phantomview.' + os.environ['GITHUB_SHA'][:7]
-          result = subprocess.run([str(binary.resolve()), '--version'], check=True, capture_output=True, text=True, timeout=10)
-          if version not in result.stdout or len(result.stdout) > 1024:
-              raise ValueError('Compiled native version does not match its provenance')
-          receipt = {
-              'schema_version': 1,
-              'helper_revision': os.environ['GITHUB_SHA'],
-              'native_revision': '5af27060327ee8c53fe730dd8b98b6b305c62add',
-              'bun_version': '1.3.11',
-              'native_version': version,
-              'embedded_extension_version': '1.1.433',
-              'compiled_version_verified': True,
-              'target': 'bun-linux-x64-baseline',
-              'routes_sha256': (root / 'routes.sha256').read_text(),
-              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
-              'binary_bytes': binary.stat().st_size,
-              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
-              'tests_passed': True,
-              'installed': False,
-              'activation_ready': False,
-          }
-          (output / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
-          print(json.dumps(receipt, indent=2))
-          PY
+          mkdir -m 700 operator-build/artifact
+          install -m 755 native-source/dist/phantombot operator-build/artifact/phantombot
+          signer-venv/bin/python phantomview/native_build.py receipt
+          EXPECTED_SHA="$(signer-venv/bin/python -c 'import json; print(json.load(open("operator-build/artifact/build-receipt.json"))["binary_sha256"])')"
+          python phantomview/native_build.py check-host --binary operator-build/artifact/phantombot --expected-sha256 "$EXPECTED_SHA"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: phantomview-native-${{ github.run_id }}
           path: operator-build/artifact/
           if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
+          retention-days: 7
+          compression-level: 6
+      - name: Retain the non-secret provenance separately from the binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phantomview-native-receipt-${{ github.run_id }}
+          path: operator-build/artifact/build-receipt.json
+          if-no-files-found: error
+          retention-days: 90
