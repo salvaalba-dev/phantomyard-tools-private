@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "repository": "phantomyard/phantombot",
+  "tag": "v1.1.433",
+  "source_revision": "5af27060327ee8c53fe730dd8b98b6b305c62add",
+  "release_id": 412194197,
+  "asset_id": 638559990,
+  "asset_name": "phantombot-v1.1.433-linux-x64",
+  "asset_size": 109774816,
+  "asset_sha256": "66b287ab0aeeb7d800fe5d8eb142be5d95528d1bfa0fa2b3df3ada7eb4df9339",
+  "build_run": 38484150790,
+  "release_url": "https://github.com/phantomyard/phantombot/releases/tag/v1.1.433",
+  "evidence_urls": [
+    "https://api.github.com/repos/phantomyard/phantombot/releases/tags/v1.1.433",
+    "https://api.github.com/repos/phantomyard/phantombot/git/ref/tags/v1.1.433",
+    "https://api.github.com/repos/phantomyard/phantombot/actions/runs/38484150790"
+  ]
+}

@@ -1,5 +1,11 @@
 # Native channel host isolation design
 
+Historical alternative: the whole-daemon trust decision in
+[DAEMON_TRUST.md](DAEMON_TRUST.md) supersedes the mandatory issuer/model account
+split below for the current integration. Preserve these design notes for
+installations that independently require isolation; do not treat them as the AU
+deployment checklist. The reviewed release parity check is also documented there.
+
 Status: reviewed source baseline and implementation contract, **not a host
 implementation or deployment approval**. The existing AU assistant remains in its
 current mode. The private adapters alone cannot establish this boundary.

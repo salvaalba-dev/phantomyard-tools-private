@@ -54,6 +54,22 @@ class HostReviewTests(unittest.TestCase):
         (self.root / 'src/model.ts').write_bytes(b'reviewed\r\n')
         self.assertTrue(native.review(self.root)['source_matches_review'])
 
+    def test_explicit_daemon_review_does_not_require_retired_account_split(self):
+        report = native.review(self.root, 'daemon')
+        self.assertEqual(report['trust_boundary'], 'daemon')
+        self.assertEqual(report['design'], 'DAEMON_TRUST.md')
+        self.assertNotIn('isolated-native-host', report['required_work'])
+        self.assertNotIn('ordinary-conversation-forwarding', report['required_work'])
+        self.assertIn('native-startup-binding', report['required_work'])
+        self.assertFalse(report['activation_ready'])
+        self.assertIn('isolated-native-host', native.review(self.root)['required_work'])
+        with self.assertRaises(ValueError):
+            native.review(self.root, 'unknown')
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(native.main([str(self.root), '--trust-boundary', 'daemon']), 0)
+        self.assertEqual(json.loads(output.getvalue())['trust_boundary'], 'daemon')
+
     def test_limits_and_link_rejection(self):
         with patch.object(native, 'MAX_FILE_BYTES', 3), self.assertRaises(ValueError):
             native.snapshot(self.root)

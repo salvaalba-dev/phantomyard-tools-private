@@ -61,26 +61,36 @@ def snapshot(root):
     return {'files': len(names), 'sha256': digest.hexdigest()}
 
 
-def review(root):
+def review(root, trust_boundary='isolated'):
+    if trust_boundary not in ('isolated', 'daemon'):
+        raise ValueError('An explicit supported trust boundary is required')
     baseline = json.loads(BASELINE.read_text(encoding='utf-8'))
     observed = snapshot(root)
     if (baseline['source_revision'] != SOURCE_REVISION or observed != baseline['snapshot']):
         raise ValueError('Native source differs from the reviewed baseline; review the installed release first')
-    return {'source_revision': SOURCE_REVISION, 'source_matches_review': True,
+    report = {'source_revision': SOURCE_REVISION, 'source_matches_review': True,
             'snapshot': observed, 'activation_ready': False,
             'required_work': ['isolated-native-host', 'protected-signing-and-delivery',
                               'ordinary-conversation-forwarding', 'installed-release-parity',
                               'authoritative-policy-and-classification', 'reversible-cutover'],
             'design': 'NATIVE_HOST_DESIGN.md'}
+    if trust_boundary == 'daemon':
+        report.update(trust_boundary='daemon', design='DAEMON_TRUST.md', required_work=[
+            'native-startup-binding', 'identified-reader-assembly', 'assistant-transport',
+            'installed-release-parity', 'authoritative-policy-and-classification',
+            'reversible-cutover'])
+    return report
 
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 1:
-        print('Usage: python3 native_host_review.py /offline/native/source', file=sys.stderr)
+    if not (len(argv) == 1 or (len(argv) == 3 and argv[1] == '--trust-boundary'
+                               and argv[2] in ('isolated', 'daemon'))):
+        print('Usage: python3 native_host_review.py /offline/native/source '
+              '[--trust-boundary isolated|daemon]', file=sys.stderr)
         return 2
     try:
-        report = review(argv[0])
+        report = review(argv[0], argv[2] if len(argv) == 3 else 'isolated')
     except (OSError, ValueError, KeyError, TypeError):
         # Avoid echoing source paths, source content or exception text.
         print('Native source review failed; use an unchanged offline copy of the reviewed revision.',

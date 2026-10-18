@@ -82,3 +82,39 @@ The tested native patch targets revision
 the installed binary matches that source. Assemble and review a compatible host
 artifact before changing the running daemon. This follow-up is compatibility
 evidence, not a deployment or identified-assistant acceptance test.
+
+## Publisher provenance resolved, 2026-10-18
+
+A subsequent publisher-metadata check resolves the source-parity question above.
+The official `v1.1.433` release asset `phantombot-v1.1.433-linux-x64` has SHA-256
+`66b287ab0aeeb7d800fe5d8eb142be5d95528d1bfa0fa2b3df3ada7eb4df9339`, matching
+the installed AU binary observed in the read-only check. Its tag and successful
+release build both resolve to the already reviewed source revision
+`5af27060327ee8c53fe730dd8b98b6b305c62add`. The baseline is therefore the installed
+release, not a different native revision. The unmodified official binary does
+not contain the private command seam or its host registration.
+
+A separate live read-only check confirmed the asset size (`109774816` bytes),
+the on-disk digest and the current selected daemon process image digest against
+that same published asset. It did not inspect process arguments, environments,
+credentials or another installation. These are point-in-time observations,
+not a persistent process-integrity monitor.
+
+`native-release-review.json` records the public release asset and build evidence;
+it contains no organization data. This is publisher metadata, not an independent
+reproducible-build attestation. Recheck it if the installed artifact changes.
+For a quiescent offline regular-file copy, run:
+
+```sh
+python3 native_release_review.py /offline/phantombot
+python3 native_host_review.py /offline/phantombot-source --trust-boundary daemon
+```
+
+The first command checks bounded binary size and SHA-256 without executing it;
+the second checks the source/dependency snapshot. Neither downloads code, changes
+the installed daemon, verifies the currently running process image or activates
+access. A matching binary report deliberately keeps `activation_ready: false`.
+Native startup registration with the existing signer/private channel transport,
+identified reader assembly, assistant transport and reversible cutover still
+remain before end-to-end activation. This check does not reinstate the retired
+issuer/model account split.
