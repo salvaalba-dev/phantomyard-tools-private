@@ -23,6 +23,7 @@ class AuthoritySourceTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.root.chmod(0o700)
         self.path = self.root / 'org.json'
         self.org = scoped_organization()
         self.write()
@@ -30,6 +31,7 @@ class AuthoritySourceTests(unittest.TestCase):
 
     def write(self):
         self.path.write_text(json.dumps(self.org), encoding='utf-8')
+        self.path.chmod(0o600)
 
     def test_each_read_reloads_and_returns_an_independent_document(self):
         first = self.authority.read()
@@ -43,6 +45,7 @@ class AuthoritySourceTests(unittest.TestCase):
     def test_yaml_and_json_have_the_same_directory_authority(self):
         other = self.root / 'org.yaml'
         other.write_text(yaml.safe_dump(self.org), encoding='utf-8')
+        other.chmod(0o600)
         self.assertEqual(self.authority().revision, OrganizationAuthority(other, 'example')().revision)
 
     def test_missing_corrupt_or_wrong_source_never_uses_last_good_policy(self):
@@ -79,6 +82,7 @@ class AuthoritySourceTests(unittest.TestCase):
                 ('org.yaml', 'one: ' + '[' * 65 + '0' + ']' * 65)):
             path = self.root / name
             path.write_text(content, encoding='utf-8')
+            path.chmod(0o600)
             with self.subTest(content=content), self.assertRaises(ValueError):
                 OrganizationAuthority(path, 'example')()
 
@@ -141,6 +145,7 @@ class FileBoundSignedTests(projection.ProjectionFixture):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.path = Path(self.temp.name) / 'org.json'
+        self.path.parent.chmod(0o700)
         self.write()
         self.authority = OrganizationAuthority(self.path, 'example')
         self.keys = {'administrator': signed_flow.PrivateKey()}
@@ -151,6 +156,7 @@ class FileBoundSignedTests(projection.ProjectionFixture):
 
     def write(self):
         self.path.write_text(json.dumps(self.org), encoding='utf-8')
+        self.path.chmod(0o600)
 
     def link(self, sender='102'):
         signed = signed_flow.IdentifiedViewerFlowTests.signed(self, self.gate)

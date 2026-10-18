@@ -17,10 +17,12 @@ class PublicationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        self.root.chmod(0o700)
         self.source = self.root / 'org.json'
         self.org = proposed_organization()
         self.org['humans'][0]['email'] = 'private-registry-marker@example.invalid'
         self.source.write_text(json.dumps(self.org), encoding='utf-8')
+        self.source.chmod(0o600)
         self.observer = pv.Observatory(self.root / 'config.json')
         self.observer.config = {'mode': 'existing', 'org_files': [str(self.source)],
             'personas_dir': '', 'persona_paths': {}, 'remote_personas': {},
@@ -28,8 +30,10 @@ class PublicationTests(unittest.TestCase):
         self.state = self.observer.refresh()
         self.index = self.root / 'reader' / 'index.json'
         self.index.parent.mkdir(mode=0o750)
+        self.index.parent.chmod(0o750)
         self.private = self.root / 'private'
         self.private.mkdir(mode=0o700)
+        self.private.chmod(0o700)
         self.ticks = [100]
         self.publication = AuthorityPublication(self.private, 'example', clock=lambda: self.ticks[0])
         self.reader = PublishedAuthority(self.private, self.index, 'example', str(self.source),
@@ -150,6 +154,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_manual_files_and_source_are_never_overwritten(self):
         self.publication.path.write_text('{"manual": true}', encoding='utf-8')
+        self.publication.path.chmod(0o640)
         before = self.publication.path.read_bytes()
         with self.assertRaises(ValueError):
             self.publish()
