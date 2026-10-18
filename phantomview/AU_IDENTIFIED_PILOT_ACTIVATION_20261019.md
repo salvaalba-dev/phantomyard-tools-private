@@ -1,6 +1,6 @@
 # AU identified reader pilot activation
 
-Status on 2026-10-19: **services active; real verified-channel acceptance pending**.
+Status on 2026-10-19: **services active; real identified session and persona response verified**.
 
 The operator explicitly authorized installation and activation of the AU-only
 pilot, publication of the 57 previously approved metadata records, local
@@ -99,14 +99,46 @@ The introduced-file recovery manifest was updated to bind this exact override,
 while the preceding override and manifest were retained privately. The existing
 root-only configuration directory remains mode 0700.
 
-## Remaining acceptance checks
+## Verified human acceptance
 
-The human must request `/phantomview` from Paco in their existing private Telegram
-or PhantomChat conversation and open the resulting temporary link. Real channel
-authentication, direct delivery, resolved human scope, visible records, search,
-assistant response, logout and expiration still require verification. No human
-identity was fabricated, and no live link was generated through an operator
-impersonation shortcut. Service startup alone does not establish these outcomes.
+The human requested and opened a fresh link through their existing persona
+conversation. The browser established an identified session showing AQUAPONICS
+UNITED ngo and Paco as the assistant. The overview showed 33 visible records and
+24 connections: eight personas, eight roles, four humans, seven departments, one
+organization and five findings. This matches the 57 approved records including
+relationship records. No operator impersonation shortcut was used.
+
+A brief informational question completed through Paco's existing native
+conversation. The browser displayed the native reply, and the metadata-only
+audit recorded one created session and one completed assistant request. Prompt
+and response text are not included in this report. A native reply remains persona
+knowledge, not a guarantee that every claim matches the displayed projection.
+
+A global search initiated from Departments returned matching role and human
+records outside that section. The role detail opened successfully and its close
+control worked. Reloading preserved the identified session.
+
+## Supplemental branding asset
+
+Visual verification found that the operator-assembled reader package omitted
+`logo.png`. The protected existing AU asset was byte-identical to the repository
+asset, Git blob `ae7c3ffe7aa21d2b607a861c25118f1928a0b276`, SHA-256
+`9feedd5c984dddd53879fcb62068286e0431fa1c60445123d04ab56ff54dec01`.
+The 190551-byte PNG was installed exclusively with root ownership and mode 0644,
+alongside a supplemental branding manifest. Every original release-manifest file
+was verified unchanged. The static endpoint returned HTTP 200 with the exact
+digest, and the browser displayed the logo after reload without a service restart.
+Future reader packages must include this tracked static asset.
+
+## Remaining acceptance limits
+
+This verifies one real human session through Paco; it does not establish both
+channel variants independently or activate other issuers. Other counterparts,
+strict project-only access and document/KB classification remain separate work.
+The active human session was preserved rather than logging it out or waiting
+for its full expiry during this check. Logout, expiry and denied-scope behavior
+retain automated coverage, but were not all repeated through a real browser
+session during this deployment. No reboot was performed.
 
 A stock PhantomBot update still requires source review and rebuilding the optional
 private hook. No update blocker or permanent compatibility guarantee was added.
