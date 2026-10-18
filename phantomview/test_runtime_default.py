@@ -38,6 +38,25 @@ class RuntimeDefaultTests(unittest.TestCase):
         self.write()
         self.assertEqual(self.reader()['default_persona']['resolved'], 'project-guide')
 
+    def test_true_flags_are_document_invariants_not_inferred_from_file_existence(self):
+        for field in ('exists', 'served'):
+            for value in (False, None, 0, 1, 'true', [], {}):
+                with self.subTest(field=field, value=value):
+                    self.report[field] = value
+                    self.write()
+                    self.assertTrue(self.path.is_file())
+                    with self.assertRaises(ValueError):
+                        self.reader()
+            del self.report[field]
+            self.write()
+            with self.assertRaises(ValueError):
+                self.reader()
+            self.report[field] = True
+        self.write()
+        row = self.reader()['default_persona']
+        self.assertIs(row['exists'], True)
+        self.assertIs(row['served'], True)
+
     def test_stale_future_naive_and_missing_timestamps_are_rejected(self):
         for value in ((self.now-timedelta(seconds=1801)).isoformat(),
                       (self.now+timedelta(seconds=1)).isoformat(), '2026-01-01T00:00:00', None):

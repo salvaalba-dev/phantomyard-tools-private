@@ -66,5 +66,8 @@ class RuntimeDefault:
         clean = safe_default({'default_persona': {
             'resolved': document.get('persona'), 'provenance': document.get('provenance'),
             'exists': document.get('exists'), 'served': document.get('served')}})
+        # safe_default has required both document flags to be exactly True.
+        # These are validated invariants, not deductions from the file's existence;
+        # false, missing and non-boolean observations have already been rejected.
         return {'default_persona': {'resolved': clean['persona'], 'provenance': clean['provenance'],
                                     'exists': True, 'served': True}}
