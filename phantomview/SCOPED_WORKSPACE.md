@@ -5,8 +5,13 @@ stays inside the upper-left of the diagram at the first reporting level and
 remains clickable and connected. Solid green arrows point from a role to its
 manager; dashed amber arrows indicate workflow or escalation destinations;
 dotted lines indicate organization context without inventing a reporting parent.
-The visible legend includes line samples and direction meanings. Workflow routes
-use row gaps and an outer lane to avoid crossing cards. Hover and keyboard focus
+The visible legend includes line samples and direction meanings. Connector routes
+choose clear horizontal/vertical paths using the cards as obstacles. Workflow
+arrows can enter the destination from its nearest clear side, including the right;
+an outer lane is a fallback, not the default. Separate ports and lanes avoid shared
+segments when space permits, and route selection penalizes crossings and detours.
+A connection that cannot be routed safely is counted in a visible diagram warning.
+Hover and keyboard focus
 continue to highlight related cards and connections. This changes presentation
 only; reporting data, session authorization and record-detail routes are unchanged.
 

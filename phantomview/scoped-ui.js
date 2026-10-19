@@ -174,18 +174,71 @@ class ScopedModel {
       incomplete:nodes.some(row=>row.issue)||nodes.some(row=>row.record.kind==='role'&&!row.personas.length)};
   }
   static treePath(tree,edge) {
-    const a=tree.positions.get(edge.source),b=tree.positions.get(edge.target),ax=a.x+120,bx=b.x+120;
-    if(edge.type==='context')return `M ${ax} ${a.y} V 16 H ${bx} V ${b.y}`;
-    if(edge.type!=='escalation'){
-      const lane=(a.y+b.y+160)/2;
-      return `M ${ax} ${a.y} V ${lane} H ${bx} V ${b.y+160}`;
+    tree.routing ||= ScopedModel.treeRoutes(tree);
+    return tree.routing.get(edge.id).path;
+  }
+  static treeRoutes(tree) {
+    const boxes=new Map(tree.nodes.map(node=>[node.id,{...tree.positions.get(node.id),w:240,h:node.record.kind==='organization'?104:160}]));
+    const routes=new Map(),used=[],ports=new Map(),directions={top:[0,-1],right:[1,0],bottom:[0,1],left:[-1,0]};
+    const compact=points=>{
+      const result=[];for(const p of points){if(result.length&&result.at(-1).x===p.x&&result.at(-1).y===p.y)continue;
+        if(result.length>1){const a=result.at(-2),b=result.at(-1);if(a.x===b.x&&b.x===p.x||a.y===b.y&&b.y===p.y)result.pop();}result.push(p);}return result;
+    };
+    const segments=points=>points.slice(1).map((p,i)=>({a:points[i],b:p}));
+    const overlaps=(a,b,c,d)=>Math.min(Math.max(a,b),Math.max(c,d))-Math.max(Math.min(a,b),Math.min(c,d))>0.1;
+    const hits=(segment,box,pad)=>{
+      const {a,b}=segment;
+      return a.x===b.x?a.x>box.x-pad&&a.x<box.x+box.w+pad&&overlaps(a.y,b.y,box.y-pad,box.y+box.h+pad):
+        a.y>box.y-pad&&a.y<box.y+box.h+pad&&overlaps(a.x,b.x,box.x-pad,box.x+box.w+pad);
+    };
+    const shared=(a,b)=>a.a.x===a.b.x&&b.a.x===b.b.x?a.a.x===b.a.x&&overlaps(a.a.y,a.b.y,b.a.y,b.b.y):
+      a.a.y===a.b.y&&b.a.y===b.b.y&&a.a.y===b.a.y&&overlaps(a.a.x,a.b.x,b.a.x,b.b.x);
+    const crosses=(a,b)=>{
+      if((a.a.x===a.b.x)===(b.a.x===b.b.x))return false;
+      const v=a.a.x===a.b.x?a:b,h=a.a.x===a.b.x?b:a;
+      return v.a.x>Math.min(h.a.x,h.b.x)&&v.a.x<Math.max(h.a.x,h.b.x)&&h.a.y>Math.min(v.a.y,v.b.y)&&h.a.y<Math.max(v.a.y,v.b.y);
+    };
+    const port=(id,side,fraction)=>{
+      const box=boxes.get(id),count=ports.get(id+':'+side)||0,extent=['top','bottom'].includes(side)?box.w:box.h;
+      const shift=count===0?0:(count%2?1:-1)*Math.ceil(count/2)*12;
+      const along=fraction===undefined?Math.max(16,Math.min(extent-16,extent/2+shift)):extent*fraction;
+      const p=side==='top'?{x:box.x+along,y:box.y}:side==='bottom'?{x:box.x+along,y:box.y+box.h}:
+        side==='left'?{x:box.x,y:box.y+along}:{x:box.x+box.w,y:box.y+along};
+      return {p,stub:{x:p.x+directions[side][0]*14,y:p.y+directions[side][1]*14},side};
+    };
+    const bounds={left:Math.min(...[...boxes.values()].map(b=>b.x))-12,right:Math.max(...[...boxes.values()].map(b=>b.x+b.w))+16,
+      top:16,bottom:Math.max(...[...boxes.values()].map(b=>b.y+b.h))+24};
+    const ordered=[...tree.edges].sort((a,b)=>(a.type==='reports'?0:a.type==='context'?1:2)-(b.type==='reports'?0:b.type==='context'?1:2));
+    for(const edge of ordered){
+      const report=edge.type==='reports';
+      const siblings=tree.edges.filter(row=>row.type==='reports'&&row.target===edge.target).sort((l,r)=>boxes.get(l.source).x-boxes.get(r.source).x);
+      const fraction=report?(siblings.findIndex(row=>row.id===edge.id)+1)/(siblings.length+1):undefined;
+      const starts=report?[port(edge.source,'top')]:Object.keys(directions).map(side=>port(edge.source,side));
+      const ends=report?[port(edge.target,'bottom',fraction)]:Object.keys(directions).map(side=>port(edge.target,side));
+      let best=null;
+      for(const start of starts)for(const end of ends){
+        const s=start.stub,t=end.stub,mx=(s.x+t.x)/2,my=(s.y+t.y)/2;
+        const middle=[[{x:s.x,y:t.y}],[{x:t.x,y:s.y}]];
+        for(const x of [mx,mx-12,mx+12,s.x-24,s.x+24,t.x-24,t.x+24,bounds.left,bounds.right])middle.push([{x,y:s.y},{x,y:t.y}]);
+        for(const y of [my,my-12,my+12,s.y-24,s.y+24,t.y-24,t.y+24,bounds.top,bounds.bottom])middle.push([{x:s.x,y},{x:t.x,y}]);
+        for(const turns of middle){
+          const points=compact([start.p,s,...turns,t,end.p]);
+          if(points.some(p=>p.x<2||p.y<2||p.x>tree.width-2||p.y>tree.height-2))continue;
+          const lines=segments(points);if(lines.some(line=>[...boxes].some(([id,box])=>hits(line,box,id===edge.source||id===edge.target?0:8))))continue;
+          const length=lines.reduce((sum,line)=>sum+Math.abs(line.a.x-line.b.x)+Math.abs(line.a.y-line.b.y),0);
+          const overlap=lines.reduce((sum,line)=>sum+used.filter(previous=>shared(line,previous)).length,0);
+          const intersections=lines.reduce((sum,line)=>sum+used.filter(previous=>crosses(line,previous)).length,0);
+          const score=length+(points.length-2)*18+overlap*100000+intersections*80;
+          if(!best||score<best.score)best={points,lines,score,start,end,overlap};
+        }
+      }
+      // Retain a visible diagnostic if a dense diagram cannot be routed safely.
+      if(!best){routes.set(edge.id,{path:'',unrouted:true});continue;}
+      const path='M '+best.points[0].x+' '+best.points[0].y+best.points.slice(1).map((p,i)=>p.x===best.points[i].x?' V '+p.y:' H '+p.x).join('');
+      used.push(...best.lines);for(const [id,side]of [[edge.source,best.start.side],[edge.target,best.end.side]])ports.set(id+':'+side,(ports.get(id+':'+side)||0)+1);
+      routes.set(edge.id,{path,points:best.points,sourceSide:best.start.side,targetSide:best.end.side,overlap:best.overlap});
     }
-    const workflows=tree.edges.filter(row=>row.type==='escalation'),index=workflows.findIndex(row=>row.id===edge.id);
-    // Route across row gaps and outside every card; never through a neighboring card.
-    const laneOffset=14+(index%4)*10;
-    if(a.y===b.y){const lane=a.y+160+laneOffset;return `M ${ax} ${a.y+160} V ${lane} H ${bx} V ${b.y+160}`;}
-    const outside=tree.width-20-index*12;
-    return `M ${ax} ${a.y} V ${a.y-laneOffset} H ${outside} V ${b.y-laneOffset} H ${bx} V ${b.y}`;
+    return routes;
   }
   impact(id, limit=60, kind=null) {
     const allowed = new Set(this.resources.filter(row=>!kind||row.kind===kind).slice(0,limit).map(row => row.id));
@@ -281,13 +334,15 @@ async function startScopedWorkspace() {
     const lines=svg('svg',{width:tree.width,height:tree.height,viewBox:`0 0 ${tree.width} ${tree.height}`,'aria-label':'Reporting and workflow connections'});
     const defs=svg('defs',{}),marker=svg('marker',{id:'tree-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'});
     marker.append(svg('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'context-stroke'}));defs.append(marker);lines.append(defs);canvas.append(lines);
-    const paths=new Map(),cards=new Map();
+    const paths=new Map(),cards=new Map();tree.routing ||= ScopedModel.treeRoutes(tree);
     for(const edge of tree.edges){const workflow=edge.type==='escalation';
       const path=svg('path',{d:ScopedModel.treePath(tree,edge),
         class:'tree-edge '+(workflow?'workflow':edge.type==='context'?'context':'reporting')});
       if(edge.type!=='context')path.setAttribute('marker-end','url(#tree-arrow)');
       const title=svg('title',{});title.textContent=edge.label||edge.type;path.append(title);lines.append(path);paths.set(edge.id,path);
     }
+    const unrouted=[...tree.routing.values()].filter(route=>route.unrouted).length;
+    if(unrouted)$('graph-caption').textContent+=` · ${unrouted} connections need more diagram space; inspect role records`;
     const highlight=id=>{
       const nodes=new Set(id?[id]:[]),edges=new Set();
       if(id){let current=id;const seen=new Set();

@@ -36,19 +36,56 @@ test('organization tree preserves context links and uses bounded orthogonal conn
     const path=ScopedModel.treePath(tree,edge);assert.match(path,/^M [\d.]+ [\d.]+ [HV]/);assert.doesNotMatch(path,/[CQLASTZ]/i);
     const values=path.match(/\d+(?:\.\d+)?/g).map(Number);assert.ok(values.every(Number.isFinite));
     assert.ok(!path.includes('-'));assert.ok(Math.max(...values)<=Math.max(tree.width,tree.height));
-    if(edge.type==='escalation'&&tree.positions.get(edge.source).y!==tree.positions.get(edge.target).y){
-      const outside=Number(path.match(/ H ([\d.]+)/)[1]);
-      assert.ok(tree.nodes.every(node=>tree.positions.get(node.id).x+240<outside));
-    }
+    assert.equal(tree.routing.get(edge.id).overlap,0);
   }
 });
 
-test('same-level workflow connectors stay in the row gap and retain direction',()=>{
+test('same-level workflow connectors use clear facing sides without a perimeter detour',()=>{
   const f=organizationFixture();f.view.relations.splice(0,f.view.relations.length,...f.view.relations.filter(edge=>edge.data.type!=='reports'));f.edge(f.manager,f.staff,'escalation');
   const tree=new ScopedModel(f.view).organizationTree(),edge=tree.edges.find(edge=>edge.type==='escalation');
   const a=tree.positions.get(edge.source),b=tree.positions.get(edge.target);assert.equal(a.y,b.y);
-  const path=ScopedModel.treePath(tree,edge);assert.match(path,new RegExp('^M '+(a.x+120)+' '+(a.y+160)+' V '));
-  assert.ok(path.endsWith('V '+(b.y+160)));assert.ok(!path.includes(' C '));
+  const path=ScopedModel.treePath(tree,edge),route=tree.routing.get(edge.id);
+  assert.ok(!path.includes(' C '));assert.equal(route.overlap,0);
+  assert.ok(['left','right'].includes(route.targetSide));assert.ok(route.points.length<=4);
+});
+
+function routingFixture(){
+  const positions=new Map([['org',{x:16,y:64}],['chief',{x:970,y:64}],['finance',{x:295,y:294}],['operations',{x:835,y:294}],
+    ['alliances',{x:1375,y:294}],['marketing',{x:1645,y:294}],['project',{x:565,y:524}],['volunteers',{x:835,y:524}],['training',{x:1105,y:524}]]);
+  const nodes=[...positions.keys()].map(id=>({id,record:{kind:id==='org'?'organization':'role'}}));let id=0;
+  const edges=[],add=(source,target,type)=>edges.push({id:String(++id),source,target,type});
+  for(const actor of ['finance','operations','alliances','marketing'])add(actor,'chief','reports');
+  for(const actor of ['project','volunteers','training'])add(actor,'operations','reports');add('chief','org','context');
+  for(const [source,target]of [['volunteers','operations'],['alliances','operations'],['operations','finance'],['operations','alliances'],
+    ['project','operations'],['finance','operations'],['chief','project'],['marketing','chief'],['training','operations'],['operations','chief'],['finance','chief']])add(source,target,'escalation');
+  return {positions,nodes,edges,width:2072,height:754};
+}
+
+test('dense reporting layout takes the clear right-hand entry for marketing escalation',()=>{
+  const tree=routingFixture(),routes=ScopedModel.treeRoutes(tree),edge=tree.edges.find(e=>e.source==='marketing'&&e.type==='escalation');
+  const route=routes.get(edge.id);assert.equal(route.targetSide,'right');assert.ok(route.points.length<=4);
+  assert.ok(Math.max(...route.points.map(p=>p.x))<=1885);assert.ok(Math.min(...route.points.map(p=>p.y))>=64);
+  for(const route of routes.values()){assert.ok(!route.unrouted);assert.equal(route.overlap,0);}
+});
+
+test('routing is deterministic, avoids card interiors and separates shared connector segments',()=>{
+  const tree=routingFixture(),routes=ScopedModel.treeRoutes(tree);assert.deepEqual(routes,ScopedModel.treeRoutes(tree));
+  const segments=[];
+  for(const [id,route]of routes){const edge=tree.edges.find(e=>e.id===id);
+    for(let i=1;i<route.points.length;i++){const a=route.points[i-1],b=route.points[i];assert.ok(a.x===b.x||a.y===b.y);
+      for(const previous of segments){const c=previous.a,d=previous.b;if(previous.id===id)continue;
+        const shared=a.x===b.x&&c.x===d.x&&a.x===c.x?Math.max(Math.min(a.y,b.y),Math.min(c.y,d.y))<Math.min(Math.max(a.y,b.y),Math.max(c.y,d.y)):
+          a.y===b.y&&c.y===d.y&&a.y===c.y&&Math.max(Math.min(a.x,b.x),Math.min(c.x,d.x))<Math.min(Math.max(a.x,b.x),Math.max(c.x,d.x));
+        assert.equal(!!shared,false,'Shared segment between '+id+' and '+previous.id);
+      }
+      segments.push({id,a,b});
+      for(const node of tree.nodes){const box={...tree.positions.get(node.id),w:240,h:node.record.kind==='organization'?104:160};
+        const inside=a.x===b.x?a.x>box.x&&a.x<box.x+box.w&&Math.max(Math.min(a.y,b.y),box.y)<Math.min(Math.max(a.y,b.y),box.y+box.h):
+          a.y>box.y&&a.y<box.y+box.h&&Math.max(Math.min(a.x,b.x),box.x)<Math.min(Math.max(a.x,b.x),box.x+box.w);
+        assert.equal(inside,false,edge.id+' crosses '+node.id);
+      }
+    }
+  }
 });
 test('reporting cycles and multiple managers stay bounded and are marked for review',()=>{
   const f=organizationFixture();f.edge(f.chief,f.staff,'reports');let tree=new ScopedModel(f.view).organizationTree();
