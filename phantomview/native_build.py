@@ -12,6 +12,7 @@ from importlib import metadata
 from pathlib import Path
 
 import native_host_entry as host
+import relay_auth_patch
 
 HERE = Path(__file__).resolve().parent
 TEST_GROUPS = ('preparation', 'channels', 'persona')
@@ -184,6 +185,9 @@ def verify_binary_version(result, expected):
 
 def receipt(binary, source, root, environment):
     results = test_results(environment)
+    dependency_patch = relay_auth_patch.verify_manifest(
+        environment.get('PHANTOMVIEW_NATIVE_SOURCE', 'native-source'),
+        json.loads((root / 'relay-auth-patch.json').read_text(encoding='utf-8')))
     image = {key: environment.get(key, '') for key in ('ImageOS', 'ImageVersion')}
     if not all(image.values()) or platform.python_version() != environment['BUILD_PYTHON_VERSION']:
         raise ValueError('Exact Python and hosted runner image provenance are required')
@@ -213,6 +217,7 @@ def receipt(binary, source, root, environment):
         'compiled_version_verified': verify_binary_version(version, source['native_version']),
         'version_diagnostics_sha256': hashlib.sha256(version.stderr.encode()).hexdigest(),
         'embedded_extension_version': source['release_version'],
+        'dependency_patches': {'nostr-tools-auth': dependency_patch},
         'test_results': results, 'tests_passed': all(value == 'success' for value in results.values()),
         'installed': False, 'activation_ready': False}
 
