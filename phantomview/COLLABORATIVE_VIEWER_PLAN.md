@@ -271,7 +271,7 @@ produce consistent human-to-persona access without a duplicate grant database.
 ### P3. Assemble the standard visual viewer
 
 Generate organization identity, navigation, counts and links from current authorized
-data. Keep overview, people, relationships, knowledge/documents, procedures,
+data. Keep overview, personas, relationships, knowledge/documents, procedures,
 findings and installation sections when relevant records exist. A project can
 show partners, objectives and tasks instead of invented departments.
 

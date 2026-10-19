@@ -1,6 +1,6 @@
 /* The server authorizes every resource. This client never infers ACL grants. */
 'use strict';
-const SCOPED_KINDS = {organization:'Organization',department:'Departments',role:'Roles',persona:'People',human:'Humans',
+const SCOPED_KINDS = {organization:'Organization',department:'Departments',role:'Roles',persona:'Personas',human:'Humans',
   project:'Projects',partner:'Partners',objective:'Objectives',task:'Tasks',document:'Documents',knowledge:'Knowledge',
   procedure:'Procedures',finding:'Findings',component:'Components',relationship:'Relationships'};
 const scopedHex = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);

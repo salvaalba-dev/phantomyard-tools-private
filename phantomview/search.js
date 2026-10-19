@@ -36,6 +36,6 @@ function globalSearchView(){scheduleKnowledgeSearch();const matches=combinedSear
 if(typeof document!=='undefined')document.addEventListener('click',event=>{
  const button=event.target.closest('[data-global-result]');if(!button)return;const row=combinedSearch()[Number(button.dataset.globalResult)];if(!row)return;
  if(row.kind==='persona'){showActor(row.key);return;}if(row.kind==='knowledge'){showNote(row.key);return;}if(row.kind==='component'){showComponent(row.key);return;}
- const section={organization:'overview',department:'departments',role:'people',document:'documents',procedure:'procedures',finding:'overview'}[row.kind];
- $('#detail').dataset.personKey='';$('#detail').dataset.componentKey='';$('#detail-body').innerHTML=`<div class="eyebrow">${esc(globalSearchText(row.kind))}</div><h2>${esc(row.title)}</h2><p>${esc(row.text)}</p><button class="button" data-search-section="${esc(section)}" data-search-department="${esc(row.department||'')}" data-search-org="${esc(row.org||'')}">${esc(globalSearchText('Open section'))} →</button>`;if(!$('#detail').open)$('#detail').showModal();
+ const section={organization:'overview',department:'departments',role:'personas',document:'documents',procedure:'procedures',finding:'overview'}[row.kind];
+ $('#detail').dataset.personaKey='';$('#detail').dataset.componentKey='';$('#detail-body').innerHTML=`<div class="eyebrow">${esc(globalSearchText(row.kind))}</div><h2>${esc(row.title)}</h2><p>${esc(row.text)}</p><button class="button" data-search-section="${esc(section)}" data-search-department="${esc(row.department||'')}" data-search-org="${esc(row.org||'')}">${esc(globalSearchText('Open section'))} →</button>`;if(!$('#detail').open)$('#detail').showModal();
 });

@@ -13,9 +13,9 @@ function context(initial={}){
  return {sandbox,store,events,selector,calls};
 }
 let fixture=context();
-assert.equal(vm.runInContext('uiText("People")',fixture.sandbox),'Personas');
+assert.equal(vm.runInContext('uiText("Personas")',fixture.sandbox),'Personas');
 fixture.events.change({target:{id:'global-language',value:'en'}});
-assert.equal(vm.runInContext('uiText("People")',fixture.sandbox),'People');
+assert.equal(vm.runInContext('uiText("Personas")',fixture.sandbox),'Personas');
 assert.equal(fixture.store.get('phantomview-language'),'en');
 assert.equal(fixture.sandbox.document.documentElement.lang,'en');
 assert.equal(vm.runInContext('uiMessage("Autenticación necesaria")',fixture.sandbox),'Authentication necessary');

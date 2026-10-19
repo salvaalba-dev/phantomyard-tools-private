@@ -3,7 +3,8 @@
 This inactive adapter and build-only patch address a verified limitation in the
 inspected PhantomBot source at `5af27060327ee8c53fe730dd8b98b6b305c62add`.
 `ask` without history still loads persona identity/MEMORY and daily recall.
-The native screener also reads persona files and decision/people/norm drawers.
+The native screener also reads persona files and the native memory drawers, including the upstream
+`memory/people.md` path. This external path retains its PhantomBot name.
 Those inputs are not filtered by PhantomView's classified projection. Therefore
 the existing AU analysis executable must not serve expanded scoped sessions.
 

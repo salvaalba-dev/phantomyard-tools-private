@@ -50,7 +50,7 @@ def suggest(folder, categories, confidential_category='category-2'):
     if parts[0] in {'normas', 'norms', 'concepts', 'lessons', 'templates'}:
         category = 'category-1'
         reason = 'Candidate internal reference material; confirm the folder has no sensitive exceptions.'
-    elif parts[0] in {'people', 'infra', 'procedures', 'runbooks', 'decisions', 'postmortems'}:
+    elif parts[0] in {'personas', 'people', 'infra', 'procedures', 'runbooks', 'decisions', 'postmortems'}:
         category = confidential_category
         reason = 'Confidential candidate under the selected existing category; check sensitive and project-specific exceptions.'
     elif parts[0] in {'finance', 'financial', 'accounting', 'finanzas', 'contabilidad'}:

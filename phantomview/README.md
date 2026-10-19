@@ -144,7 +144,7 @@ Three views are available:
 
 - **Software:** Phantomyard packages, services, runtimes, libraries, data and external
   services, with presence/version/service evidence.
-- **People & tools:** declared persona capabilities and explicit links to software
+- **Personas & tools:** declared persona capabilities and explicit links to software
   and external services.
 - **Impact:** reverse traversal of declared `requires`, `reads`, `runs_on` and `uses`
   relations. Optional dependencies and publication outputs are excluded. This is a
@@ -758,3 +758,7 @@ inference. It remains tool-less and separate from the scoped projection-only
 assistant. Credential-store isolation, reviewed artifacts and full channel
 queue/control integration remain required before live activation.
 
+
+Persona terminology is used throughout the viewer. Existing upstream knowledge
+paths such as `memory/people.md` remain compatible; folder classification also
+recognizes `personas` without changing the ACL classification of legacy paths.

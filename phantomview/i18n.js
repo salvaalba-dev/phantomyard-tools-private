@@ -35,7 +35,7 @@ const uiSpanish = {
   "Default persona observation": "Lectura de persona por defecto",
   "Organization": "Organización",
   "Departments": "Departamentos",
-  "People": "Personas",
+  "Personas": "Personas",
   "Tools": "Herramientas",
   "Documents": "Documentos",
   "Procedures": "Procedimientos",
@@ -163,7 +163,7 @@ const uiSpanish = {
   "YOUR ORGANIZATION AT A GLANCE": "TU ORGANIZACIÓN, A LA VISTA",
   "Everything connected.": "Todo conectado.",
   "Everything in context.": "Todo en contexto.",
-  "People, responsibilities and resources: explore how they fit.": "Personas, responsabilidades y recursos: explora cómo encajan.",
+  "Personas, responsibilities and resources: explore how they fit.": "Personas, responsabilidades y recursos: explora cómo encajan.",
   "Reading sources": "Leyendo fuentes",
   "Search this view": "Buscar en esta vista",
   "Persona, role, tool or document…": "Persona, rol, herramienta o documento…",
@@ -297,7 +297,7 @@ const uiSpanish = {
   "Request it from": "Solicítalo a",
   "visible relationships": "relaciones visibles",
   "findings": "hallazgos",
-  "people": "personas",
+  "personas": "personas",
   "records": "registros",
   "steps": "pasos",
   "readings with changes": "lecturas con cambios",
@@ -377,7 +377,7 @@ function applyUiChrome(){
 function setUiLanguage(language){
  if(!['en','es'].includes(language))return;
  uiLanguage=language;localStorage.setItem('phantomview-language',language);applyUiChrome();
- if(state){fillFilters();render();if(document.querySelector('#detail').open){const key=document.querySelector('#detail').dataset.personKey,component=document.querySelector('#detail').dataset.componentKey;if(key)showActor(key);else if(component)showComponent(component);}if(document.querySelector('#note').open&&openNoteData)renderNote(openNoteData);}else{drawNav();accessScreen(accessLastMessage);}
+ if(state){fillFilters();render();if(document.querySelector('#detail').open){const key=document.querySelector('#detail').dataset.personaKey,component=document.querySelector('#detail').dataset.componentKey;if(key)showActor(key);else if(component)showComponent(component);}if(document.querySelector('#note').open&&openNoteData)renderNote(openNoteData);}else{drawNav();accessScreen(accessLastMessage);}
 }
 document.addEventListener('DOMContentLoaded',applyUiChrome);
 document.addEventListener('change',event=>{if(event.target.id==='global-language')setUiLanguage(event.target.value);});

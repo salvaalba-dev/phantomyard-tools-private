@@ -32,6 +32,6 @@ const cardScope={actors:()=>[{id:'atlas',key:'example:atlas',tools:[],descriptio
  esc:String,uiText:key=>key,roleFor:()=>({name:'Staff'}),departmentName:()=>'',
  badge:label=>label,installation:()=>'',installationEvidenceLabel:()=>'',tags:()=>'',operationBadge:()=>'<span>● Alive</span>'};
 vm.createContext(cardScope);
-vm.runInContext(source.slice(source.indexOf('function people(){'),source.indexOf('function tools(){')),cardScope);
-assert.match(cardScope.people(),/persona-operation[^]*● Alive/);
+vm.runInContext(source.slice(source.indexOf('function personas(){'),source.indexOf('function tools(){')),cardScope);
+assert.match(cardScope.personas(),/persona-operation[^]*● Alive/);
 console.log('Persona card rendering includes the operational status flag.');

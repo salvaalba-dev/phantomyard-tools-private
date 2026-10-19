@@ -9,7 +9,7 @@ import re
 from channel_identity import HumanDirectory
 
 LABELS = {'organization': 'Organization', 'department': 'Departments', 'role': 'Roles',
-          'persona': 'People', 'human': 'Humans', 'project': 'Projects', 'partner': 'Partners',
+          'persona': 'Personas', 'human': 'Humans', 'project': 'Projects', 'partner': 'Partners',
           'objective': 'Objectives', 'task': 'Tasks', 'document': 'Documents', 'knowledge': 'Knowledge',
           'procedure': 'Procedures', 'finding': 'Findings', 'component': 'Installation'}
 VIEWS = frozenset({'table', 'cards', 'graph', 'document'})

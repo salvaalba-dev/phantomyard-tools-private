@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import time
 
-VIEWS = {"overview", "departments", "people", "tools", "documents", "procedures", "history", "installation", "sources"}
+VIEWS = {"overview", "departments", "personas", "tools", "documents", "procedures", "history", "installation", "sources"}
 
 
 def selected_default(snapshot, issuer):

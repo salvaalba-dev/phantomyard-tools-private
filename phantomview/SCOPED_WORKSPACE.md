@@ -13,7 +13,7 @@ not access checks. Public static files contain no private resource data.
 ## Visible workspace
 
 Navigation comes from resource kinds actually present in the authorized response.
-An organization view can contain departments, roles and people; a project view can
+An organization view can contain departments, roles and personas; a project view can
 contain partners, objectives and tasks without organization or department menus.
 Counts are derived from returned records, never a global inventory. An available
 organization record supplies its display title; otherwise only the organization

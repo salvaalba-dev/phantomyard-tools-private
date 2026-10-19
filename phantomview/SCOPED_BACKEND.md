@@ -118,7 +118,7 @@ Static application assets remain public and contain no projected private data.
 
 ## Validation and remaining work
 
-Tests exercise isolation across people and projects; denied-file read prevention;
+Tests exercise isolation across personas and projects; denied-file read prevention;
 relationship endpoint filtering; visible-only counts/revisions; source, policy and
 category-definition changes; unknown/secret resources; manifest exclusions; global
 search; and actual HTTP dispatch, logout and legacy-route denial.

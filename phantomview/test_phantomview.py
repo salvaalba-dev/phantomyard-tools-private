@@ -121,7 +121,7 @@ class ObservatoryTests(unittest.TestCase):
         index = self.root / "reader" / "index.json"
         self.obs.export(index, data)
         payload = self.obs.read_note(ident)
-        payload["actor"] = "another:actors:person"
+        payload["actor"] = "another:actors:persona"
         pv.atomic_json(index.parent / "kb" / (ident + ".json"), payload)
         with self.assertRaises(ValueError):
             SnapshotReader(index, {}).read_note(ident)
@@ -173,7 +173,7 @@ class ObservatoryTests(unittest.TestCase):
         data = self.obs.refresh()
         self.assertEqual([x["slug"] for x in data["snapshot"]["documents"]], ["current"])
 
-    def test_empty_new_setup_does_not_invent_people(self):
+    def test_empty_new_setup_does_not_invent_personas(self):
         cfg = pv.default_config()
         cfg.update(mode="new", org_files=[], docs_manifests=[], procedures_file="")
         data = self.obs.configure(cfg)
