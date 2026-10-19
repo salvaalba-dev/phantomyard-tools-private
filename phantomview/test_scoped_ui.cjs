@@ -42,6 +42,24 @@ function fixture(){return {schema_version:1,complete_corpus:false,organization:'
   resources:[{id:a,kind:'partner',data:{title:'River partner'}},{id:b,kind:'task',data:{title:'Field review'}},
     {id:c,kind:'objective',data:{title:'Improve monitoring'}}],
   relations:[{id:e,kind:'relationship',data:{source:a,target:b,label:'Assigned work',type:'assignment'}}]};}
+test('record rows align personas with explicit visible counterparts and roles only',()=>{
+  const f=organizationFixture();f.edge(f.human,f.persona,'counterpart');f.edge(f.department,f.persona,'assignment');
+  f.persona.data.human='Unpublished human';const rows=new ScopedModel(f.view).personaRows(),row=rows.find(row=>row.persona?.id===f.persona.id);
+  assert.deepEqual(row.humans.map(record=>record.id),[f.human.id]);
+  assert.deepEqual(row.roles.map(record=>record.id),[f.staff.id]);
+  assert.ok(!rows.flatMap(row=>row.humans).some(record=>record.data.title==='Unpublished human'));
+  assert.ok(!row.roles.some(record=>record.kind==='department'));
+});
+
+test('unassigned humans and roles remain visible without fabricated persona joins',()=>{
+  const f=organizationFixture();f.view.relations=[];const rows=new ScopedModel(f.view).personaRows();
+  const row=rows.find(row=>row.persona?.id===f.persona.id);assert.deepEqual(row.humans,[]);assert.deepEqual(row.roles,[]);
+  for(const record of f.view.resources.filter(row=>['human','role'].includes(row.kind))){
+    const orphan=rows.find(row=>[...row.humans,...row.roles].some(item=>item.id===record.id));assert.equal(orphan.persona,null);
+  }
+  assert.deepEqual(new ScopedModel(fixture()).personaRows(),[]);
+});
+
 test('project menus contain only visible kinds and visible counts ignore global claims',()=>{
   const model=new ScopedModel(fixture());assert.deepEqual(model.sections().map(row=>row.kind),['objective','partner','task']);
   assert.deepEqual(model.counts(),{partner:1,task:1,objective:1});assert.equal(model.organization(),'example');

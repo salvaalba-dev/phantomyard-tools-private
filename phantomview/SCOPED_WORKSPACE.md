@@ -1,5 +1,13 @@
 # Generic scoped workspace
 
+The overview groups available records into aligned Persona, Human and Role
+columns. Each persona row uses only published counterpart and role assignment
+relationships; every linked name opens its current authorized record. Missing
+associations are labeled explicitly. Visible humans and roles without a published
+persona association remain in separate rows. Other record kinds appear in groups
+below the directory. Section navigation and global search retain their existing
+record views, and narrow screens can scroll the three columns horizontally.
+
 When a trusted embedding supplies `scoped_backend=` to `phantomview.serve`, the
 root page now serves `scoped-index.html` and the separate `scoped-ui.js` and
 `scoped-ui.css` assets. The default reader keeps its existing frontend. No CLI

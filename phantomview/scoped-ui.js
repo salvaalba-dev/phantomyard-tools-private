@@ -102,6 +102,20 @@ class ScopedModel {
     const row = this.resources.find(row => row.kind === 'organization');
     return row ? this.title(row) : this.view.organization;
   }
+  personaRows() {
+    const unique=rows=>[...new Map(rows.map(row=>[row.id,row])).values()];
+    const linked=(persona,type,kind)=>unique(this.relations.filter(edge=>edge.data.type===type&&edge.data.target===persona.id)
+      .map(edge=>this.byId.get(edge.data.source)).filter(row=>row?.kind===kind));
+    const personas=this.resources.filter(row=>row.kind==='persona').sort((a,b)=>this.title(a).localeCompare(this.title(b)));
+    const rows=personas.map(persona=>({persona,humans:linked(persona,'counterpart','human'),roles:linked(persona,'assignment','role')}));
+    const shown=new Set(rows.flatMap(row=>[...row.humans,...row.roles].map(record=>record.id)));
+    // Preserve visible, unassigned records without inventing an association.
+    for(const record of this.resources.filter(row=>['human','role'].includes(row.kind)&&!shown.has(row.id))
+      .sort((a,b)=>this.title(a).localeCompare(this.title(b)))) {
+      rows.push({persona:null,humans:record.kind==='human'?[record]:[],roles:record.kind==='role'?[record]:[]});
+    }
+    return rows;
+  }
   organizationTree() {
     const organization=this.resources.find(row=>row.kind==='organization');
     if(!organization||!this.resources.some(row=>row.kind==='role'||row.kind==='persona'))return null;
@@ -323,6 +337,33 @@ async function startScopedWorkspace() {
     }
     graph.append(root);
   }
+  function renderOverviewRecords(records) {
+    const rows=model.personaRows();
+    if(rows.length){
+      const wrapper=text('div','', 'persona-directory'),table=text('table','', 'persona-records');
+      table.setAttribute('aria-label','Persona, human and role associations');
+      const head=text('thead',''),header=text('tr','');
+      for(const label of ['Persona','Human','Role']){const cell=text('th',label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);
+      const body=text('tbody','');
+      for(const row of rows){const line=text('tr','');
+        for(const [items,empty]of [[[row.persona].filter(Boolean),'No linked persona'],[row.humans,'No visible counterpart'],[row.roles,'No visible role']]){
+          const cell=text('td','');
+          for(const record of items){const button=text('button',model.title(record),'record-link');button.type='button';
+            button.addEventListener('click',()=>showDetails(record));cell.append(button);}
+          if(!items.length)cell.append(text('span',empty,'muted'));line.append(cell);
+        }
+        body.append(line);
+      }
+      table.append(body);wrapper.append(table);records.append(wrapper);
+    }
+    for(const kind of [...new Set(model.resources.map(row=>row.kind))].filter(kind=>!['persona','human','role'].includes(kind))){
+      const group=text('section','', 'record-group'),heading=text('h3',SCOPED_KINDS[kind]),cards=text('div','', 'cards');group.append(heading,cards);
+      for(const row of model.resources.filter(row=>row.kind===kind)){
+        const button=text('button',model.title(row),'card');button.type='button';button.addEventListener('click',()=>showDetails(row));cards.append(button);
+      }
+      records.append(group);
+    }
+  }
   function render(search=false) {
     const selected=model.selection(section);
     const selectSection=id=>{section=id;chat.reset();render(search);loadAssistant(epoch);};
@@ -345,8 +386,10 @@ async function startScopedWorkspace() {
       if(target)tile.addEventListener('click',()=>selectSection(target.id));stats.append(tile);
     }
     const records=$('records');records.replaceChildren();
-    records.className=selected?.view==='table'?'record-table':'cards';
-    for(const row of model.resources.filter(row=>!selected||row.kind===selected.kind)) {
+    const overview=!search&&!selected;
+    records.className=overview?'overview-records':selected?.view==='table'?'record-table':'cards';
+    if(overview)renderOverviewRecords(records);
+    else for(const row of model.resources.filter(row=>!selected||row.kind===selected.kind)) {
       const card=text('button','', 'card');card.type='button';card.append(text('small',SCOPED_KINDS[row.kind]),text('h3',model.title(row)));
       const summary=row.data.description||row.data.severity||row.data.kind;
       if(typeof summary==='string')card.append(text('p',summary.slice(0,180)));card.addEventListener('click',()=>showDetails(row));records.append(card);
