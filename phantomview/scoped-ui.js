@@ -304,17 +304,17 @@ async function startScopedWorkspace() {
     },
     onInvalid:()=>failure(Error('Current scoped session required'),epoch),
     render:state=>{
-      const labels={unavailable:'Not configured for this session.',ready:'How can I help with your workspace?',submitting:'Submitting your consultationÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',
-        queued:'Queued for your personaÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',running:'Your persona is reviewing the evidenceÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',complete:'Answer based on selected authorized evidence.',
+      const labels={unavailable:'Not configured for this session.',ready:'How can I help with your workspace?',submitting:'Submitting your consultation\u2026',
+        queued:'Queued for your persona\u2026',running:'Your persona is reviewing the evidence\u2026',complete:'Answer based on selected authorized evidence.',
         held:'Screening held this request. No answer was released.',failed:'The consultation could not finish.',cancelled:'Cleared. Cancellation requested.',
         limited:'Consultation limit reached. Retry later.',error:'Connection interrupted. Retry the same request or cancel.'};
       if(state.mode==='persona-conversation'){
         labels.ready='Ask your existing persona. Its native knowledge and tools apply.';
-        labels.running='Your persona is answering through PhantomBotÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';
+        labels.running='Your persona is answering through PhantomBot\u2026';
         labels.complete='Reply from your existing persona; selected viewer context is supplemental.';
       }
       const note=document.querySelector('.session-note');
-      if(note)note.textContent=state.mode==='persona-conversation'?'Read-only viewer ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Native persona permissions apply':'Private ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Read-only session';
+      if(note)note.textContent=state.mode==='persona-conversation'?'Read-only viewer \u00b7 Native persona permissions apply':'Private \u00b7 Read-only session';
       $('assistant-status').textContent=labels[state.status]||labels.unavailable;
       $('assistant-persona').textContent=state.persona;$('assistant-answer').textContent=state.text;$('assistant-answer').hidden=!state.text;
       $('assistant-question').textContent=state.question;$('assistant-question').hidden=!state.question;
@@ -357,7 +357,7 @@ async function startScopedWorkspace() {
     const ticket=epoch, detailTicket=++detailEpoch;
     // Remove old contents before any new read; never show a cached fallback.
     detailFocus=null;$('assistant-about').hidden=true;
-    $('detail-content').textContent='Loading current recordÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';$('detail-title').textContent='Record';$('detail').showModal();
+    $('detail-content').textContent='Loading current record\u2026';$('detail-title').textContent='Record';$('detail').showModal();
     api(ScopedModel.detailPath(row),undefined,controller?.signal).then(current=>{
       if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
       $('detail-content').textContent=ScopedModel.detailText(row,current);
@@ -371,7 +371,7 @@ async function startScopedWorkspace() {
     const graphWidth=$('graph').clientWidth;if(graphWidth<240)return;
     const tree=ScopedModel.fitTree(sourceTree,graphWidth);
     const graph=$('graph');graph.replaceChildren();$('graph-panel').hidden=false;$('graph-title').textContent='Organization tree';
-    $('graph-caption').textContent=`Visible reporting levels ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${tree.unlinked} unlinked personas`+(tree.truncated?' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· diagram limited to 60 cards':'');
+    $('graph-caption').textContent=`Visible reporting levels \u00b7 ${tree.unlinked} unlinked personas`+(tree.truncated?' \u00b7 diagram limited to 60 cards':'');
     const canvas=text('div','', 'organization-tree'+(tree.compact?' tree-compact':''));canvas.style.width=tree.width+'px';canvas.style.height=tree.height+'px';
     const ns='http://www.w3.org/2000/svg',svg=(tag,attrs)=>{const element=document.createElementNS(ns,tag);for(const[key,value]of Object.entries(attrs))element.setAttribute(key,String(value));return element;};
     const lines=svg('svg',{width:tree.width,height:tree.height,viewBox:`0 0 ${tree.width} ${tree.height}`,'aria-label':'Reporting and workflow connections'});
@@ -389,7 +389,7 @@ async function startScopedWorkspace() {
     }
     for(const point of tree.junctions)lines.append(svg('circle',{cx:point.x,cy:point.y,r:3,class:'tree-junction'}));
     const unrouted=[...tree.routing.values()].filter(route=>route.unrouted).length;
-    if(unrouted)$('graph-caption').textContent+=` ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${unrouted} connections need more diagram space; inspect role records`;
+    if(unrouted)$('graph-caption').textContent+=` \u00b7 ${unrouted} connections need more diagram space; inspect role records`;
     const highlight=id=>{
       const nodes=new Set(id?[id]:[]),edges=new Set();
       if(id){let current=id;const seen=new Set();
@@ -426,7 +426,7 @@ async function startScopedWorkspace() {
     }
     graph.append(canvas,detail);toggle.addEventListener('change',()=>{all=toggle.checked;preferences.all=all;highlight(selected);});highlight(selected);
     const legend=text('div','', 'tree-legend');legend.setAttribute('aria-label','Connection legend');
-    for(const [style,label]of [['reporting','Reports to ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· solid green arrow points to the manager'],['workflow','Workflow / escalation ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· dashed amber arrow points to the destination'],['context','Organization context ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· dotted line connects the role to its organization']]){
+    for(const [style,label]of [['reporting','Reports to \u00b7 solid green arrow points to the manager'],['workflow','Workflow / escalation \u00b7 dashed amber arrow points to the destination'],['context','Organization context \u00b7 dotted line connects the role to its organization']]){
       const item=text('span','', 'tree-key'),sample=svg('svg',{width:44,height:14,'aria-hidden':'true'});
       const path=svg('path',{d:'M 0 7 H 40',class:'tree-edge '+style});if(style!=='context')path.setAttribute('marker-end','url(#tree-arrow)');sample.append(path);item.append(sample,text('span',label));legend.append(item);
     }
@@ -445,7 +445,7 @@ async function startScopedWorkspace() {
     const nodes=model.resources.filter(row=>!selected||row.kind===selected.kind).slice(0,60), ids=new Set(nodes.map(row=>row.id));
     const edges=model.relations.filter(row=>ids.has(row.data.source)&&ids.has(row.data.target));
     $('graph-panel').hidden=!nodes.length;
-    $('graph-caption').textContent=`${nodes.length} visible records ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${edges.length} connections`+(model.resources.length>60?' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· graph limited to 60 records':'');
+    $('graph-caption').textContent=`${nodes.length} visible records \u00b7 ${edges.length} connections`+(model.resources.length>60?' \u00b7 graph limited to 60 records':'');
     if(!nodes.length)return;
     const ns='http://www.w3.org/2000/svg';
     const svg=(tag,attrs)=>{const node=document.createElementNS(ns,tag);for(const[key,value]of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
@@ -534,7 +534,7 @@ async function startScopedWorkspace() {
   }
   async function load() {
     if(closing)return;
-    const ticket=operation();$('status').textContent='Refreshing your workspaceÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';$('query').value='';
+    const ticket=operation();$('status').textContent='Refreshing your workspace\u2026';$('query').value='';
     try {const view=await api('/api/state',undefined,controller.signal);if(ticket!==epoch)return;model=new ScopedModel(view);render();await loadAssistant(ticket);
       try{const review=await api('/api/review',undefined,controller.signal);if(ticket===epoch&&review.resources?.length)$('review-open').hidden=false;}
       catch(error){if(error.status===401)failure(error,ticket);/* Read access does not imply review authority. */}}
@@ -555,7 +555,7 @@ async function startScopedWorkspace() {
   $('assistant-unfocus').addEventListener('click',()=>chat.setFocus(null));
   $('assistant-about').addEventListener('click',()=>{if(detailFocus&&chat.view){chat.setFocus(detailFocus);$('detail').close();$('assistant-input').focus();}});
   $('refresh').addEventListener('click',load);
-  $('logout').addEventListener('click',async()=>{if(closing)return;closing=true;const ticket=operation();$('query').value='';$('status').textContent='Closing your sessionÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';
+  $('logout').addEventListener('click',async()=>{if(closing)return;closing=true;const ticket=operation();$('query').value='';$('status').textContent='Closing your session\u2026';
     // Revocation must finish even if visibility changes or other reads are aborted.
     try{if(redemption)await redemption.catch(()=>{});
       await api('/api/logout',{});if(ticket===epoch)$('status').textContent='Logged out. Request a new temporary link to continue.';}
@@ -568,7 +568,7 @@ async function startScopedWorkspace() {
     $('review-category').replaceChildren(new Option('Choose a category',''));
     if(!row)return;
     for(const category of row.allowed_categories)$('review-category').append(new Option(category,category));
-    $('review-current').textContent=`Current: ${row.category} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${row.scope.id}`;
+    $('review-current').textContent=`Current: ${row.category} \u00b7 ${row.scope.id}`;
     $('review-content').textContent=JSON.stringify(row.data,null,2);
   }
   $('review-open').addEventListener('click',async()=>{
@@ -596,7 +596,7 @@ async function startScopedWorkspace() {
     }catch(error){if(reviewTicket===reviewEpoch)failure(error,ticket);}
   });
   $('search-form').addEventListener('submit',async event=>{event.preventDefault();if(closing)return;const query=$('query').value.trim();if(!query){await load();return;}
-    const ticket=operation();$('status').textContent='Searching all authorized informationÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';
+    const ticket=operation();$('status').textContent='Searching all authorized information\u2026';
     try{const result=await api('/api/search',{query},controller.signal);if(ticket!==epoch)return;
       model=ScopedModel.search(result);render(true);await loadAssistant(ticket);
       if(result.partial)$('status').textContent='Showing the first 100 authorized matches. Refine your search for more.';
