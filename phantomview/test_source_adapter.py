@@ -93,6 +93,16 @@ class SourceAdapterTests(unittest.TestCase):
         self.assertNotEqual(a['provenance']['source_sha256'], b['provenance']['source_sha256'])
         self.assertNotEqual(first['source_revision'], second['source_revision'])
 
+    def test_organization_link_fingerprints_ignore_only_existing_observation_clocks(self):
+        self.source['actors'][0]['role'] = 'executive'
+        diagnostic = self.source['actors'][0]['diagnostics']
+        diagnostic.update(checked_at='2026-10-19T10:00:00Z', checks=[{'age_minutes': 1, 'status': 'ok'}])
+        first = prepare(self.source, self.directory, organization_links=True)
+        diagnostic.update(checked_at='2026-10-19T10:01:00Z', checks=[{'age_minutes': 2, 'status': 'ok'}])
+        self.assertEqual(first, prepare(self.source, self.directory, organization_links=True))
+        diagnostic['checks'][0]['status'] = 'failed'
+        self.assertNotEqual(first, prepare(self.source, self.directory, organization_links=True))
+
     def test_unrendered_source_changes_still_invalidate_review_fingerprints(self):
         first = self.prepare()
         self.source['actors'][0]['knowledge'][0]['title'] = 'Changed source metadata'

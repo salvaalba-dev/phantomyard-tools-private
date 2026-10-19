@@ -211,11 +211,11 @@ def prepare(snapshot, directory, *, organization_links=False):
         for actor in snapshot.get('actors', []):
             if actor.get('org') == oid and eligible(actor) and isinstance(actor.get('role'), str):
                 link(f"{oid}:roles:{actor['role']}", f"{oid}:actors:{actor.get('id')}",
-                     'assignment', 'Assigned persona', actor)
+                     'assignment', 'Assigned persona', {'source_revision': source_revision('actors', actor)})
         for role in snapshot.get('roles', []):
             if role.get('org') == oid and eligible(role) and isinstance(role.get('department'), str):
                 link(f"{oid}:roles:{role.get('id')}", f"{oid}:departments:{role['department']}",
-                     'membership', 'Department', role)
+                     'membership', 'Department', {'source_revision': source_revision('roles', role)})
         for human, binding in directory.scope.policy['humans'].items():
             persona = binding.get('counterpart_persona')
             if persona:
