@@ -211,3 +211,33 @@ test('note details reject stale bytes, wrong identity and incomplete or trusted 
     {format:'html'},{excerpt_only:true},{content:null},{content:'x'.repeat(262145)}])
     assert.throws(()=>ScopedModel.detailText(row,{...note,...change}));
 });
+
+
+test('fitted diagrams keep every card and route within the measured panel at responsive widths',()=>{
+  for(const width of [280,320,580,736,1024,1328]){
+    const original=routingFixture(),tree=ScopedModel.fitTree(original,width),routes=ScopedModel.treeRoutes(tree);
+    assert.equal(tree.width,width);assert.equal(routes.size,19);assert.ok(tree.junctions.length>0);
+    for(const node of tree.nodes){const b={...tree.positions.get(node.id),...tree.sizes.get(node.id)};
+      assert.ok(b.x>=0&&b.x+b.w<=width);assert.ok(b.y>=0&&b.y+b.h<=tree.height);
+      for(const other of tree.nodes.filter(row=>row.id!==node.id)){const c={...tree.positions.get(other.id),...tree.sizes.get(other.id)};
+        assert.ok(b.x+b.w<=c.x||c.x+c.w<=b.x||b.y+b.h<=c.y||c.y+c.h<=b.y,'Overlapping cards');}
+    }
+    for(const [id,route]of routes){assert.ok(!route.unrouted,'Missing route '+id+' at '+width);assert.equal(route.overlap,0);
+      for(let i=1;i<route.points.length;i++){const a=route.points[i-1],b=route.points[i];assert.ok(a.x===b.x||a.y===b.y);
+        assert.ok(b.x>=0&&b.x<=width&&b.y>=0&&b.y<=tree.height);
+        for(const node of tree.nodes){const box={...tree.positions.get(node.id),...tree.sizes.get(node.id)};
+          const hit=a.x===b.x?a.x>box.x&&a.x<box.x+box.w&&Math.max(Math.min(a.y,b.y),box.y)<Math.min(Math.max(a.y,b.y),box.y+box.h):
+            a.y>box.y&&a.y<box.y+box.h&&Math.max(Math.min(a.x,b.x),box.x)<Math.min(Math.max(a.x,b.x),box.x+box.w);
+          assert.equal(hit,false,'Route crosses a card at '+width);}
+      }
+    }
+    assert.deepEqual(original.positions,routingFixture().positions,'Fitting must not mutate the source tree');
+  }
+});
+
+test('fitted peers wrap into rows and retain bounded cycle diagnostics',()=>{
+  const f=organizationFixture();for(let i=0;i<30;i++)f.view.resources.push({id:(100+i).toString(16).padStart(64,'0'),kind:'role',data:{title:'Peer '+i}});
+  const source=new ScopedModel(f.view).organizationTree(),tree=ScopedModel.fitTree(source,320);
+  assert.equal(tree.nodes.length,source.nodes.length);assert.ok(tree.height>source.height);
+  assert.throws(()=>ScopedModel.fitTree(source,NaN));assert.throws(()=>ScopedModel.fitTree(source,0));
+});

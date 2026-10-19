@@ -173,12 +173,36 @@ class ScopedModel {
       truncated:this.resources.filter(row=>row.kind==='role').length>roles.length||unlinked.length>unlinkedShown.length,
       incomplete:nodes.some(row=>row.issue)||nodes.some(row=>row.record.kind==='role'&&!row.personas.length)};
   }
+  static fitTree(tree, availableWidth) {
+    if(!Number.isFinite(availableWidth)||availableWidth<240)throw Error('Diagram width required');
+    const width=Math.floor(availableWidth),compact=width<580,gap=compact?14:20,columns=4;
+    const cardWidth=(width-32-gap*(columns-1))/columns,cardHeight=compact?82:120,rowGap=compact?82:80;
+    const organization=tree.nodes.find(node=>node.record.kind==='organization'),levels=new Map();
+    for(const node of tree.nodes.filter(node=>node!==organization)){
+      const level=tree.positions.get(node.id).y;if(!levels.has(level))levels.set(level,[]);levels.get(level).push(node);
+    }
+    const positions=new Map(),sizes=new Map();let y=32;
+    positions.set(organization.id,{x:16,y});sizes.set(organization.id,{w:Math.min(168,width*.27),h:compact?82:104});
+    for(const [,nodes]of [...levels].sort((a,b)=>a[0]-b[0])){
+      nodes.sort((a,b)=>tree.positions.get(a.id).x-tree.positions.get(b.id).x);
+      // Wrap peers before adding another reporting level; never scale text or overflow horizontally.
+      for(let start=0;start<nodes.length;start+=columns){const row=nodes.slice(start,start+columns);
+        if(start===0&&positions.size===1&&row.length>1)y+=cardHeight+rowGap;
+        for(const [i,node]of row.entries()){
+          const x=row.length===1?(width-cardWidth)/2:16+i*(cardWidth+gap);
+          positions.set(node.id,{x,y});sizes.set(node.id,{w:cardWidth,h:cardHeight});
+        }
+        y+=cardHeight+rowGap;
+      }
+    }
+    return {...tree,positions,sizes,width,height:y-rowGap+24,compact,fit:true,routing:null,junctions:[]};
+  }
   static treePath(tree,edge) {
     tree.routing ||= ScopedModel.treeRoutes(tree);
     return tree.routing.get(edge.id).path;
   }
   static treeRoutes(tree) {
-    const boxes=new Map(tree.nodes.map(node=>[node.id,{...tree.positions.get(node.id),w:240,h:node.record.kind==='organization'?104:160}]));
+    const boxes=new Map(tree.nodes.map(node=>[node.id,{...tree.positions.get(node.id),...(tree.sizes?.get(node.id)||{w:240,h:node.record.kind==='organization'?104:160})}]));
     const routes=new Map(),used=[],ports=new Map(),directions={top:[0,-1],right:[1,0],bottom:[0,1],left:[-1,0]};
     const compact=points=>{
       const result=[];for(const p of points){if(result.length&&result.at(-1).x===p.x&&result.at(-1).y===p.y)continue;
@@ -200,21 +224,35 @@ class ScopedModel {
     };
     const port=(id,side,fraction)=>{
       const box=boxes.get(id),count=ports.get(id+':'+side)||0,extent=['top','bottom'].includes(side)?box.w:box.h;
-      const shift=count===0?0:(count%2?1:-1)*Math.ceil(count/2)*12;
-      const along=fraction===undefined?Math.max(16,Math.min(extent-16,extent/2+shift)):extent*fraction;
+      const shift=count===0?0:(count%2?1:-1)*Math.ceil(count/2)*(tree.fit?8:12);
+      const along=fraction===undefined?Math.max(8,Math.min(extent-8,extent/2+shift)):extent*fraction;
       const p=side==='top'?{x:box.x+along,y:box.y}:side==='bottom'?{x:box.x+along,y:box.y+box.h}:
         side==='left'?{x:box.x,y:box.y+along}:{x:box.x+box.w,y:box.y+along};
-      return {p,stub:{x:p.x+directions[side][0]*14,y:p.y+directions[side][1]*14},side};
+      return {p,stub:{x:p.x+directions[side][0]*(tree.fit?8:14),y:p.y+directions[side][1]*(tree.fit?8:14)},side};
     };
     const bounds={left:Math.min(...[...boxes.values()].map(b=>b.x))-12,right:Math.max(...[...boxes.values()].map(b=>b.x+b.w))+16,
       top:16,bottom:Math.max(...[...boxes.values()].map(b=>b.y+b.h))+24};
     const ordered=[...tree.edges].sort((a,b)=>(a.type==='reports'?0:a.type==='context'?1:2)-(b.type==='reports'?0:b.type==='context'?1:2));
+    tree.junctions=[];
     for(const edge of ordered){
       const report=edge.type==='reports';
+      if(tree.fit&&report){
+        const a=boxes.get(edge.source),b=boxes.get(edge.target),peers=tree.edges.filter(row=>row.type==='reports'&&row.target===edge.target&&boxes.get(row.source).y===a.y);
+        const lane=(a.y+b.y+b.h)/2,ax=a.x+a.w/2,bx=b.x+b.w/2;
+        const points=compact([{x:ax,y:a.y},{x:ax,y:lane},{x:bx,y:lane},{x:bx,y:b.y+b.h}]),lines=segments(points);
+        // Only actual siblings share a reporting bus. Other flows keep independent paths.
+        if(a.y>b.y+b.h&&!lines.some(line=>used.some(previous=>previous.bus!==edge.target&&shared(line,previous)))&&!lines.some(line=>[...boxes].some(([id,box])=>hits(line,box,id===edge.source||id===edge.target?0:4)))){
+          const path='M '+points[0].x+' '+points[0].y+points.slice(1).map((p,i)=>p.x===points[i].x?' V '+p.y:' H '+p.x).join('');
+          routes.set(edge.id,{path,points,sourceSide:'top',targetSide:'bottom',overlap:0,bus:edge.target});used.push(...lines.map(line=>({...line,bus:edge.target})));
+          if(peers.length>1)for(const x of [ax,bx])if(!tree.junctions.some(j=>j.x===x&&j.y===lane))tree.junctions.push({x,y:lane});
+          continue;
+        }
+      }
       const siblings=tree.edges.filter(row=>row.type==='reports'&&row.target===edge.target).sort((l,r)=>boxes.get(l.source).x-boxes.get(r.source).x);
       const fraction=report?(siblings.findIndex(row=>row.id===edge.id)+1)/(siblings.length+1):undefined;
-      const starts=report?[port(edge.source,'top')]:Object.keys(directions).map(side=>port(edge.source,side));
-      const ends=report?[port(edge.target,'bottom',fraction)]:Object.keys(directions).map(side=>port(edge.target,side));
+      const candidates=id=>Object.keys(directions).flatMap(side=>(tree.fit?[undefined,.3,.7]:[undefined]).map(fraction=>port(id,side,fraction)));
+      const starts=report?[port(edge.source,'top')]:candidates(edge.source);
+      const ends=report?[port(edge.target,'bottom',fraction)]:candidates(edge.target);
       let best=null;
       for(const start of starts)for(const end of ends){
         const s=start.stub,t=end.stub,mx=(s.x+t.x)/2,my=(s.y+t.y)/2;
@@ -224,11 +262,11 @@ class ScopedModel {
         for(const turns of middle){
           const points=compact([start.p,s,...turns,t,end.p]);
           if(points.some(p=>p.x<2||p.y<2||p.x>tree.width-2||p.y>tree.height-2))continue;
-          const lines=segments(points);if(lines.some(line=>[...boxes].some(([id,box])=>hits(line,box,id===edge.source||id===edge.target?0:8))))continue;
+          const lines=segments(points);if(lines.some(line=>[...boxes].some(([id,box])=>hits(line,box,id===edge.source||id===edge.target?0:(tree.fit?4:8)))))continue;
           const length=lines.reduce((sum,line)=>sum+Math.abs(line.a.x-line.b.x)+Math.abs(line.a.y-line.b.y),0);
           const overlap=lines.reduce((sum,line)=>sum+used.filter(previous=>shared(line,previous)).length,0);
           const intersections=lines.reduce((sum,line)=>sum+used.filter(previous=>crosses(line,previous)).length,0);
-          const score=length+(points.length-2)*18+overlap*100000+intersections*80;
+          const score=length+(points.length-2)*18+overlap*100000+intersections*(tree.fit?160:80);
           if(!best||score<best.score)best={points,lines,score,start,end,overlap};
         }
       }
@@ -256,6 +294,7 @@ class ScopedModel {
 async function startScopedWorkspace() {
   const $ = id => document.getElementById(id);
   const text = (tag,value,className) => {const node=document.createElement(tag);node.textContent=value;if(className)node.className=className;return node;};
+  let treeObserver=null;
   let model=null, section='', epoch=0, controller=null, detailEpoch=0, redemption=null, closing=false, reviewContext=null, proposalId=null, reviewEpoch=0, detailFocus=null;
   const chat=new ScopedChat({
     request:async(method,path,body)=>{
@@ -265,17 +304,17 @@ async function startScopedWorkspace() {
     },
     onInvalid:()=>failure(Error('Current scoped session required'),epoch),
     render:state=>{
-      const labels={unavailable:'Not configured for this session.',ready:'How can I help with your workspace?',submitting:'Submitting your consultation…',
-        queued:'Queued for your persona…',running:'Your persona is reviewing the evidence…',complete:'Answer based on selected authorized evidence.',
+      const labels={unavailable:'Not configured for this session.',ready:'How can I help with your workspace?',submitting:'Submitting your consultationÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',
+        queued:'Queued for your personaÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',running:'Your persona is reviewing the evidenceÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦',complete:'Answer based on selected authorized evidence.',
         held:'Screening held this request. No answer was released.',failed:'The consultation could not finish.',cancelled:'Cleared. Cancellation requested.',
         limited:'Consultation limit reached. Retry later.',error:'Connection interrupted. Retry the same request or cancel.'};
       if(state.mode==='persona-conversation'){
         labels.ready='Ask your existing persona. Its native knowledge and tools apply.';
-        labels.running='Your persona is answering through PhantomBot…';
+        labels.running='Your persona is answering through PhantomBotÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';
         labels.complete='Reply from your existing persona; selected viewer context is supplemental.';
       }
       const note=document.querySelector('.session-note');
-      if(note)note.textContent=state.mode==='persona-conversation'?'Read-only viewer · Native persona permissions apply':'Private · Read-only session';
+      if(note)note.textContent=state.mode==='persona-conversation'?'Read-only viewer ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Native persona permissions apply':'Private ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Read-only session';
       $('assistant-status').textContent=labels[state.status]||labels.unavailable;
       $('assistant-persona').textContent=state.persona;$('assistant-answer').textContent=state.text;$('assistant-answer').hidden=!state.text;
       $('assistant-question').textContent=state.question;$('assistant-question').hidden=!state.question;
@@ -293,6 +332,7 @@ async function startScopedWorkspace() {
     $('review-confirm').checked=false;if($('review-dialog').open)$('review-dialog').close();
   }
   function clear() {
+    treeObserver?.disconnect();treeObserver=null;
     chat.reset();detailFocus=null;$('assistant-about').hidden=true;
     model=null;section='';detailEpoch++;$('navigation').replaceChildren();$('records').replaceChildren();$('stats').replaceChildren();
     $('graph').replaceChildren();$('graph-panel').hidden=true;$('organization').textContent='';$('scope-label').textContent='Session required';
@@ -317,7 +357,7 @@ async function startScopedWorkspace() {
     const ticket=epoch, detailTicket=++detailEpoch;
     // Remove old contents before any new read; never show a cached fallback.
     detailFocus=null;$('assistant-about').hidden=true;
-    $('detail-content').textContent='Loading current record…';$('detail-title').textContent='Record';$('detail').showModal();
+    $('detail-content').textContent='Loading current recordÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';$('detail-title').textContent='Record';$('detail').showModal();
     api(ScopedModel.detailPath(row),undefined,controller?.signal).then(current=>{
       if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
       $('detail-content').textContent=ScopedModel.detailText(row,current);
@@ -326,23 +366,30 @@ async function startScopedWorkspace() {
       detailFocus={id:current.id,title};$('assistant-about').hidden=!chat.view;
     }).catch(error=>failure(error,ticket));
   }
-  function renderOrganizationTree(tree) {
+  function renderOrganizationTree(sourceTree, observe=true, preferences={}) {
+    $('graph-panel').hidden=false;
+    const graphWidth=$('graph').clientWidth;if(graphWidth<240)return;
+    const tree=ScopedModel.fitTree(sourceTree,graphWidth);
     const graph=$('graph');graph.replaceChildren();$('graph-panel').hidden=false;$('graph-title').textContent='Organization tree';
-    $('graph-caption').textContent=`Visible reporting levels · ${tree.unlinked} unlinked personas`+(tree.truncated?' · diagram limited to 60 cards':'');
-    const canvas=text('div','', 'organization-tree');canvas.style.width=tree.width+'px';canvas.style.height=tree.height+'px';
+    $('graph-caption').textContent=`Visible reporting levels ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${tree.unlinked} unlinked personas`+(tree.truncated?' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· diagram limited to 60 cards':'');
+    const canvas=text('div','', 'organization-tree'+(tree.compact?' tree-compact':''));canvas.style.width=tree.width+'px';canvas.style.height=tree.height+'px';
     const ns='http://www.w3.org/2000/svg',svg=(tag,attrs)=>{const element=document.createElementNS(ns,tag);for(const[key,value]of Object.entries(attrs))element.setAttribute(key,String(value));return element;};
     const lines=svg('svg',{width:tree.width,height:tree.height,viewBox:`0 0 ${tree.width} ${tree.height}`,'aria-label':'Reporting and workflow connections'});
     const defs=svg('defs',{}),marker=svg('marker',{id:'tree-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'});
     marker.append(svg('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'context-stroke'}));defs.append(marker);lines.append(defs);canvas.append(lines);
     const paths=new Map(),cards=new Map();tree.routing ||= ScopedModel.treeRoutes(tree);
+    let selected=preferences.selected||[...tree.nodes].filter(node=>node.record.kind!=='organization').sort((a,b)=>tree.positions.get(a.id).y-tree.positions.get(b.id).y)[0]?.id,all=!!preferences.all;
+    const controls=text('label','', 'tree-controls'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=all;controls.append(toggle,text('span','All workflows'));graph.append(controls);
+    const detail=text('div','', 'tree-detail');detail.setAttribute('aria-live','polite');
     for(const edge of tree.edges){const workflow=edge.type==='escalation';
       const path=svg('path',{d:ScopedModel.treePath(tree,edge),
         class:'tree-edge '+(workflow?'workflow':edge.type==='context'?'context':'reporting')});
       if(edge.type!=='context')path.setAttribute('marker-end','url(#tree-arrow)');
       const title=svg('title',{});title.textContent=edge.label||edge.type;path.append(title);lines.append(path);paths.set(edge.id,path);
     }
+    for(const point of tree.junctions)lines.append(svg('circle',{cx:point.x,cy:point.y,r:3,class:'tree-junction'}));
     const unrouted=[...tree.routing.values()].filter(route=>route.unrouted).length;
-    if(unrouted)$('graph-caption').textContent+=` · ${unrouted} connections need more diagram space; inspect role records`;
+    if(unrouted)$('graph-caption').textContent+=` ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${unrouted} connections need more diagram space; inspect role records`;
     const highlight=id=>{
       const nodes=new Set(id?[id]:[]),edges=new Set();
       if(id){let current=id;const seen=new Set();
@@ -352,11 +399,15 @@ async function startScopedWorkspace() {
         for(const edge of tree.edges)if(edge.type==='escalation'&&(edge.source===id||edge.target===id)){edges.add(edge.id);nodes.add(edge.source);nodes.add(edge.target);}
       }
       for(const[key,card]of cards){card.classList.toggle('lit',nodes.has(key));card.classList.toggle('dim',!!id&&!nodes.has(key));}
-      for(const[key,path]of paths){path.classList.toggle('lit',edges.has(key));path.classList.toggle('dim',!!id&&!edges.has(key));}
+      for(const[key,path]of paths){path.classList.toggle('lit',edges.has(key));path.classList.toggle('dim',!!id&&!edges.has(key));
+        path.style.display=!all&&tree.edges.find(edge=>edge.id===key).type==='escalation'&&!edges.has(key)?'none':'';}
+      const node=tree.nodes.find(row=>row.id===(id||selected));detail.replaceChildren();
+      if(node){for(const row of [...node.personas,...node.humans,...(node.record.kind==='role'?[node.record]:[]),...node.departments])detail.append(link(row,'tree-detail-link'));}
+    
     };
     const link=(row,className)=>{const button=text('button',model.title(row),className);button.type='button';button.title=model.title(row);button.addEventListener('click',()=>showDetails(row));return button;};
     for(const node of tree.nodes){const point=tree.positions.get(node.id),card=text('article','', 'tree-card'+(node.record.kind==='organization'?' tree-root':''));
-      card.style.left=point.x+'px';card.style.top=point.y+'px';
+      card.style.left=point.x+'px';card.style.top=point.y+'px';card.style.width=tree.sizes.get(node.id).w+'px';card.style.height=tree.sizes.get(node.id).h+'px';
       card.append(link(node.personas.length===1?node.personas[0]:node.record,'tree-primary'));
       if(node.record.kind==='organization'){card.append(text('p','Organization','tree-role'));}
       else{
@@ -368,19 +419,25 @@ async function startScopedWorkspace() {
         if(!node.departments.length)departments.append(text('span','No visible department','tree-muted'));card.append(departments);
         if(node.issue)card.append(text('p',node.issue,'tree-warning'));else if(!node.personas.length)card.append(text('p','Persona assignment not published','tree-warning'));
       }
-      card.addEventListener('mouseenter',()=>highlight(node.id));card.addEventListener('mouseleave',()=>highlight(null));
-      card.addEventListener('focusin',()=>highlight(node.id));card.addEventListener('focusout',event=>{if(!card.contains(event.relatedTarget))highlight(null);});
+      card.addEventListener('mouseenter',()=>highlight(node.id));card.addEventListener('mouseleave',()=>highlight(selected));
+      card.addEventListener('focusin',()=>highlight(node.id));card.addEventListener('focusout',event=>{if(!card.contains(event.relatedTarget))highlight(selected);});
+      card.addEventListener('click',()=>{selected=node.id;preferences.selected=selected;highlight(selected);});
       cards.set(node.id,card);canvas.append(card);
     }
-    graph.append(canvas);
+    graph.append(canvas,detail);toggle.addEventListener('change',()=>{all=toggle.checked;preferences.all=all;highlight(selected);});highlight(selected);
     const legend=text('div','', 'tree-legend');legend.setAttribute('aria-label','Connection legend');
-    for(const [style,label]of [['reporting','Reports to · solid green arrow points to the manager'],['workflow','Workflow / escalation · dashed amber arrow points to the destination'],['context','Organization context · dotted line connects the role to its organization']]){
+    for(const [style,label]of [['reporting','Reports to ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· solid green arrow points to the manager'],['workflow','Workflow / escalation ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· dashed amber arrow points to the destination'],['context','Organization context ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· dotted line connects the role to its organization']]){
       const item=text('span','', 'tree-key'),sample=svg('svg',{width:44,height:14,'aria-hidden':'true'});
       const path=svg('path',{d:'M 0 7 H 40',class:'tree-edge '+style});if(style!=='context')path.setAttribute('marker-end','url(#tree-arrow)');sample.append(path);item.append(sample,text('span',label));legend.append(item);
     }
+    legend.append(text('span','A dot is a shared reporting junction. Crossings without a dot are separate. Hover or focus a persona for its workflows and linked details.','tree-legend-note'));
     graph.append(legend);
+    if(observe){let width=graphWidth;treeObserver=new ResizeObserver(()=>{if(!graph.querySelector('.organization-tree')||!model){treeObserver?.disconnect();return;}
+      if(Math.abs(graph.clientWidth-width)>1){width=graph.clientWidth;renderOrganizationTree(sourceTree,false,preferences);}});treeObserver.observe(graph);}
+
   }
   function renderGraph() {
+    treeObserver?.disconnect();treeObserver=null;
     if(!section){const tree=model.organizationTree();if(tree){renderOrganizationTree(tree);return;}}
     $('graph-title').textContent='Relationships';
     const graph=$('graph');graph.replaceChildren();
@@ -388,7 +445,7 @@ async function startScopedWorkspace() {
     const nodes=model.resources.filter(row=>!selected||row.kind===selected.kind).slice(0,60), ids=new Set(nodes.map(row=>row.id));
     const edges=model.relations.filter(row=>ids.has(row.data.source)&&ids.has(row.data.target));
     $('graph-panel').hidden=!nodes.length;
-    $('graph-caption').textContent=`${nodes.length} visible records · ${edges.length} connections`+(model.resources.length>60?' · graph limited to 60 records':'');
+    $('graph-caption').textContent=`${nodes.length} visible records ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${edges.length} connections`+(model.resources.length>60?' ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· graph limited to 60 records':'');
     if(!nodes.length)return;
     const ns='http://www.w3.org/2000/svg';
     const svg=(tag,attrs)=>{const node=document.createElementNS(ns,tag);for(const[key,value]of Object.entries(attrs))node.setAttribute(key,String(value));return node;};
@@ -471,13 +528,13 @@ async function startScopedWorkspace() {
       if(selected?.view==='document')card.append(text('pre',JSON.stringify(row.data,null,2),'record-preview'));
     }
     if(!records.childElementCount)records.append(text('p','No records are available in this view.','muted'));
-    if(search){$('graph-panel').hidden=true;$('graph').replaceChildren();}else renderGraph();
+    if(search){treeObserver?.disconnect();treeObserver=null;$('graph-panel').hidden=true;$('graph').replaceChildren();}else renderGraph();
     $('status').textContent=search?'Results cover all information available to this session.':'Showing only information available to this session.';
     $('records-title').textContent=search?'Search results':selected?selected.label:'Available records';
   }
   async function load() {
     if(closing)return;
-    const ticket=operation();$('status').textContent='Refreshing your workspace…';$('query').value='';
+    const ticket=operation();$('status').textContent='Refreshing your workspaceÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';$('query').value='';
     try {const view=await api('/api/state',undefined,controller.signal);if(ticket!==epoch)return;model=new ScopedModel(view);render();await loadAssistant(ticket);
       try{const review=await api('/api/review',undefined,controller.signal);if(ticket===epoch&&review.resources?.length)$('review-open').hidden=false;}
       catch(error){if(error.status===401)failure(error,ticket);/* Read access does not imply review authority. */}}
@@ -498,7 +555,7 @@ async function startScopedWorkspace() {
   $('assistant-unfocus').addEventListener('click',()=>chat.setFocus(null));
   $('assistant-about').addEventListener('click',()=>{if(detailFocus&&chat.view){chat.setFocus(detailFocus);$('detail').close();$('assistant-input').focus();}});
   $('refresh').addEventListener('click',load);
-  $('logout').addEventListener('click',async()=>{if(closing)return;closing=true;const ticket=operation();$('query').value='';$('status').textContent='Closing your session…';
+  $('logout').addEventListener('click',async()=>{if(closing)return;closing=true;const ticket=operation();$('query').value='';$('status').textContent='Closing your sessionÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';
     // Revocation must finish even if visibility changes or other reads are aborted.
     try{if(redemption)await redemption.catch(()=>{});
       await api('/api/logout',{});if(ticket===epoch)$('status').textContent='Logged out. Request a new temporary link to continue.';}
@@ -511,7 +568,7 @@ async function startScopedWorkspace() {
     $('review-category').replaceChildren(new Option('Choose a category',''));
     if(!row)return;
     for(const category of row.allowed_categories)$('review-category').append(new Option(category,category));
-    $('review-current').textContent=`Current: ${row.category} · ${row.scope.id}`;
+    $('review-current').textContent=`Current: ${row.category} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· ${row.scope.id}`;
     $('review-content').textContent=JSON.stringify(row.data,null,2);
   }
   $('review-open').addEventListener('click',async()=>{
@@ -539,7 +596,7 @@ async function startScopedWorkspace() {
     }catch(error){if(reviewTicket===reviewEpoch)failure(error,ticket);}
   });
   $('search-form').addEventListener('submit',async event=>{event.preventDefault();if(closing)return;const query=$('query').value.trim();if(!query){await load();return;}
-    const ticket=operation();$('status').textContent='Searching all authorized information…';
+    const ticket=operation();$('status').textContent='Searching all authorized informationÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦';
     try{const result=await api('/api/search',{query},controller.signal);if(ticket!==epoch)return;
       model=ScopedModel.search(result);render(true);await loadAssistant(ticket);
       if(result.partial)$('status').textContent='Showing the first 100 authorized matches. Refine your search for more.';

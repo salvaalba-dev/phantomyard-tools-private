@@ -133,3 +133,24 @@ Node behavior tests cover project-only menus, visible counts, strict schema chec
 relationship-only search and cycle-safe directed graph highlighting. Browser tests
 use synthetic scoped data and verify details, cross-section search, highlighted
 flows, unavailable-source clearing and logout revocation.
+
+
+### Fit-to-panel organization diagram
+
+The organization tree measures its panel width and arranges compact cards in up to
+four columns, wrapping larger reporting levels into additional rows. It preserves
+the published reporting hierarchy and does not change records or authorization.
+The organization remains a linked context card at the upper left. A resize rebuilds
+coordinates rather than shrinking a fixed-width drawing or requiring horizontal
+scrolling. Compact cards retain linked personas, roles and department badges;
+full linked counterpart and department details appear below the diagram on hover
+or keyboard focus. Narrow layouts move secondary card details into that row.
+
+Solid reporting branches may share a bus only for the same actual manager. Dots
+mark those real junctions. Workflow routes remain independent, use right-angle
+turns, avoid card interiors and penalize crossings and shared segments. Crossings
+without a dot do not imply a relationship. Dense cases that cannot be routed
+safely retain the visible missing-route diagnostic and linked source records.
+By default the selected persona's workflows are shown; the All workflows checkbox
+reveals the complete visible workflow set. Selection and that preference survive
+panel resizing. All data still comes from the server-authorized projection.
