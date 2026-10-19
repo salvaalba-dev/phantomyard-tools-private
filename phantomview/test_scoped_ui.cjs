@@ -13,7 +13,8 @@ function organizationFixture(){
 }
 test('organization levels follow reporting links and cards join only visible explicit assignments',()=>{
   const f=organizationFixture();f.edge(f.chief,f.staff,'escalation');const tree=new ScopedModel(f.view).organizationTree();
-  assert.ok(tree.positions.get(f.org.id).y<tree.positions.get(f.chief.id).y);
+  assert.equal(tree.positions.get(f.org.id).y,tree.positions.get(f.chief.id).y);
+  assert.ok(tree.positions.get(f.org.id).x+240<tree.positions.get(f.chief.id).x);
   assert.ok(tree.positions.get(f.chief.id).y<tree.positions.get(f.manager.id).y);
   assert.ok(tree.positions.get(f.manager.id).y<tree.positions.get(f.staff.id).y);
   const card=tree.nodes.find(row=>row.id===f.staff.id);assert.equal(card.personas[0].id,f.persona.id);
@@ -25,6 +26,29 @@ test('missing assignments never infer placement or counterparts from names or ra
   const tree=new ScopedModel(f.view).organizationTree(),card=tree.nodes.find(row=>row.id===f.persona.id);
   assert.equal(tree.unlinked,1);assert.equal(card.humans.length,0);assert.equal(card.departments.length,0);
   assert.ok(card.issue.includes('not published'));assert.ok(!tree.edges.some(row=>row.source===f.persona.id||row.target===f.persona.id));
+});
+
+test('organization tree preserves context links and uses bounded orthogonal connector paths',()=>{
+  const f=organizationFixture();f.edge(f.chief,f.staff,'escalation');f.edge(f.staff,f.manager,'escalation');
+  const tree=new ScopedModel(f.view).organizationTree();
+  assert.ok(tree.edges.some(edge=>edge.type==='context'&&edge.source===f.chief.id&&edge.target===f.org.id));
+  for(const edge of tree.edges){
+    const path=ScopedModel.treePath(tree,edge);assert.match(path,/^M [\d.]+ [\d.]+ [HV]/);assert.doesNotMatch(path,/[CQLASTZ]/i);
+    const values=path.match(/\d+(?:\.\d+)?/g).map(Number);assert.ok(values.every(Number.isFinite));
+    assert.ok(!path.includes('-'));assert.ok(Math.max(...values)<=Math.max(tree.width,tree.height));
+    if(edge.type==='escalation'&&tree.positions.get(edge.source).y!==tree.positions.get(edge.target).y){
+      const outside=Number(path.match(/ H ([\d.]+)/)[1]);
+      assert.ok(tree.nodes.every(node=>tree.positions.get(node.id).x+240<outside));
+    }
+  }
+});
+
+test('same-level workflow connectors stay in the row gap and retain direction',()=>{
+  const f=organizationFixture();f.view.relations.splice(0,f.view.relations.length,...f.view.relations.filter(edge=>edge.data.type!=='reports'));f.edge(f.manager,f.staff,'escalation');
+  const tree=new ScopedModel(f.view).organizationTree(),edge=tree.edges.find(edge=>edge.type==='escalation');
+  const a=tree.positions.get(edge.source),b=tree.positions.get(edge.target);assert.equal(a.y,b.y);
+  const path=ScopedModel.treePath(tree,edge);assert.match(path,new RegExp('^M '+(a.x+120)+' '+(a.y+160)+' V '));
+  assert.ok(path.endsWith('V '+(b.y+160)));assert.ok(!path.includes(' C '));
 });
 test('reporting cycles and multiple managers stay bounded and are marked for review',()=>{
   const f=organizationFixture();f.edge(f.chief,f.staff,'reports');let tree=new ScopedModel(f.view).organizationTree();

@@ -1,5 +1,15 @@
 # Generic scoped workspace
 
+The organization diagram uses right-angle connectors. The organization label
+stays inside the upper-left of the diagram at the first reporting level and
+remains clickable and connected. Solid green arrows point from a role to its
+manager; dashed amber arrows indicate workflow or escalation destinations;
+dotted lines indicate organization context without inventing a reporting parent.
+The visible legend includes line samples and direction meanings. Workflow routes
+use row gaps and an outer lane to avoid crossing cards. Hover and keyboard focus
+continue to highlight related cards and connections. This changes presentation
+only; reporting data, session authorization and record-detail routes are unchanged.
+
 The overview groups available records into aligned Persona, Human and Role
 columns. Each persona row uses only published counterpart and role assignment
 relationships; every linked name opens its current authorized record. Missing

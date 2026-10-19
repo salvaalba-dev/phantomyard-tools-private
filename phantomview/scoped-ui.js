@@ -154,22 +154,38 @@ class ScopedModel {
     const ordered=ids=>ids.sort((a,b)=>this.title(byId.get(a).record).localeCompare(this.title(byId.get(b).record)));
     for(const ids of children.values())ordered(ids);
     const units=id=>Math.max(1,children.get(id).reduce((sum,key)=>sum+units(key),0));
-    const width=Math.max(780,units(organization.id)*270),positions=new Map();let depth=0;
-    const place=(id,left,span,level)=>{positions.set(id,{x:left+span/2-120,y:24+level*210});depth=Math.max(depth,level);
+    const forestWidth=Math.max(780,units(organization.id)*270),positions=new Map();let depth=0;
+    const place=(id,left,span,level)=>{positions.set(id,{x:left+span/2-120,y:64+level*230});depth=Math.max(depth,level);
       let offset=left;for(const child of children.get(id)){const size=span*units(child)/units(id);place(child,offset,size,level+1);offset+=size;}};
-    place(organization.id,0,width,0);
+    positions.set(organization.id,{x:16,y:64});
+    let offset=280;for(const child of children.get(organization.id)){const span=forestWidth*units(child)/units(organization.id);place(child,offset,span,0);offset+=span;}
     const assigned=new Set(nodes.flatMap(row=>row.personas.map(persona=>persona.id)));
     const unlinked=this.resources.filter(row=>row.kind==='persona'&&!assigned.has(row.id));
-    const available=Math.max(0,60-nodes.length),unlinkedShown=unlinked.slice(0,available),unlinkedY=24+(depth+1)*210;
+    const available=Math.max(0,60-nodes.length),unlinkedShown=unlinked.slice(0,available),unlinkedY=64+(depth+1)*230;
     unlinkedShown.forEach((row,index)=>{const node=card(row,[row]);node.issue='Role assignment not published';nodes.push(node);
-      positions.set(row.id,{x:Math.floor(index%Math.max(1,Math.floor(width/270)))*270+15,y:unlinkedY+Math.floor(index/Math.max(1,Math.floor(width/270)))*210});});
+      positions.set(row.id,{x:280+Math.floor(index%Math.max(1,Math.floor(forestWidth/270)))*270+15,y:unlinkedY+Math.floor(index/Math.max(1,Math.floor(forestWidth/270)))*230});});
     const edges=roles.map(row=>{const boss=parent.get(row.id);const source=reporting.find(edge=>edge.data.source===row.id&&edge.data.target===boss);
       return {id:source?.id||'context:'+row.id,source:row.id,target:boss||organization.id,type:boss?'reports':'context',label:boss?'Reports to':'Organization context; no visible reporting parent'};});
     for(const edge of this.relations)if(edge.data.type==='escalation'&&roleIds.has(edge.data.source)&&roleIds.has(edge.data.target))edges.push({id:edge.id,...edge.data});
+    const workflowCount=edges.filter(edge=>edge.type==='escalation').length,width=forestWidth+280+40+workflowCount*12;
     const bottom=Math.max(...[...positions.values()].map(point=>point.y))+190;
-    return {nodes,edges,positions,width,height:bottom,unlinked:unlinked.length,
+    return {nodes,edges,positions,width,height:bottom+40,unlinked:unlinked.length,
       truncated:this.resources.filter(row=>row.kind==='role').length>roles.length||unlinked.length>unlinkedShown.length,
       incomplete:nodes.some(row=>row.issue)||nodes.some(row=>row.record.kind==='role'&&!row.personas.length)};
+  }
+  static treePath(tree,edge) {
+    const a=tree.positions.get(edge.source),b=tree.positions.get(edge.target),ax=a.x+120,bx=b.x+120;
+    if(edge.type==='context')return `M ${ax} ${a.y} V 16 H ${bx} V ${b.y}`;
+    if(edge.type!=='escalation'){
+      const lane=(a.y+b.y+160)/2;
+      return `M ${ax} ${a.y} V ${lane} H ${bx} V ${b.y+160}`;
+    }
+    const workflows=tree.edges.filter(row=>row.type==='escalation'),index=workflows.findIndex(row=>row.id===edge.id);
+    // Route across row gaps and outside every card; never through a neighboring card.
+    const laneOffset=14+(index%4)*10;
+    if(a.y===b.y){const lane=a.y+160+laneOffset;return `M ${ax} ${a.y+160} V ${lane} H ${bx} V ${b.y+160}`;}
+    const outside=tree.width-20-index*12;
+    return `M ${ax} ${a.y} V ${a.y-laneOffset} H ${outside} V ${b.y-laneOffset} H ${bx} V ${b.y}`;
   }
   impact(id, limit=60, kind=null) {
     const allowed = new Set(this.resources.filter(row=>!kind||row.kind===kind).slice(0,limit).map(row => row.id));
@@ -266,9 +282,8 @@ async function startScopedWorkspace() {
     const defs=svg('defs',{}),marker=svg('marker',{id:'tree-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'});
     marker.append(svg('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'context-stroke'}));defs.append(marker);lines.append(defs);canvas.append(lines);
     const paths=new Map(),cards=new Map();
-    for(const edge of tree.edges){const a=tree.positions.get(edge.source),b=tree.positions.get(edge.target),workflow=edge.type==='escalation';
-      const path=svg('path',{d:workflow?`M ${a.x+240} ${a.y+80} C ${a.x+285} ${a.y+80},${b.x-45} ${b.y+80},${b.x} ${b.y+80}`:
-        `M ${a.x+120} ${a.y} C ${a.x+120} ${(a.y+b.y+160)/2},${b.x+120} ${(a.y+b.y+160)/2},${b.x+120} ${b.y+160}`,
+    for(const edge of tree.edges){const workflow=edge.type==='escalation';
+      const path=svg('path',{d:ScopedModel.treePath(tree,edge),
         class:'tree-edge '+(workflow?'workflow':edge.type==='context'?'context':'reporting')});
       if(edge.type!=='context')path.setAttribute('marker-end','url(#tree-arrow)');
       const title=svg('title',{});title.textContent=edge.label||edge.type;path.append(title);lines.append(path);paths.set(edge.id,path);
@@ -288,7 +303,7 @@ async function startScopedWorkspace() {
     for(const node of tree.nodes){const point=tree.positions.get(node.id),card=text('article','', 'tree-card'+(node.record.kind==='organization'?' tree-root':''));
       card.style.left=point.x+'px';card.style.top=point.y+'px';
       card.append(link(node.personas.length===1?node.personas[0]:node.record,'tree-primary'));
-      if(node.record.kind==='organization'){card.append(text('p','Organization','tree-role'),text('p','Declared reporting structure','tree-muted'));}
+      if(node.record.kind==='organization'){card.append(text('p','Organization','tree-role'));}
       else{
         if(node.record.kind==='role')card.append(link(node.record,'tree-role'));
         if(node.personas.length>1){const names=text('div','', 'tree-personas');for(const persona of node.personas.slice(0,3))names.append(link(persona,'tree-persona'));card.append(names);}
@@ -303,7 +318,12 @@ async function startScopedWorkspace() {
       cards.set(node.id,card);canvas.append(card);
     }
     graph.append(canvas);
-    const legend=text('p','Solid: reporting · Dashed amber: workflow/escalation · Dotted: organization context. Only published, authorized links are shown.','tree-legend');graph.append(legend);
+    const legend=text('div','', 'tree-legend');legend.setAttribute('aria-label','Connection legend');
+    for(const [style,label]of [['reporting','Reports to · solid green arrow points to the manager'],['workflow','Workflow / escalation · dashed amber arrow points to the destination'],['context','Organization context · dotted line connects the role to its organization']]){
+      const item=text('span','', 'tree-key'),sample=svg('svg',{width:44,height:14,'aria-hidden':'true'});
+      const path=svg('path',{d:'M 0 7 H 40',class:'tree-edge '+style});if(style!=='context')path.setAttribute('marker-end','url(#tree-arrow)');sample.append(path);item.append(sample,text('span',label));legend.append(item);
+    }
+    graph.append(legend);
   }
   function renderGraph() {
     if(!section){const tree=model.organizationTree();if(tree){renderOrganizationTree(tree);return;}}
