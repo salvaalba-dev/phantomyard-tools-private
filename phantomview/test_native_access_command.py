@@ -39,7 +39,8 @@ class NativeAccessCommandTests(unittest.TestCase):
                                               'principal_authenticated': True, 'scope_id': 'river-project'})
         self.deliver.assert_called_once_with('telegram', '101', self.link)
         self.assertNotIn(self.link, repr(outcome))
-        self.assertNotIn('101', repr(self.message))
+        # The opaque object address can randomly contain the sender digits.
+        self.assertIs(type(self.message).__repr__, object.__repr__)
 
     def test_other_messages_are_the_only_model_fallthrough(self):
         for text in ('Hello', 'Please send a link', '/status', '/phantomview-other'):
