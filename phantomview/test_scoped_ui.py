@@ -8,7 +8,7 @@ import unittest
 class ScopedUITests(unittest.TestCase):
     @unittest.skipUnless(shutil.which('node'), 'Node.js is required for scoped UI behavior checks')
     def test_visible_only_menus_graphs_and_search_models(self):
-        subprocess.run([shutil.which('node'), '--test', 'test_scoped_ui.cjs'], capture_output=True,
+        subprocess.run([shutil.which('node'), '--test', 'test_scoped_ui.cjs', 'test_profile_ui.cjs'], capture_output=True,
                        text=True, timeout=15, check=True, cwd=Path(__file__).resolve().parent)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js is required for scoped consultation UI checks')

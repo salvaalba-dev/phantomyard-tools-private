@@ -82,6 +82,50 @@ class SourceAdapterTests(unittest.TestCase):
                       'Hidden diagnostics', 'private-owner', 'Private setup', 'Private history'):
             self.assertNotIn(value, payloads)
 
+    def test_profile_metadata_requires_explicit_mode_and_fresh_unclassified_review(self):
+        ordinary = self.prepare()
+        enriched = prepare(self.source, self.directory, profile_fields=True)
+        persona = next(row for row in enriched['records'] if row['kind'] == 'persona')
+        self.assertEqual(persona['data']['contacts'], {'email': 'private@example.invalid'})
+        self.assertNotIn('private@example.invalid', json.dumps(ordinary['records']))
+        self.assertIs(enriched['profile_fields'], True)
+        for row in enriched['resources']:
+            self.assertIsNone(row['category'])
+            self.assertIsNone(row['secret'])
+        for forbidden in ('NEVER_COPY', 'Hidden KB title', '/private/', 'Private history'):
+            self.assertNotIn(forbidden, json.dumps(enriched['records']))
+
+    def test_profile_contacts_reject_unsafe_values_and_omit_human_login_identifiers(self):
+        self.source['actors'][0]['channels'] = {'website': 'https://user:password@example.invalid',
+            'email': 'person@example.invalid?bcc=other@example.invalid', 'npub': 'nsec1' + 'q' * 58,
+            'telegram_bot': '../private', 'password': 'NEVER_COPY'}
+        self.source['humans'] = [{'org': 'example', 'id': 'owner', 'name': 'Owner',
+                                  'email': 'human@example.invalid', 'telegram_user_id': 123456}]
+        enriched = prepare(self.source, self.directory, profile_fields=True)
+        payloads = json.dumps(enriched['records'])
+        for forbidden in ('user:password', 'bcc=', 'nsec1', '../private', 'NEVER_COPY', 'human@example.invalid', '123456'):
+            self.assertNotIn(forbidden, payloads)
+
+    def test_profile_legal_metadata_selects_institutional_fields_only(self):
+        self.source['organizations'][0]['legal'] = {'legal_name': 'Example Foundation', 'nif': 'EXAMPLE',
+            'founders': [{'name': 'Example Human', 'dni': 'NEVER_COPY'}],
+            'governing_body': [{'nie': 'NEVER_COPY'}], 'address': {'street': 'Private address'}}
+        enriched = prepare(self.source, self.directory, profile_fields=True)
+        org = next(row for row in enriched['records'] if row['kind'] == 'organization')
+        self.assertEqual(org['data']['legal']['nif'], 'EXAMPLE')
+        self.assertNotIn('NEVER_COPY', json.dumps(enriched['records']))
+        self.assertNotIn('Private address', json.dumps(enriched['records']))
+
+    def test_profile_mode_recomputes_exactly_and_rejects_ambiguous_flags(self):
+        from source_adapter import prepare_like
+        draft = prepare(self.source, self.directory, organization_links=True, profile_fields=True)
+        self.assertEqual(prepare_like(self.source, self.directory, draft), draft)
+        self.assertEqual(prepare_like(self.source, self.directory, self.prepare()), self.prepare())
+        with self.assertRaises(ValueError):
+            prepare_like(self.source, self.directory, draft | {'profile_fields': False})
+        with self.assertRaises(ValueError):
+            prepare(self.source, self.directory, profile_fields=1)
+
     def test_source_identity_is_stable_and_revision_changes_when_source_changes(self):
         first = self.prepare()
         self.source['actors'][0]['tools'].append('drive')

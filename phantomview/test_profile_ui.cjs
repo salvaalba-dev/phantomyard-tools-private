@@ -1,0 +1,48 @@
+/* Exercise the actual profile dialog functions with inert DOM and HTTP fixtures. */
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {ScopedModel}=require('./scoped-ui.js');
+class Element {
+  constructor(tag){this.tag=tag;this.children=[];this.events={};this.attrs={};this.open=false;this.hidden=false;this.textContent='';}
+  append(...children){this.children.push(...children);}
+  replaceChildren(...children){this.children=[];this.textContent='';this.append(...children);}
+  addEventListener(name,fn){this.events[name]=fn;}
+  showModal(){this.open=true;}
+}
+const id='a'.repeat(64),noteId='b'.repeat(64),hash='c'.repeat(64);
+function fixture(){return {schema_version:1,complete_corpus:false,organization:'example',scope_id:'example',
+  policy_revision:'1'.repeat(64),view_revision:'2'.repeat(64),
+  resources:[{id,kind:'persona',data:{id:'coordinator',title:'Coordinator',description:'<img src=x onerror=alert(1)>'}},
+    {id:noteId,kind:'knowledge',data:{title:'Role profile',actor:'example:actors:coordinator',source:'reviewed-knowledge',payload_sha256:hash}}],relations:[]};}
+function setup(request){
+  const source=fs.readFileSync(require.resolve('./scoped-ui.js'),'utf8'),begin=source.indexOf('  function renderProfile('),end=source.indexOf('  function renderOrganizationTree(');
+  assert.ok(begin>0&&end>begin);
+  const elements=new Map(),failures=[],$=key=>{if(!elements.has(key))elements.set(key,new Element('div'));return elements.get(key);};
+  const text=(tag,value,cls)=>{const e=new Element(tag);e.textContent=value;e.className=cls;return e;};
+  const make=new Function('ScopedModel','text','$','api','failure',`let epoch=0,detailEpoch=0,profileReadEpoch=0,detailFocus=null;
+    const controller={signal:null},chat={view:true};${source.slice(begin,end)}
+    return {showDetails,close:()=>{detailEpoch++;profileReadEpoch++;$('detail').open=false;$('detail-content').replaceChildren();}};`);
+  const ui=make(ScopedModel,text,$,request,error=>failures.push(error.message));return {ui,$,failures};
+}
+function flatten(node){return [node,...node.children.flatMap(flatten)];}
+test('profile dialog renders plain text, preserves one dialog and reads documents in place',async()=>{
+  const view=fixture(),calls=[],f=setup(async path=>{calls.push(path);if(path==='/api/state')return view;
+    if(path==='/api/resource/'+id)return view.resources[0];
+    return {id:noteId,title:'Role profile',actor:'example:actors:coordinator',payload_sha256:hash,trust:'untrusted',format:'markdown',excerpt_only:false,content:'<script>doNotExecute()</script>'};});
+  await f.ui.showDetails(view.resources[0]);assert.equal(f.$('detail').open,true);assert.deepEqual(f.failures,[]);
+  const nodes=flatten(f.$('detail-content'));assert.ok(nodes.some(n=>n.textContent==='<img src=x onerror=alert(1)>'));
+  assert.ok(!nodes.some(n=>n.tag==='img'||n.tag==='script'));
+  const document=nodes.find(n=>n.className==='profile-link profile-document');assert.ok(document);
+  await document.events.click();const after=flatten(f.$('detail-content'));
+  assert.ok(after.some(n=>n.tag==='pre'&&n.textContent==='<script>doNotExecute()</script>'));
+  assert.equal(f.$('detail').open,true);assert.ok(calls.includes('/api/reviewed-knowledge/'+noteId));
+});
+test('a changed authorized view prevents rendering and stale requests cannot repopulate a closed dialog',async()=>{
+  const view=fixture();let states=0;
+  const f=setup(async path=>path==='/api/state'?{...view,view_revision:++states===1?view.view_revision:'3'.repeat(64)}:view.resources[0]);
+  await f.ui.showDetails(view.resources[0]);assert.deepEqual(f.failures,['Record information changed']);
+  assert.equal(f.$('detail-content').children.length,0);
+  let resolve;const pending=new Promise(done=>resolve=done),g=setup(()=>pending);
+  const read=g.ui.showDetails(view.resources[0]);g.ui.close();resolve(view);await read;
+  assert.equal(g.$('detail').open,false);assert.equal(g.$('detail-content').children.length,0);assert.deepEqual(g.failures,[]);
+});

@@ -3,6 +3,40 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
 const {ScopedModel}=require('./scoped-ui.js');
 const a='a'.repeat(64),b='b'.repeat(64),c='c'.repeat(64),e='e'.repeat(64);
+test('profile cards use explicit visible relationships and never fabricate contacts',()=>{
+  const f=organizationFixture(),model=new ScopedModel(f.view),profile=model.profile(model.byId.get(f.persona.id));
+  assert.deepEqual(profile.people.map(row=>row.id),[f.human.id]);
+  assert.ok(profile.roles.some(row=>row.id===f.staff.id));assert.deepEqual(profile.departments.map(row=>row.id),[f.department.id]);
+  assert.ok(profile.contacts.every(row=>row.value===null&&row.href===null));
+  assert.throws(()=>model.profile({...f.persona,data:{email:'not-published@example.invalid'}}));
+  assert.throws(()=>model.profile({id:'f'.repeat(64),kind:'persona',data:{}}));
+});
+
+test('profile responsibilities come from assigned roles, not managers or sibling personas',()=>{
+  const f=organizationFixture();f.staff.data.functions=['Review field tasks'];f.manager.data.functions=['Approve spending'];
+  f.staff.data.description='Coordinate field work';f.manager.data.description='Finance lead';
+  const model=new ScopedModel(f.view),profile=model.profile(model.byId.get(f.persona.id));
+  assert.deepEqual(profile.functions,['Review field tasks']);assert.equal(profile.description,'Coordinate field work');
+  assert.ok(!JSON.stringify(profile.functions).includes('Approve spending'));
+});
+
+test('contact links reject scripts, credentials, control characters and private key formats',()=>{
+  for(const [kind,value]of [['website','javascript:alert(1)'],['website','http://example.invalid'],['website','https://user:password@example.invalid'],
+    ['email','person@example.invalid?bcc=other@example.invalid'],['email','person@example.invalid\r\nBcc:other@example.invalid'],
+    ['npub','nsec1'+'q'.repeat(58)],['telegram','../../private']])assert.equal(ScopedModel.contactLink(kind,value),null);
+  assert.equal(ScopedModel.contactLink('email','contact@example.invalid'),'mailto:contact@example.invalid');
+  assert.equal(ScopedModel.contactLink('email','contact?tag#box@example.invalid'),'mailto:contact%3Ftag%23box@example.invalid');
+  assert.equal(ScopedModel.contactLink('website','https://example.invalid/about'),'https://example.invalid/about');
+  assert.equal(ScopedModel.contactLink('telegram','@example_bot'),'https://t.me/example_bot');
+});
+
+test('profile documents require visible associations or exact reviewed persona ownership',()=>{
+  const f=organizationFixture(),note={id:'d'.repeat(64),kind:'knowledge',data:{title:'Profile',actor:'example:actors:field',source:'reviewed-knowledge'}};
+  f.persona.data.id='field';f.view.resources.push(note,{id:'f'.repeat(64),kind:'knowledge',data:{...note.data,actor:'foreign:actors:field'}});
+  let model=new ScopedModel(f.view),profile=model.profile(model.byId.get(f.persona.id));assert.deepEqual(profile.documents.map(row=>row.id),[note.id]);
+  note.data.actor='someone-else';model=new ScopedModel(f.view);assert.deepEqual(model.profile(model.byId.get(f.persona.id)).documents,[]);
+  f.edge(f.persona,note,'profile');model=new ScopedModel(f.view);assert.deepEqual(model.profile(model.byId.get(f.persona.id)).documents.map(row=>row.id),[note.id]);
+});
 function organizationFixture(){
   let serial=0;const resources=[],relations=[],node=(kind,title)=>{const row={id:(++serial).toString(16).padStart(64,'0'),kind,data:{title}};resources.push(row);return row;};
   const org=node('organization','Example Foundation'),chief=node('role','Executive'),manager=node('role','Operations'),staff=node('role','Field coordinator');

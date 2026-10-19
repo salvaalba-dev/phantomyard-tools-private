@@ -10,7 +10,7 @@
 <section id="graph-panel" class="panel" hidden><div class="panel-heading"><h2 id="graph-title">Relationships</h2><span id="graph-caption" class="muted"></span></div><div id="graph" class="graph"></div></section>
 <section class="records-section"><h2 id="records-title">Records</h2><div id="records" class="cards"></div></section>
 <footer>PhantomView · Built with PhantomBot</footer></main></div>
-<dialog id="detail"><button id="close-detail" type="button" aria-label="Close record">×</button><h2 id="detail-title">Record</h2><button id="assistant-about" type="button" hidden>Ask about this record</button><pre id="detail-content"></pre></dialog>
+<dialog id="detail" aria-labelledby="detail-title"><button id="close-detail" type="button" aria-label="Close record">×</button><h2 id="detail-title">Record</h2><button id="assistant-about" type="button" hidden>Ask about this record</button><div id="detail-content" aria-live="polite"></div></dialog>
 <dialog id="review-dialog"><button id="review-close" type="button" aria-label="Close access review">×</button><h2>Propose an access change</h2><p>Only visible records and explicitly authorized categories are available. Scope and secret status stay fixed. Publication requires separate approval.</p>
 <label>Record<select id="review-resource"></select></label><p id="review-current" class="muted"></p><pre id="review-content"></pre>
 <label>Proposed information category<select id="review-category"></select></label><label class="review-confirm"><input id="review-confirm" type="checkbox">I reviewed this record and the proposed category change.</label>

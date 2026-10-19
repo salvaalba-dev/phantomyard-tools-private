@@ -116,6 +116,72 @@ class ScopedModel {
     }
     return rows;
   }
+  static contactLink(kind, value) {
+    if(typeof value!=='string'||value.length>600||/[\s\x00-\x1f\x7f]/.test(value))return null;
+    if(kind==='email')return /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value)?'mailto:'+encodeURIComponent(value).replace('%40','@'):null;
+    if(kind==='npub')return /^npub1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58}$/.test(value)?'nostr:'+value:null;
+    if(kind==='telegram')return /^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$/.test(value)?'https://t.me/'+value.replace(/^@/,''):null;
+    if(kind==='website'){
+      try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password?url.href:null;}catch{return null;}
+    }
+    return null;
+  }
+  profile(row) {
+    scopedRecord(row);
+    const current=this.byId.get(row.id);
+    if(!current||JSON.stringify(current)!==JSON.stringify(row))throw Error('Current visible profile required');
+    const data=row.data,scalar=value=>typeof value==='string'&&value.trim()?value.slice(0,4000):null;
+    const list=value=>Array.isArray(value)?value.filter(item=>typeof item==='string'&&item.trim()).slice(0,128):[];
+    const related=new Map(),documents=new Map(),roles=new Map(),people=new Map(),departments=new Map();
+    const add=(target,label)=>{if(!target||target.id===row.id)return;related.set(target.id,{record:target,label});
+      if(['document','knowledge','procedure'].includes(target.kind))documents.set(target.id,target);
+      if(target.kind==='role')roles.set(target.id,target);
+      if(['persona','human'].includes(target.kind))people.set(target.id,target);
+      if(target.kind==='department')departments.set(target.id,target);};
+    const labels={assignment:'Role / persona',counterpart:'Human counterpart',membership:'Department',reports:'Reporting',
+      context:'Organization',department:'Department hierarchy',escalation:'Workflow',document:'Document',documentation:'Document',
+      profile:'Profile document',knowledge:'Knowledge',reference:'Reference'};
+    const neighbors=id=>this.relations.filter(edge=>edge.data.source===id||edge.data.target===id);
+    for(const edge of neighbors(row.id))add(this.byId.get(edge.data.source===row.id?edge.data.target:edge.data.source),labels[edge.data.type]||'Related record');
+    if(row.kind==='persona')for(const role of [...roles.values()])for(const edge of neighbors(role.id)){
+      if(['membership','reports'].includes(edge.data.type))add(this.byId.get(edge.data.source===role.id?edge.data.target:edge.data.source),labels[edge.data.type]);
+    }
+    if(row.kind==='human')for(const persona of [...people.values()].filter(item=>item.kind==='persona'))for(const edge of neighbors(persona.id)){
+      if(edge.data.type==='assignment')add(this.byId.get(edge.data.source), 'Counterpart role');
+    }
+    if(row.kind==='organization'){
+      for(const target of this.resources.filter(item=>item.kind==='department'))departments.set(target.id,target);
+      const roots=this.resources.filter(item=>item.kind==='role'&&!this.relations.some(edge=>edge.data.type==='reports'&&edge.data.source===item.id));
+      for(const role of roots){add(role,'Organization lead');for(const edge of neighbors(role.id))if(edge.data.type==='assignment'){
+        const persona=this.byId.get(edge.data.target);add(persona,'Organization lead');
+        if(persona)for(const binding of neighbors(persona.id))if(binding.data.type==='counterpart')add(this.byId.get(binding.data.source),'Human counterpart');
+      }}
+    }
+    // Reviewed note ownership is an exact collector identity, never a title/path guess.
+    if(row.kind==='persona'&&scalar(data.id))for(const note of this.resources.filter(item=>item.kind==='knowledge'&&ScopedModel.isReviewedNote(item))){
+      if(note.data.actor===this.view.organization+':actors:'+data.id)add(note,'Reviewed knowledge');
+    }
+    const contacts=data.contacts&&typeof data.contacts==='object'?data.contacts:data.channels&&typeof data.channels==='object'?data.channels:{};
+    const contactRows=[['Website','website',contacts.website||data.website],['Email','email',contacts.email||data.email],
+      ['Nostr / npub','npub',contacts.npub||data.npub],['Telegram','telegram',contacts.telegram||contacts.telegram_bot||data.telegram_bot]]
+      .map(([label,kind,value])=>({label,value:scalar(value),href:ScopedModel.contactLink(kind,value)}));
+    const fields=[];for(const [key,label]of [['sector','Sector'],['legal_name','Legal name'],['country','Country'],['scope','Scope'],
+      ['languages','Languages'],['default_language','Default language'],['installation_label','Installation'],['runtime','Runtime']]){
+      const value=scalar(data[key])||list(data[key]).join(', ');if(value)fields.push({label,value});
+    }
+    const legal=data.legal&&typeof data.legal==='object'?data.legal:{};
+    for(const [key,label]of [['legal_name','Legal name'],['legal_form','Legal form'],['nif','Organization tax ID'],['constitution_date','Founded']]){
+      const value=scalar(legal[key]);if(value)fields.push({label,value});
+    }
+    const assignedRoles=row.kind==='persona'?this.relations.filter(edge=>edge.data.type==='assignment'&&edge.data.target===row.id)
+      .map(edge=>this.byId.get(edge.data.source)).filter(role=>role?.kind==='role'):[];
+    const functions=[...new Set([...list(data.functions),...assignedRoles.flatMap(role=>list(role.data.functions))])];
+    const description=scalar(data.description)||assignedRoles.map(role=>scalar(role.data.description)).find(Boolean)||'';
+    return {record:row,title:this.title(row),kind:SCOPED_KINDS[row.kind],description,contacts:contactRows,fields,functions,
+      tools:list(data.tools),excluded:list(data.excluded),roles:[...roles.values()],people:[...people.values()],
+      departments:[...departments.values()],relations:[...related.values()].filter(item=>!documents.has(item.record.id)),
+      documents:[...documents.values()]};
+  }
   organizationTree() {
     const organization=this.resources.find(row=>row.kind==='organization');
     if(!organization||!this.resources.some(row=>row.kind==='role'||row.kind==='persona'))return null;
@@ -294,7 +360,7 @@ class ScopedModel {
 async function startScopedWorkspace() {
   const $ = id => document.getElementById(id);
   const text = (tag,value,className) => {const node=document.createElement(tag);node.textContent=value;if(className)node.className=className;return node;};
-  let treeObserver=null;
+  let treeObserver=null, profileReadEpoch=0;
   let model=null, section='', epoch=0, controller=null, detailEpoch=0, redemption=null, closing=false, reviewContext=null, proposalId=null, reviewEpoch=0, detailFocus=null;
   const chat=new ScopedChat({
     request:async(method,path,body)=>{
@@ -332,6 +398,7 @@ async function startScopedWorkspace() {
     $('review-confirm').checked=false;if($('review-dialog').open)$('review-dialog').close();
   }
   function clear() {
+    profileReadEpoch++;
     treeObserver?.disconnect();treeObserver=null;
     chat.reset();detailFocus=null;$('assistant-about').hidden=true;
     model=null;section='';detailEpoch++;$('navigation').replaceChildren();$('records').replaceChildren();$('stats').replaceChildren();
@@ -353,18 +420,77 @@ async function startScopedWorkspace() {
       headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
     if(!response.ok){const error=Error('Scoped request unavailable');error.status=response.status;throw error;}return response.json();
   }
-  function showDetails(row) {
+  function renderProfile(profile, view, ticket, detailTicket) {
+    const host=$('detail-content');host.replaceChildren();
+    const section=(title,parent)=>{const box=text('section','', 'profile-section');box.append(text('h3',title));parent.append(box);return box;};
+    const value=(parent,label,content)=>{const line=text('div','', 'profile-field');line.append(text('span',label,'profile-label'),text('span',content));parent.append(line);};
+    const links=(parent,rows,empty)=>{
+      if(!rows.length){parent.append(text('p',empty,'profile-empty'));return;}
+      for(const row of rows){const button=text('button',view.title(row),'profile-link');button.type='button';
+        button.addEventListener('click',()=>showDetails(row));parent.append(button);}
+    };
+    host.append(text('p',profile.kind,'profile-kind'));
+    if(profile.description)host.append(text('p',profile.description,'profile-description'));
+    const grid=text('div','', 'profile-grid');host.append(grid);
+    const contact=section('Identity & contact',grid);
+    for(const row of profile.contacts){const line=text('div','', 'profile-field');line.append(text('span',row.label,'profile-label'));
+      if(row.href){const link=text('a',row.value,'profile-contact');link.href=row.href;link.rel='noopener noreferrer';
+        if(row.href.startsWith('https:'))link.target='_blank';line.append(link);}
+      else line.append(text('span',row.value||'Not linked in the authorized information',row.value?'':'profile-empty'));
+      contact.append(line);}
+    const related=section(profile.record.kind==='organization'?'People & structure':'People & responsibilities',grid);
+    if(profile.people.length)links(related,profile.people,'');
+    if(profile.roles.length)links(related,profile.roles,'');
+    if(profile.departments.length){related.append(text('h4','Departments'));links(related,profile.departments,'');}
+    if(!profile.people.length&&!profile.roles.length&&!profile.departments.length)related.append(text('p','No published associations for this record.','profile-empty'));
+    if(profile.functions.length){const box=section('Responsibilities',host),list=text('ul','', 'profile-functions');
+      for(const item of profile.functions)list.append(text('li',item));box.append(list);}
+    if(profile.tools.length||profile.excluded.length){const box=section('Declared tools',host);value(box,'Available',profile.tools.join(', ')||'None declared');
+      if(profile.excluded.length)value(box,'Excluded',profile.excluded.join(', '));}
+    const docs=section('Profiles & working documents',host),reader=text('section','', 'profile-reader');reader.hidden=true;
+    if(!profile.documents.length)docs.append(text('p','No document or profile text has been published for this record.','profile-empty'));
+    for(const row of profile.documents){const button=text('button',view.title(row),'profile-link profile-document');button.type='button';
+      button.addEventListener('click',async()=>{
+        const readTicket=++profileReadEpoch;reader.hidden=false;reader.replaceChildren(text('p','Loading current document...'));
+        try{const current=await api(ScopedModel.detailPath(row),undefined,controller?.signal);
+          if(ticket!==epoch||detailTicket!==detailEpoch||readTicket!==profileReadEpoch||!$('detail').open)return;
+          const content=ScopedModel.detailText(row,current),fresh=new ScopedModel(await api('/api/state',undefined,controller?.signal));
+          if(ticket!==epoch||detailTicket!==detailEpoch||readTicket!==profileReadEpoch||!$('detail').open)return;
+          if(fresh.view.view_revision!==view.view.view_revision||fresh.view.policy_revision!==view.view.policy_revision||fresh.view.scope_id!==view.view.scope_id)throw Error('Profile information changed');
+          const body=ScopedModel.isReviewedNote(row)?content:typeof current.data?.content==='string'&&['markdown','text/plain'].includes(current.data.format)
+            ?current.data.content:'Document information is available, but its text has not been published for this session.';
+          reader.replaceChildren();const close=text('button','Close document','profile-reader-close');close.type='button';
+          close.addEventListener('click',()=>{profileReadEpoch++;reader.replaceChildren();reader.hidden=true;});reader.append(close,text('h3',view.title(row)),text('pre',body,'profile-document-body'));
+        }catch(error){if(readTicket===profileReadEpoch&&detailTicket===detailEpoch)failure(error,ticket);}
+      });docs.append(button);}
+    docs.append(reader);
+    if(profile.fields.length){const extra=text('details','', 'profile-extra');extra.append(text('summary','Organization & record details'));
+      for(const field of profile.fields)value(extra,field.label,field.value);host.append(extra);}
+    const other=profile.relations.filter(item=>!['persona','human','role','department'].includes(item.record.kind));
+    if(other.length)links(section('Related information',host),other.map(item=>item.record),'');
+    host.append(text('p','Source: current authorized organization records. Documents are shown only when separately available to this session.','profile-source'));
+  }
+  async function showDetails(row) {
     const ticket=epoch, detailTicket=++detailEpoch;
     // Remove old contents before any new read; never show a cached fallback.
     detailFocus=null;$('assistant-about').hidden=true;
-    $('detail-content').textContent='Loading current record\u2026';$('detail-title').textContent='Record';$('detail').showModal();
-    api(ScopedModel.detailPath(row),undefined,controller?.signal).then(current=>{
+    profileReadEpoch++;
+    $('detail-content').textContent='Loading current record\u2026';$('detail-title').textContent='Record';if(!$('detail').open)$('detail').showModal();
+    try{
+      const view=new ScopedModel(await api('/api/state',undefined,controller?.signal));
       if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
-      $('detail-content').textContent=ScopedModel.detailText(row,current);
-      const title=ScopedModel.isReviewedNote(row)?current.title:model.title(current);
+      const selected=view.byId.get(row.id);if(!selected||selected.kind!==row.kind)throw Error('Record is no longer visible');
+      const current=await api(ScopedModel.detailPath(selected),undefined,controller?.signal);
+      if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
+      const content=ScopedModel.detailText(selected,current),fresh=new ScopedModel(await api('/api/state',undefined,controller?.signal));
+      if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
+      if(fresh.view.view_revision!==view.view.view_revision||fresh.view.policy_revision!==view.view.policy_revision||fresh.view.scope_id!==view.view.scope_id)throw Error('Record information changed');
+      if(ScopedModel.isReviewedNote(selected))$('detail-content').replaceChildren(text('pre',content,'profile-document-body'));
+      else renderProfile(view.profile(current),view,ticket,detailTicket);
+      const title=ScopedModel.isReviewedNote(selected)?current.title:view.title(current);
       $('detail-title').textContent=title;
       detailFocus={id:current.id,title};$('assistant-about').hidden=!chat.view;
-    }).catch(error=>failure(error,ticket));
+    }catch(error){if(detailTicket===detailEpoch)failure(error,ticket);}
   }
   function renderOrganizationTree(sourceTree, observe=true, preferences={}) {
     $('graph-panel').hidden=false;

@@ -3,6 +3,8 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
+from urllib.parse import urlsplit
 
 from channel_identity import HumanDirectory
 from resource_review import revision
@@ -55,7 +57,42 @@ def clean(row, fields):
     return output
 
 
-def prepare(snapshot, directory, *, organization_links=False):
+def profile_data(source, collection):
+    """Select bounded profile metadata, never arbitrary nested records or bodies."""
+    result = clean(source, ('description', 'functions', 'languages', 'default_language'))
+    channels = source.get('contacts', source.get('channels', {}))
+    channels = channels if isinstance(channels, dict) else {}
+    contacts = {}
+    for key in ('website', 'email', 'npub', 'telegram_bot'):
+        value = channels.get(key, source.get(key))
+        if not isinstance(value, str) or not 1 <= len(value) <= 600 or re.search(r'[\s\x00-\x1f\x7f]', value):
+            continue
+        if key == 'email' and not re.fullmatch(r"[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", value):
+            continue
+        if key == 'npub' and not re.fullmatch(r'npub1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58}', value):
+            continue
+        if key == 'telegram_bot' and not re.fullmatch(r'@?[a-zA-Z][a-zA-Z0-9_]{4,31}', value):
+            continue
+        if key == 'website':
+            try:
+                url = urlsplit(value)
+                if url.scheme != 'https' or not url.hostname or url.username is not None or url.password is not None:
+                    continue
+                _ = url.port
+            except ValueError:
+                continue
+        contacts[key] = value
+    # Human login identifiers stay in the authority, not in profile exports.
+    if contacts and collection != 'humans':
+        result['contacts'] = contacts
+    if collection == 'organizations' and isinstance(source.get('legal'), dict):
+        legal = clean(source['legal'], ('legal_name', 'legal_form', 'nif', 'country', 'constitution_date'))
+        if legal:
+            result['legal'] = legal
+    return result
+
+
+def prepare(snapshot, directory, *, organization_links=False, profile_fields=False):
     """Create bounded draft records with raw-source fingerprints and no ACL grants.
 
     Findings/procedures retain source dependencies. KB bodies, diagnostics, source
@@ -63,6 +100,8 @@ def prepare(snapshot, directory, *, organization_links=False):
     """
     if type(organization_links) is not bool:
         raise ValueError('Organization links must be an explicit boolean adapter option')
+    if type(profile_fields) is not bool:
+        raise ValueError('Profile metadata must be an explicit boolean adapter option')
     if not isinstance(directory, HumanDirectory) or not isinstance(snapshot, dict):
         raise ValueError('A trusted organization directory and selected collector snapshot are required')
     if len(encode(snapshot)) > MAX_SCAN_BYTES:
@@ -114,6 +153,8 @@ def prepare(snapshot, directory, *, organization_links=False):
                 continue
             identity = source.get('urn') if collection == 'documents' else source.get('id')
             data = clean(source, fields)
+            if profile_fields:
+                data.update(profile_data(source, collection))
             data['title'] = next((source[key] for key in ('display_name', 'name', 'slug', 'id', 'urn')
                                   if isinstance(source.get(key), str) and source[key]), '')[:4000]
             ident = add(collection, identity, kind, source, data)
@@ -229,6 +270,8 @@ def prepare(snapshot, directory, *, organization_links=False):
              'unsupported': ['knowledge-bodies', 'diagnostics', 'installation', 'history']}
     if organization_links:
         draft['organization_links'] = True
+    if profile_fields:
+        draft['profile_fields'] = True
     if len(encode(draft)) > MAX_SCAN_BYTES:
         raise ValueError('Private adapter draft exceeds output bounds')
     return draft
@@ -239,7 +282,10 @@ def prepare_like(snapshot, directory, reference):
     enabled = reference.get('organization_links', False)
     if 'organization_links' in reference and enabled is not True:
         raise ValueError('Only an explicit enabled organization-link mode may be recorded')
-    return prepare(snapshot, directory, organization_links=enabled)
+    profiles = reference.get('profile_fields', False)
+    if 'profile_fields' in reference and profiles is not True:
+        raise ValueError('Only an explicit enabled profile mode may be recorded')
+    return prepare(snapshot, directory, organization_links=enabled, profile_fields=profiles)
 
 
 def write_draft(path, draft):
@@ -265,6 +311,8 @@ def main():
     parser.add_argument('--output', required=True, help='Absolute new private draft path')
     parser.add_argument('--organization-links', action='store_true',
                         help='Include declared role assignments, departments and human counterparts as unclassified links')
+    parser.add_argument('--profile-fields', action='store_true',
+                        help='Include selected contact and profile metadata in a new unclassified review draft')
     args = parser.parse_args()
     def read_json(path):
         with Path(path).open('rb') as stream:
@@ -274,7 +322,8 @@ def main():
         return json.loads(raw)
     source = read_json(args.snapshot)
     org = read_json(args.organization)
-    draft = prepare(source.get('snapshot', source), HumanDirectory(org), organization_links=args.organization_links)
+    draft = prepare(source.get('snapshot', source), HumanDirectory(org), organization_links=args.organization_links,
+                    profile_fields=args.profile_fields)
     write_draft(args.output, draft)
 
 

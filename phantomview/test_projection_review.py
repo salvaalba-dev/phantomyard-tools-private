@@ -32,6 +32,26 @@ class ProjectionReviewTests(unittest.TestCase):
         return approve(self.draft, self.decisions, self.org, lambda: self.source,
                        reviewer=self.reviewer, previous=previous)
 
+    def test_profile_mode_survives_approval_and_requires_new_payload_decisions(self):
+        self.draft = prepare(self.source, HumanDirectory(self.org), profile_fields=True)
+        with self.assertRaises(ValueError):
+            self.approval()
+        self.decisions['draft_revision'] = revision(self.draft)
+        candidates = {row['id']: row for row in self.draft['resources']}
+        for row in self.decisions['resources']:
+            row['payload_sha256'] = candidates[row['id']]['payload_sha256']
+        bundle = self.approval()
+        self.assertIs(bundle['profile_fields'], True)
+        with tempfile.TemporaryDirectory() as root:
+            publisher = self.publisher(root)
+            publisher.publish(bundle, self.draft, expected_revision=None)
+            self.assertEqual(publisher.active()[1], bundle)
+        invalid = copy.deepcopy(bundle)
+        invalid['profile_fields'] = False
+        invalid['revision'] = revision({key: value for key, value in invalid.items() if key != 'revision'})
+        with self.assertRaises(ValueError):
+            validate(invalid)
+
     def publisher(self, root):
         return PublishedProjection(root, lambda: self.org, lambda: self.source)
 

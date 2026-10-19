@@ -27,6 +27,23 @@ class ObservatoryTests(unittest.TestCase):
         self.assertEqual(len(data["snapshot"]["actors"]), 5)
         self.assertTrue(all(a["installed"] is None and a["runtime"] == "unknown" for a in data["snapshot"]["actors"]))
 
+    def test_institutional_profile_metadata_is_opt_in_and_does_not_copy_personal_documents(self):
+        org = pv.read_source(pv.HERE / 'example-org.yaml')
+        org['organization'].update(email='contact@example.invalid', website='https://example.invalid',
+            legal={'legal_name': 'Example Foundation', 'nif': 'EXAMPLE', 'founders': [{'dni': 'NEVER_COPY'}]})
+        path = self.root / 'org.json'
+        pv.atomic_json(path, org)
+        config = pv.default_config() | {'mode': 'existing', 'org_files': [str(path)]}
+        self.obs.configure(config)
+        self.assertNotIn('contacts', self.obs.snapshot['organizations'][0])
+        self.obs.configure(config | {'profile_metadata': True})
+        selected = self.obs.snapshot['organizations'][0]
+        self.assertEqual(selected['contacts']['email'], 'contact@example.invalid')
+        self.assertEqual(selected['legal']['nif'], 'EXAMPLE')
+        self.assertNotIn('NEVER_COPY', json.dumps(selected))
+        with self.assertRaises(ValueError):
+            self.obs.validate_config(config | {'profile_metadata': 'yes'})
+
     def test_refresh_without_changes_does_not_duplicate_history(self):
         self.obs.refresh()
         self.obs.refresh()

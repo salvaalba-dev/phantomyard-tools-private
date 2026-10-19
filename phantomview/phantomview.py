@@ -171,6 +171,8 @@ class Observatory:
             raise ValueError("Invalid mode")
         if type(config.get("auto_procedures", True)) is not bool:
             raise ValueError("Automatic procedure discovery must be a boolean")
+        if type(config.get("profile_metadata", False)) is not bool:
+            raise ValueError("Profile metadata collection must be a boolean")
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
                 raise ValueError(f"Invalid configuration: {key}")
@@ -255,6 +257,9 @@ class Observatory:
                                             "sector": text(org["organization"].get("sector")), "source": source,
                                             "communication": {"message_types": strings(org.get("communication", {}).get("message_types")),
                                                               "max_hops": org.get("communication", {}).get("max_hops", 3)}})
+            if config.get("profile_metadata", False):
+                from source_adapter import profile_data
+                result["organizations"][-1].update(profile_data(org["organization"], 'organizations'))
             deps = {x["id"]: x for x in org["departments"]}
             roles = {x["id"]: x for x in org["roles"]}
             policies = org.get("policies") or {}
