@@ -13,14 +13,16 @@ from channel_identity import HumanDirectory
 from resource_review import revision
 from scoped_backend import MAX_SCAN_BYTES, PrivateRecordStore, ProjectionCatalog
 from scoped_knowledge import HEX
-from source_adapter import encode, prepare
+from source_adapter import encode, prepare_like
 
 
 def validate(bundle):
     fields = {'schema_version', 'sequence', 'previous_revision', 'reviewer',
               'organization_revision', 'draft_revision', 'decision_revision',
               'catalog', 'sources', 'revision'}
-    if (not isinstance(bundle, dict) or set(bundle) != fields
+    if (not isinstance(bundle, dict) or not fields <= set(bundle)
+            or set(bundle) - (fields | {'organization_links'})
+            or 'organization_links' in bundle and bundle['organization_links'] is not True
             or type(bundle['schema_version']) is not int or bundle['schema_version'] != 1
             or type(bundle['sequence']) is not int or bundle['sequence'] < 1
             or not isinstance(bundle['reviewer'], str) or not bundle['reviewer']):
@@ -61,7 +63,7 @@ def approve(draft, decisions, org, snapshot_loader, *, reviewer, previous=None):
     directory = HumanDirectory(org)
     if not callable(snapshot_loader) or reviewer not in directory.scope.policy['humans']:
         raise ValueError('A trusted source loader and declared operator-supplied reviewer are required')
-    if prepare(snapshot_loader(), directory) != draft:
+    if prepare_like(snapshot_loader(), directory, draft) != draft:
         raise ValueError('Draft differs from current selected sources; prepare and review it again')
     header = {'schema_version': 1, 'draft_revision': revision(draft), 'organization_revision': revision(org)}
     if (not isinstance(decisions, dict) or set(decisions) != set(header) | {'resources'}
@@ -103,8 +105,10 @@ def approve(draft, decisions, org, snapshot_loader, *, reviewer, previous=None):
                        'decision_revision': revision(decisions | {'resources': sorted(decisions['resources'], key=lambda row: row['id'])}),
                        'catalog': catalog,
                        'sources': sorted(sources, key=lambda row: row['id'])}
+    if draft.get('organization_links') is True:
+        bundle['organization_links'] = True
     # Recheck sources after classification work; no stale approval is returned.
-    if prepare(snapshot_loader(), HumanDirectory(org)) != draft:
+    if prepare_like(snapshot_loader(), HumanDirectory(org), draft) != draft:
         raise ValueError('Sources changed during review')
     bundle['revision'] = revision(bundle)
     return validate(bundle)
@@ -161,7 +165,7 @@ class PublishedProjection:
         if bundle['revision'] != pointer['revision']:
             raise ValueError('Active projection revision mismatch')
         org = self.org_loader()
-        draft = prepare(self.snapshot_loader(), HumanDirectory(org))
+        draft = prepare_like(self.snapshot_loader(), HumanDirectory(org), bundle)
         if revision(org) != bundle['organization_revision'] or revision(draft) != bundle['draft_revision']:
             raise ValueError('Sources or authority changed; review and publish a new projection')
         return generation, bundle
@@ -206,7 +210,7 @@ class PublishedProjection:
                     raise ValueError('Publication must extend this organization history')
             org = self.org_loader()
             if (revision(org) != bundle['organization_revision'] or revision(draft) != bundle['draft_revision']
-                    or prepare(self.snapshot_loader(), HumanDirectory(org)) != draft):
+                    or prepare_like(self.snapshot_loader(), HumanDirectory(org), bundle) != draft):
                 raise ValueError('Publication inputs changed after approval')
             decisions = {'schema_version': 1, 'draft_revision': bundle['draft_revision'],
                          'organization_revision': bundle['organization_revision'], 'resources': [
@@ -231,7 +235,7 @@ class PublishedProjection:
             write_new(generation / 'approval.json', bundle)
             final_org = self.org_loader()
             if (revision(final_org) != bundle['organization_revision']
-                    or prepare(self.snapshot_loader(), HumanDirectory(final_org)) != draft):
+                    or prepare_like(self.snapshot_loader(), HumanDirectory(final_org), bundle) != draft):
                 raise ValueError('Sources changed while staging publication')
             staged = self.root / 'active.next.json'
             write_new(staged, {'revision': bundle['revision']})

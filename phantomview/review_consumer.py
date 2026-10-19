@@ -10,7 +10,7 @@ from resource_review import revision
 from scoped_backend import MAX_SCAN_BYTES
 from scoped_knowledge import HEX
 from session_audit import Ledger
-from source_adapter import encode, prepare
+from source_adapter import encode, prepare_like
 
 CLASSIFICATION = ('category', 'scope', 'project', 'secret')
 
@@ -117,7 +117,7 @@ class ApprovalConsumer:
             seen.add(row['id'])
         if seen != set(current_rows):
             raise ValueError('Approval cannot silently add or remove catalog records')
-        draft = prepare(self.publisher.snapshot_loader(), HumanDirectory(org))
+        draft = prepare_like(self.publisher.snapshot_loader(), HumanDirectory(org), active)
         approval = approve(draft, decisions, org, self.publisher.snapshot_loader, reviewer=reviewer.human, previous=previous)
         current, _ = self.gate.identified_scope(headers)
         if (current != reviewer or self.publisher.active()[1] != active or self._proposal(request_id) != proposal):

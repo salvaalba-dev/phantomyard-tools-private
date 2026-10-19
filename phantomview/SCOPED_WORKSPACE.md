@@ -30,6 +30,40 @@ The directed relationship graph includes visible endpoints only and is capped at
 and flow lines; unrelated elements dim. Cycles terminate through a visited set.
 Nodes support keyboard activation and fetch current details from the backend.
 
+### Organization overview tree
+
+When the authorized view includes an organization and roles or personas, Overview
+uses a top-down organization tree. Reporting levels come only from `reports`
+relationships (child role to manager role). Workflow/escalation links are dashed
+and do not change reporting levels. Dotted organization-context lines connect
+visible roots; they do not assert that a missing reporting edge means no manager.
+Project-only views and individual sections retain the relationship graph.
+
+Role cards join visible personas through `assignment` links, departments through
+`membership` links (role to department), and humans through `counterpart` links
+(human to persona). Names, role identifiers inside arbitrary payloads and hidden
+records never establish these joins. Cards open the persona/role, human or
+department's current detail endpoint. Hover and keyboard focus highlight the
+reporting path, descendants and directly connected workflow links.
+
+Unassigned personas remain separately visible without invented manager links.
+Missing counterparts/departments are described as not visible. Cycles and multiple
+managers are marked for review instead of choosing a parent silently. The diagram
+is bounded to 60 cards and reports truncation.
+
+To prepare the missing declared links, run the existing source adapter with
+`--organization-links`. This is opt-in and produces an inert, unclassified draft.
+It reads counterpart identities from the trusted PhantomOrg directory, includes
+only selected visible endpoints, deduplicates existing assignments and retains
+source/authority fingerprints. Each new relationship still needs classification,
+review and publication through the existing process. This flag grants no access,
+changes no existing approval and publishes no live records.
+
+The enabled adapter mode is bound into the draft and approval fingerprints.
+Approval, publication, review pages and subsequent source revalidation recompute
+that exact mode. Approvals without the optional mode retain their legacy source
+fingerprints. An adapter option never substitutes for explicit resource decisions.
+
 ## Search and session behavior
 
 Search always posts the query alone to `/api/search`, independent of the menu

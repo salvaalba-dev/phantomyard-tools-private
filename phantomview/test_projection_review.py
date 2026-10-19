@@ -47,6 +47,31 @@ class ProjectionReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.approval()
 
+    def test_organization_link_mode_survives_review_publication_and_current_source_checks(self):
+        self.source['actors'][0]['role'] = 'executive'
+        self.source['roles'][0]['department'] = 'board'
+        self.source['humans'] = [{'org': 'example', 'id': 'owner', 'name': 'Owner'}]
+        self.draft = prepare(self.source, HumanDirectory(self.org), organization_links=True)
+        self.decisions = {'schema_version': 1, 'draft_revision': revision(self.draft),
+                          'organization_revision': revision(self.org), 'resources': [
+            {key: row[key] for key in ('id', 'payload_sha256')} | {
+                'category': 'category-1', 'scope': {'kind': 'organization', 'id': 'example'},
+                'project': None, 'secret': False} for row in self.draft['resources']]}
+        bundle = self.approval()
+        self.assertIs(bundle['organization_links'], True)
+        invalid = copy.deepcopy(bundle)
+        invalid['organization_links'] = False
+        invalid['revision'] = revision({key: value for key, value in invalid.items() if key != 'revision'})
+        with self.assertRaises(ValueError):
+            validate(invalid)
+        with tempfile.TemporaryDirectory() as root:
+            publisher = self.publisher(root)
+            publisher.publish(bundle, self.draft, expected_revision=None)
+            self.assertEqual(publisher.active()[1], bundle)
+            self.source['actors'][0]['role'] = 'different-role'
+            with self.assertRaises(ValueError):
+                publisher.active()
+
     def test_stale_draft_source_and_authority_are_rejected(self):
         for change in ('source', 'draft', 'authority', 'decisions'):
             with self.subTest(change=change):

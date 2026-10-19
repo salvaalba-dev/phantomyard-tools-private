@@ -10,14 +10,14 @@ from channel_identity import HumanDirectory
 from projection_review import read_json, root_path
 from resource_review import revision
 from scoped_backend import MAX_SCAN_BYTES
-from source_adapter import encode, prepare
+from source_adapter import encode, prepare_like
 
 HERE = Path(__file__).resolve().parent
 
 
 def payload(draft, org, snapshot):
     directory = HumanDirectory(org)
-    if prepare(snapshot, directory) != draft:
+    if prepare_like(snapshot, directory, draft) != draft:
         raise ValueError('Review page requires an exact current draft and authoritative organization')
     records = {row['id']: row['data'] for row in draft['records']}
     definitions = directory.scope.policy['view_access']['scope_definitions']

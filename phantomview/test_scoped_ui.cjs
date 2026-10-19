@@ -3,6 +3,40 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
 const {ScopedModel}=require('./scoped-ui.js');
 const a='a'.repeat(64),b='b'.repeat(64),c='c'.repeat(64),e='e'.repeat(64);
+function organizationFixture(){
+  let serial=0;const resources=[],relations=[],node=(kind,title)=>{const row={id:(++serial).toString(16).padStart(64,'0'),kind,data:{title}};resources.push(row);return row;};
+  const org=node('organization','Example Foundation'),chief=node('role','Executive'),manager=node('role','Operations'),staff=node('role','Field coordinator');
+  const persona=node('persona','Field persona'),human=node('human','Project counterpart'),department=node('department','Field operations');
+  const edge=(source,target,type)=>relations.push({id:(++serial).toString(16).padStart(64,'0'),kind:'relationship',data:{source:source.id,target:target.id,type}});
+  edge(staff,manager,'reports');edge(manager,chief,'reports');edge(staff,persona,'assignment');edge(human,persona,'counterpart');edge(staff,department,'membership');
+  const view={...fixture(),resources,relations};return {view,org,chief,manager,staff,persona,human,department,edge};
+}
+test('organization levels follow reporting links and cards join only visible explicit assignments',()=>{
+  const f=organizationFixture();f.edge(f.chief,f.staff,'escalation');const tree=new ScopedModel(f.view).organizationTree();
+  assert.ok(tree.positions.get(f.org.id).y<tree.positions.get(f.chief.id).y);
+  assert.ok(tree.positions.get(f.chief.id).y<tree.positions.get(f.manager.id).y);
+  assert.ok(tree.positions.get(f.manager.id).y<tree.positions.get(f.staff.id).y);
+  const card=tree.nodes.find(row=>row.id===f.staff.id);assert.equal(card.personas[0].id,f.persona.id);
+  assert.equal(card.humans[0].id,f.human.id);assert.equal(card.departments[0].id,f.department.id);
+  assert.equal(tree.edges.filter(row=>row.type==='escalation').length,1);assert.equal(tree.unlinked,0);
+});
+test('missing assignments never infer placement or counterparts from names or raw identifiers',()=>{
+  const f=organizationFixture();f.persona.data.role=f.staff.id;f.view.relations=f.view.relations.filter(row=>!['assignment','counterpart','membership'].includes(row.data.type));
+  const tree=new ScopedModel(f.view).organizationTree(),card=tree.nodes.find(row=>row.id===f.persona.id);
+  assert.equal(tree.unlinked,1);assert.equal(card.humans.length,0);assert.equal(card.departments.length,0);
+  assert.ok(card.issue.includes('not published'));assert.ok(!tree.edges.some(row=>row.source===f.persona.id||row.target===f.persona.id));
+});
+test('reporting cycles and multiple managers stay bounded and are marked for review',()=>{
+  const f=organizationFixture();f.edge(f.chief,f.staff,'reports');let tree=new ScopedModel(f.view).organizationTree();
+  assert.equal(tree.nodes.filter(row=>row.issue.includes('Circular')).length,3);assert.ok(Number.isFinite(tree.height));
+  const g=organizationFixture();g.edge(g.staff,g.chief,'reports');tree=new ScopedModel(g.view).organizationTree();
+  assert.ok(tree.nodes.find(row=>row.id===g.staff.id).issue.includes('Multiple'));assert.ok(Number.isFinite(tree.width));
+});
+test('organization tree is bounded and project-only workspaces retain their relationship graph',()=>{
+  assert.equal(new ScopedModel(fixture()).organizationTree(),null);const f=organizationFixture();
+  for(let i=0;i<80;i++)f.view.resources.push({id:(100+i).toString(16).padStart(64,'0'),kind:'role',data:{title:'Role '+i}});
+  const tree=new ScopedModel(f.view).organizationTree();assert.ok(tree.nodes.length<=60);assert.equal(tree.truncated,true);
+});
 function fixture(){return {schema_version:1,complete_corpus:false,organization:'example',scope_id:'river-project',
   policy_revision:'1'.repeat(64),view_revision:'2'.repeat(64),counts:{human:9000},
   resources:[{id:a,kind:'partner',data:{title:'River partner'}},{id:b,kind:'task',data:{title:'Field review'}},

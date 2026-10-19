@@ -54,6 +54,28 @@ class SourceAdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ProjectionCatalog(draft | {'status': 'approved'})
 
+    def test_organization_links_are_opt_in_unclassified_and_bound_to_visible_endpoints(self):
+        self.source['actors'][0]['role'] = 'executive'
+        self.source['roles'][0]['department'] = 'board'
+        self.source['humans'] = [{'org': 'example', 'id': 'owner', 'name': 'Owner'},
+                                 {'org': 'example', 'id': 'unbound', 'name': 'Unbound'}]
+        ordinary = self.prepare()
+        self.assertNotIn('counterpart', {row['data'].get('type') for row in ordinary['records']})
+        draft = prepare(self.source, self.directory, organization_links=True)
+        links = [row for row in draft['records'] if row['kind'] == 'relationship']
+        self.assertEqual(sum(row['data']['type'] == 'assignment' for row in links), 1)
+        self.assertEqual({row['data']['type'] for row in links}, {'assignment', 'membership', 'counterpart'})
+        ids = {row['id'] for row in draft['records']}
+        for row in draft['resources']:
+            if row['kind'] == 'relationship':
+                self.assertTrue(set(row['endpoints']) <= ids)
+                self.assertIsNone(row['category'])
+        owner = next(row['id'] for row in draft['records'] if row['kind'] == 'human' and row['data']['id'] == 'owner')
+        self.assertEqual([row['data']['source'] for row in links if row['data']['type'] == 'counterpart'], [owner])
+        self.source['humans'][0]['searchable'] = False
+        hidden = prepare(self.source, self.directory, organization_links=True)
+        self.assertNotIn('counterpart', {row['data'].get('type') for row in hidden['records']})
+
     def test_payloads_omit_nested_kb_credentials_contacts_paths_diagnostics_and_totals(self):
         payloads = json.dumps(self.prepare()['records'])
         for value in ('Hidden KB title', 'private@example.invalid', 'NEVER_COPY', '/private/',

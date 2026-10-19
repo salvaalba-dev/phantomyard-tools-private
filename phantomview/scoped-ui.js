@@ -102,6 +102,61 @@ class ScopedModel {
     const row = this.resources.find(row => row.kind === 'organization');
     return row ? this.title(row) : this.view.organization;
   }
+  organizationTree() {
+    const organization=this.resources.find(row=>row.kind==='organization');
+    if(!organization||!this.resources.some(row=>row.kind==='role'||row.kind==='persona'))return null;
+    const roles=this.resources.filter(row=>row.kind==='role').slice(0,59),roleIds=new Set(roles.map(row=>row.id));
+    const visible=(id,kind)=>{const row=this.byId.get(id);return row?.kind===kind?row:null;};
+    const assignments=new Map(roles.map(row=>[row.id,[]])),memberships=new Map(roles.map(row=>[row.id,[]])),counterparts=new Map();
+    for(const edge of this.relations){const {source,target,type}=edge.data;
+      if(type==='assignment'&&roleIds.has(source)&&visible(target,'persona'))assignments.get(source).push(visible(target,'persona'));
+      if(type==='membership'&&roleIds.has(source)&&visible(target,'department'))memberships.get(source).push(visible(target,'department'));
+      if(type==='counterpart'&&visible(source,'human')&&visible(target,'persona')){
+        if(!counterparts.has(target))counterparts.set(target,[]);counterparts.get(target).push(visible(source,'human'));
+      }
+    }
+    const unique=rows=>[...new Map(rows.map(row=>[row.id,row])).values()];
+    const card=(record,personas=[])=>({id:record.id,record,personas:unique(personas),
+      humans:unique(personas.flatMap(row=>counterparts.get(row.id)||[])),departments:unique(memberships.get(record.id)||[]),issue:''});
+    const nodes=[card(organization),...roles.map(row=>card(row,assignments.get(row.id)))],byId=new Map(nodes.map(row=>[row.id,row]));
+    const parents=new Map(),reporting=[];
+    for(const edge of this.relations.filter(row=>row.data.type==='reports'&&roleIds.has(row.data.source))){
+      if(!roleIds.has(edge.data.target)){byId.get(edge.data.source).issue='Manager outside this diagram';continue;}
+      reporting.push(edge);if(!parents.has(edge.data.source))parents.set(edge.data.source,new Set());parents.get(edge.data.source).add(edge.data.target);
+    }
+    const parent=new Map();
+    for(const row of roles){const choices=parents.get(row.id)||new Set();
+      if(choices.size>1)byId.get(row.id).issue='Multiple reporting parents';
+      parent.set(row.id,choices.size===1?[...choices][0]:null);
+    }
+    const cycles=new Set();
+    for(const row of roles){const path=[],seen=new Map();let id=row.id;
+      while(id){if(seen.has(id)){for(const key of path.slice(seen.get(id)))cycles.add(key);break;}
+        seen.set(id,path.length);path.push(id);id=parent.get(id);}
+    }
+    for(const id of cycles){parent.set(id,null);byId.get(id).issue='Circular reporting: review required';}
+    const children=new Map(nodes.map(row=>[row.id,[]]));
+    for(const row of roles)children.get(parent.get(row.id)||organization.id).push(row.id);
+    const ordered=ids=>ids.sort((a,b)=>this.title(byId.get(a).record).localeCompare(this.title(byId.get(b).record)));
+    for(const ids of children.values())ordered(ids);
+    const units=id=>Math.max(1,children.get(id).reduce((sum,key)=>sum+units(key),0));
+    const width=Math.max(780,units(organization.id)*270),positions=new Map();let depth=0;
+    const place=(id,left,span,level)=>{positions.set(id,{x:left+span/2-120,y:24+level*210});depth=Math.max(depth,level);
+      let offset=left;for(const child of children.get(id)){const size=span*units(child)/units(id);place(child,offset,size,level+1);offset+=size;}};
+    place(organization.id,0,width,0);
+    const assigned=new Set(nodes.flatMap(row=>row.personas.map(persona=>persona.id)));
+    const unlinked=this.resources.filter(row=>row.kind==='persona'&&!assigned.has(row.id));
+    const available=Math.max(0,60-nodes.length),unlinkedShown=unlinked.slice(0,available),unlinkedY=24+(depth+1)*210;
+    unlinkedShown.forEach((row,index)=>{const node=card(row,[row]);node.issue='Role assignment not published';nodes.push(node);
+      positions.set(row.id,{x:Math.floor(index%Math.max(1,Math.floor(width/270)))*270+15,y:unlinkedY+Math.floor(index/Math.max(1,Math.floor(width/270)))*210});});
+    const edges=roles.map(row=>{const boss=parent.get(row.id);const source=reporting.find(edge=>edge.data.source===row.id&&edge.data.target===boss);
+      return {id:source?.id||'context:'+row.id,source:row.id,target:boss||organization.id,type:boss?'reports':'context',label:boss?'Reports to':'Organization context; no visible reporting parent'};});
+    for(const edge of this.relations)if(edge.data.type==='escalation'&&roleIds.has(edge.data.source)&&roleIds.has(edge.data.target))edges.push({id:edge.id,...edge.data});
+    const bottom=Math.max(...[...positions.values()].map(point=>point.y))+190;
+    return {nodes,edges,positions,width,height:bottom,unlinked:unlinked.length,
+      truncated:this.resources.filter(row=>row.kind==='role').length>roles.length||unlinked.length>unlinkedShown.length,
+      incomplete:nodes.some(row=>row.issue)||nodes.some(row=>row.record.kind==='role'&&!row.personas.length)};
+  }
   impact(id, limit=60, kind=null) {
     const allowed = new Set(this.resources.filter(row=>!kind||row.kind===kind).slice(0,limit).map(row => row.id));
     const nodes = new Set(allowed.has(id) ? [id] : []), edges = new Set(), pending = [...nodes];
@@ -188,7 +243,57 @@ async function startScopedWorkspace() {
       detailFocus={id:current.id,title};$('assistant-about').hidden=!chat.view;
     }).catch(error=>failure(error,ticket));
   }
+  function renderOrganizationTree(tree) {
+    const graph=$('graph');graph.replaceChildren();$('graph-panel').hidden=false;$('graph-title').textContent='Organization tree';
+    $('graph-caption').textContent=`Visible reporting levels · ${tree.unlinked} unlinked personas`+(tree.truncated?' · diagram limited to 60 cards':'');
+    const canvas=text('div','', 'organization-tree');canvas.style.width=tree.width+'px';canvas.style.height=tree.height+'px';
+    const ns='http://www.w3.org/2000/svg',svg=(tag,attrs)=>{const element=document.createElementNS(ns,tag);for(const[key,value]of Object.entries(attrs))element.setAttribute(key,String(value));return element;};
+    const lines=svg('svg',{width:tree.width,height:tree.height,viewBox:`0 0 ${tree.width} ${tree.height}`,'aria-label':'Reporting and workflow connections'});
+    const defs=svg('defs',{}),marker=svg('marker',{id:'tree-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'});
+    marker.append(svg('path',{d:'M 0 0 L 10 5 L 0 10 z',fill:'context-stroke'}));defs.append(marker);lines.append(defs);canvas.append(lines);
+    const paths=new Map(),cards=new Map();
+    for(const edge of tree.edges){const a=tree.positions.get(edge.source),b=tree.positions.get(edge.target),workflow=edge.type==='escalation';
+      const path=svg('path',{d:workflow?`M ${a.x+240} ${a.y+80} C ${a.x+285} ${a.y+80},${b.x-45} ${b.y+80},${b.x} ${b.y+80}`:
+        `M ${a.x+120} ${a.y} C ${a.x+120} ${(a.y+b.y+160)/2},${b.x+120} ${(a.y+b.y+160)/2},${b.x+120} ${b.y+160}`,
+        class:'tree-edge '+(workflow?'workflow':edge.type==='context'?'context':'reporting')});
+      if(edge.type!=='context')path.setAttribute('marker-end','url(#tree-arrow)');
+      const title=svg('title',{});title.textContent=edge.label||edge.type;path.append(title);lines.append(path);paths.set(edge.id,path);
+    }
+    const highlight=id=>{
+      const nodes=new Set(id?[id]:[]),edges=new Set();
+      if(id){let current=id;const seen=new Set();
+        while(!seen.has(current)){seen.add(current);const edge=tree.edges.find(row=>row.source===current&&row.type!=='escalation');if(!edge)break;nodes.add(edge.target);edges.add(edge.id);current=edge.target;}
+        const pending=[id];for(let i=0;i<pending.length;i++)for(const edge of tree.edges)if(edge.type!=='escalation'&&edge.target===pending[i]){
+          edges.add(edge.id);if(!nodes.has(edge.source)){nodes.add(edge.source);pending.push(edge.source);}}
+        for(const edge of tree.edges)if(edge.type==='escalation'&&(edge.source===id||edge.target===id)){edges.add(edge.id);nodes.add(edge.source);nodes.add(edge.target);}
+      }
+      for(const[key,card]of cards){card.classList.toggle('lit',nodes.has(key));card.classList.toggle('dim',!!id&&!nodes.has(key));}
+      for(const[key,path]of paths){path.classList.toggle('lit',edges.has(key));path.classList.toggle('dim',!!id&&!edges.has(key));}
+    };
+    const link=(row,className)=>{const button=text('button',model.title(row),className);button.type='button';button.title=model.title(row);button.addEventListener('click',()=>showDetails(row));return button;};
+    for(const node of tree.nodes){const point=tree.positions.get(node.id),card=text('article','', 'tree-card'+(node.record.kind==='organization'?' tree-root':''));
+      card.style.left=point.x+'px';card.style.top=point.y+'px';
+      card.append(link(node.personas.length===1?node.personas[0]:node.record,'tree-primary'));
+      if(node.record.kind==='organization'){card.append(text('p','Organization','tree-role'),text('p','Declared reporting structure','tree-muted'));}
+      else{
+        if(node.record.kind==='role')card.append(link(node.record,'tree-role'));
+        if(node.personas.length>1){const names=text('div','', 'tree-personas');for(const persona of node.personas.slice(0,3))names.append(link(persona,'tree-persona'));card.append(names);}
+        const humans=text('div','', 'tree-humans');humans.append(text('span','Human: '));
+        if(node.humans.length)for(const human of node.humans.slice(0,3))humans.append(link(human,'tree-human'));else humans.append(text('span','No visible counterpart','tree-muted'));card.append(humans);
+        const departments=text('div','', 'tree-departments');for(const department of node.departments.slice(0,2))departments.append(link(department,'tree-department'));
+        if(!node.departments.length)departments.append(text('span','No visible department','tree-muted'));card.append(departments);
+        if(node.issue)card.append(text('p',node.issue,'tree-warning'));else if(!node.personas.length)card.append(text('p','Persona assignment not published','tree-warning'));
+      }
+      card.addEventListener('mouseenter',()=>highlight(node.id));card.addEventListener('mouseleave',()=>highlight(null));
+      card.addEventListener('focusin',()=>highlight(node.id));card.addEventListener('focusout',event=>{if(!card.contains(event.relatedTarget))highlight(null);});
+      cards.set(node.id,card);canvas.append(card);
+    }
+    graph.append(canvas);
+    const legend=text('p','Solid: reporting · Dashed amber: workflow/escalation · Dotted: organization context. Only published, authorized links are shown.','tree-legend');graph.append(legend);
+  }
   function renderGraph() {
+    if(!section){const tree=model.organizationTree();if(tree){renderOrganizationTree(tree);return;}}
+    $('graph-title').textContent='Relationships';
     const graph=$('graph');graph.replaceChildren();
     const selected=model.selection(section);
     const nodes=model.resources.filter(row=>!selected||row.kind===selected.kind).slice(0,60), ids=new Set(nodes.map(row=>row.id));

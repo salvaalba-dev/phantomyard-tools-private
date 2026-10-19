@@ -55,12 +55,14 @@ def clean(row, fields):
     return output
 
 
-def prepare(snapshot, directory):
+def prepare(snapshot, directory, *, organization_links=False):
     """Create bounded draft records with raw-source fingerprints and no ACL grants.
 
     Findings/procedures retain source dependencies. KB bodies, diagnostics, source
     paths, installation inventory and history require separate reviewed adapters.
     """
+    if type(organization_links) is not bool:
+        raise ValueError('Organization links must be an explicit boolean adapter option')
     if not isinstance(directory, HumanDirectory) or not isinstance(snapshot, dict):
         raise ValueError('A trusted organization directory and selected collector snapshot are required')
     if len(encode(snapshot)) > MAX_SCAN_BYTES:
@@ -192,14 +194,52 @@ def prepare(snapshot, directory):
         add('edges', identity, 'relationship', source,
             {'source': left, 'target': right, 'type': kind, 'label': label}, endpoints=[left, right])
 
+    if organization_links:
+        existing = {(row['data']['source'], row['data']['target'], row['data']['type'])
+                    for row in records.values() if row['kind'] == 'relationship'}
+
+        def link(left_alias, right_alias, kind, label, evidence):
+            left, right = aliases.get(left_alias), aliases.get(right_alias)
+            if left is None or right is None or (left, right, kind) in existing:
+                return
+            source = {'from': left_alias, 'to': right_alias, 'type': kind,
+                      'evidence': evidence, 'authority_revision': directory.authority_revision}
+            add('organization_links', revision([left_alias, right_alias, kind]), 'relationship', source,
+                {'source': left, 'target': right, 'type': kind, 'label': label}, endpoints=[left, right])
+            existing.add((left, right, kind))
+
+        for actor in snapshot.get('actors', []):
+            if actor.get('org') == oid and eligible(actor) and isinstance(actor.get('role'), str):
+                link(f"{oid}:roles:{actor['role']}", f"{oid}:actors:{actor.get('id')}",
+                     'assignment', 'Assigned persona', actor)
+        for role in snapshot.get('roles', []):
+            if role.get('org') == oid and eligible(role) and isinstance(role.get('department'), str):
+                link(f"{oid}:roles:{role.get('id')}", f"{oid}:departments:{role['department']}",
+                     'membership', 'Department', role)
+        for human, binding in directory.scope.policy['humans'].items():
+            persona = binding.get('counterpart_persona')
+            if persona:
+                link(f'{oid}:humans:{human}', f'{oid}:actors:{persona}',
+                     'counterpart', 'Human counterpart', {'human': human, 'persona': persona})
+
     draft = {'schema_version': 1, 'organization': oid, 'status': 'draft', 'activation_supported': False,
              'authority_revision': directory.authority_revision, 'source_revision': revision(sorted(selected)),
              'resources': sorted(review.values(), key=lambda row: row['id']),
              'records': sorted(records.values(), key=lambda row: row['id']), 'omitted': omitted,
              'unsupported': ['knowledge-bodies', 'diagnostics', 'installation', 'history']}
+    if organization_links:
+        draft['organization_links'] = True
     if len(encode(draft)) > MAX_SCAN_BYTES:
         raise ValueError('Private adapter draft exceeds output bounds')
     return draft
+
+
+def prepare_like(snapshot, directory, reference):
+    """Recompute exactly the adapter mode bound into a reviewed draft or approval."""
+    enabled = reference.get('organization_links', False)
+    if 'organization_links' in reference and enabled is not True:
+        raise ValueError('Only an explicit enabled organization-link mode may be recorded')
+    return prepare(snapshot, directory, organization_links=enabled)
 
 
 def write_draft(path, draft):
@@ -223,6 +263,8 @@ def main():
     parser.add_argument('--snapshot', required=True, help='Trusted collector JSON snapshot')
     parser.add_argument('--organization', required=True, help='Trusted private PhantomOrg JSON source')
     parser.add_argument('--output', required=True, help='Absolute new private draft path')
+    parser.add_argument('--organization-links', action='store_true',
+                        help='Include declared role assignments, departments and human counterparts as unclassified links')
     args = parser.parse_args()
     def read_json(path):
         with Path(path).open('rb') as stream:
@@ -232,7 +274,7 @@ def main():
         return json.loads(raw)
     source = read_json(args.snapshot)
     org = read_json(args.organization)
-    draft = prepare(source.get('snapshot', source), HumanDirectory(org))
+    draft = prepare(source.get('snapshot', source), HumanDirectory(org), organization_links=args.organization_links)
     write_draft(args.output, draft)
 
 
