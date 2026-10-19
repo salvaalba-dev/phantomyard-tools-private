@@ -28,7 +28,11 @@ The runner family is ubuntu-24.04, Python is 3.12.15 and Bun is 1.3.11.
 The Linux x86-64 CPython 3.12 wheels for PyYAML 6.0.3 and coincurve 21.0.0
 are pinned by SHA-256 in native-build-requirements.lock. pip requires hashes
 and binary wheels. These distributions declare no runtime dependencies.
-Native dependencies still use the unchanged reviewed frozen Bun lock.
+Native dependencies and the editor extension use their unchanged reviewed frozen
+Bun locks. The upstream editor packager still invokes @vscode/vsce@latest via
+npx, and VSIX archive timestamps vary. That upstream packaging input is not
+hash-locked by this change; complete supply-chain and bit-for-bit reproducibility
+remain separate work. No claim of complete reproducibility is made.
 
 The verifier import closure is archived in build-sources with its original
 license and unmodified sources from phantomblog at

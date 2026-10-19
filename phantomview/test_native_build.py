@@ -125,7 +125,9 @@ class BuildTests(unittest.TestCase):
     def test_version_contract_is_exact_stdout_with_bounded_diagnostics(self):
         result = subprocess.CompletedProcess([], 0, '1.2.3\n', 'dependency diagnostic\n')
         self.assertTrue(build.verify_binary_version(result, '1.2.3'))
-        for output in ('1.2.30', 'prefix 1.2.3', '1.2.3\nextra'):
+        result.stdout = '[log] 1.2.3\n'
+        self.assertTrue(build.verify_binary_version(result, '1.2.3'))
+        for output in ('1.2.30', 'prefix 1.2.3', '[log] 1.2.30', '[log] 1.2.3\nextra', '1.2.3\nextra'):
             result.stdout = output
             with self.assertRaises(ValueError):
                 build.verify_binary_version(result, '1.2.3')

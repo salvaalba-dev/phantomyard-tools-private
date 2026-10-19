@@ -174,8 +174,9 @@ def test_results(environment):
 
 
 def verify_binary_version(result, expected):
-    # CLI dependencies may emit diagnostics on stderr; only stdout is its version contract.
-    if result.stdout.strip() != expected or len(result.stdout) > 1024 or len(result.stderr) > 4096:
+    # Citty uses consola.log: CI emits '[log] VERSION', terminals may emit VERSION.
+    # Dependency diagnostics on stderr are bounded independently.
+    if result.stdout.strip() not in {expected, '[log] ' + expected} or len(result.stdout) > 1024 or len(result.stderr) > 4096:
         raise ValueError('Compiled native version does not match its provenance: '
                          + repr(result.stdout[:1024]))
     return True
