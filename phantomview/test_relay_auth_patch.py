@@ -17,7 +17,8 @@ class RelayAuthPatchTests(unittest.TestCase):
         self.package = self.root / 'node_modules/nostr-tools'
         self.package.mkdir(parents=True)
         (self.package / 'package.json').write_text(json.dumps({'name': 'nostr-tools', 'version': overlay.VERSION}))
-        self.raw = (overlay.OLD_SEND + '\n' + overlay.OLD_AUTH).encode()
+        self.raw = '\n'.join([overlay.OLD_SEND, overlay.OLD_AUTH]
+                             + [old for old, _ in overlay.EXTRA_REPLACEMENTS]).encode()
         self.paths = ('lib/esm/pool.js', 'lib/esm/abstract-relay.js')
         for relative in self.paths:
             path = self.package / relative

@@ -21,7 +21,16 @@ OLD_SEND = '''  async send(message) {
       this.ws?.send(message);
     });
   }'''
-NEW_SEND = OLD_SEND.replace('    this.connectionPromise.then(', '    return this.connectionPromise.then(')
+NEW_SEND = '''  async send(message) {
+    const connection = this.connectionPromise;
+    if (!connection)
+      throw new SendingOnClosedConnection(message, this.url);
+    return connection.then(() => {
+      if (this.connectionPromise !== connection || !this.ws || this.ws.readyState !== 1)
+        throw new SendingOnClosedConnection(message, this.url);
+      this.ws.send(message);
+    });
+  }'''
 OLD_AUTH = '''  async auth(signAuthEvent) {
     const challenge = this.challenge;
     if (!challenge)
@@ -52,9 +61,12 @@ NEW_AUTH = '''  async auth(signAuthEvent) {
       throw new Error("can't perform auth, no challenge was received");
     if (this.authPromise)
       return this.authPromise;
+    const connection = this.connectionPromise;
     this.authPromise = new Promise((resolve, reject) => {
       const signAndSend = async () => {
         const evt = await signAuthEvent(makeAuthEvent(this.url, challenge));
+        if (!connection || this.connectionPromise !== connection || this.challenge !== challenge)
+          throw new SendingOnClosedConnection("AUTH", this.url);
         const timeout = setTimeout(() => {
           const ep = this.openEventPublishes.get(evt.id);
           if (ep) {
@@ -76,15 +88,69 @@ NEW_AUTH = '''  async auth(signAuthEvent) {
       };
       void signAndSend().catch(reject);
     });
-    return this.authPromise;
+    const pending = this.authPromise;
+    void pending.catch(() => {
+      if (this.authPromise === pending)
+        this.authPromise = void 0;
+    });
+    return pending;
   }'''
+
+EXTRA_REPLACEMENTS = (
+    ('''    this.send('["EVENT",' + JSON.stringify(event) + "]");''',
+     '''    void this.send('["EVENT",' + JSON.stringify(event) + "]").catch((err) => {
+      const pending = this.openEventPublishes.get(event.id);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        this.openEventPublishes.delete(event.id);
+        pending.reject(err);
+      }
+    });'''),
+    ('''    this.send('["COUNT","' + id + '",' + JSON.stringify(filters).substring(1));''',
+     '''    void this.send('["COUNT","' + id + '",' + JSON.stringify(filters).substring(1)).catch((err) => {
+      const pending = this.openCountRequests.get(id);
+      if (pending) {
+        this.openCountRequests.delete(id);
+        pending.reject(err);
+      }
+    });'''),
+    ('''    this.relay.send('["REQ","' + this.id + '",' + JSON.stringify(this.filters).substring(1));''',
+     '''    void this.relay.send('["REQ","' + this.id + '",' + JSON.stringify(this.filters).substring(1)).catch((err) => {
+      this.close(String(err));
+    });'''),
+    ('''  close(reason = "closed by caller") {
+    if (!this.closed && this.relay.connected) {
+      try {
+        this.relay.send('["CLOSE",' + JSON.stringify(this.id) + "]");
+      } catch (err) {
+        if (err instanceof SendingOnClosedConnection) {
+        } else {
+          throw err;
+        }
+      }
+      this.closed = true;
+    }''',
+     '''  close(reason = "closed by caller") {
+    if (this.closed && this.relay.openSubs.get(this.id) !== this)
+      return;
+    const sendClose = !this.closed && this.relay.connected;
+    this.closed = true;
+    clearTimeout(this.eoseTimeoutHandle);
+    if (sendClose) {
+      // CLOSE is best effort: local teardown must finish even if the wire fails.
+      void this.relay.send('["CLOSE",' + JSON.stringify(this.id) + "]").catch(() => {});
+    }'''),
+)
 
 
 def transform(text):
     """Fail closed on drift or an already patched input; validate before writes."""
-    if text.count(OLD_SEND) != 1 or text.count(OLD_AUTH) != 1:
-        raise ValueError('Reviewed nostr-tools send/auth methods changed')
-    return text.replace(OLD_SEND, NEW_SEND).replace(OLD_AUTH, NEW_AUTH)
+    replacements = ((OLD_SEND, NEW_SEND), (OLD_AUTH, NEW_AUTH)) + EXTRA_REPLACEMENTS
+    if any(text.count(old) != 1 for old, _ in replacements):
+        raise ValueError('Reviewed nostr-tools operation methods changed')
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
 
 
 def digest(raw):

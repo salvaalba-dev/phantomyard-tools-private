@@ -46,7 +46,7 @@ for (const entry of ['abstract-relay', 'pool']) {
       });
       await relay.connect();
     }
-    relay.publishTimeout = 30;
+    relay.publishTimeout = 250;
     const socket = FakeWebSocket.latest;
     socket.receive(['AUTH', 'synthetic-challenge']);
     return { relay, socket };
@@ -112,10 +112,10 @@ for (const entry of ['abstract-relay', 'pool']) {
     }
   });
 
-  test(`${entry}: existing fire-and-forget guard observes the send rejection`, async () => {
+  test(`${entry}: synthetic fire-and-forget observer sees the send rejection`, async () => {
     const { relay, socket } = await connect();
     const signing = deferred(), entered = deferred(), observed = deferred();
-    // Same observation boundary as the pinned guardRelayAuthRejection().
+    // Unit-test observer only. The separate Bun integration imports the real guard.
     const original = relay.auth.bind(relay);
     relay.auth = signer => {
       const pending = original(signer);
@@ -130,5 +130,115 @@ for (const entry of ['abstract-relay', 'pool']) {
     assert.match((await observed.promise).message, /closed connection/);
     assert.equal(relay.openEventPublishes.size, 0);
     await turn();
+  });
+
+  test(`${entry}: transient signing failure allows retry on the same connection`, async () => {
+    const { relay, socket } = await connect();
+    try {
+      await assert.rejects(relay.auth(async () => { throw Error('transient signer'); }), /transient signer/);
+      const pending = relay.auth(async () => event);
+      await turn();
+      assert.equal(socket.sent.length, 1);
+      socket.receive(['OK', event.id, true, 'retry accepted']);
+      assert.equal(await pending, 'retry accepted');
+    } finally { relay.close(); }
+  });
+
+  test(`${entry}: concurrent AUTH shares signing and a late old failure preserves the new AUTH`, async () => {
+    const { relay, socket } = await connect();
+    const oldSigning = deferred();
+    try {
+      let calls = 0;
+      const signer = async () => { calls++; return oldSigning.promise; };
+      const first = relay.auth(signer), same = relay.auth(signer);
+      const rejected = Promise.all([assert.rejects(first, /closed connection/), assert.rejects(same, /closed connection/)]);
+      assert.equal(calls, 1);
+      socket.close();
+      await relay.connect();
+      const nextSocket = FakeWebSocket.latest;
+      nextSocket.receive(['AUTH', 'new challenge']);
+      const next = relay.auth(async () => event);
+      const nextMemo = relay.authPromise;
+      oldSigning.resolve(event);
+      await rejected;
+      assert.equal(relay.authPromise, nextMemo);
+      await turn();
+      assert.equal(nextSocket.sent.length, 1);
+      assert.equal(nextSocket.sent[0][0], 'AUTH');
+      nextSocket.receive(['OK', event.id, true, 'new connection accepted']);
+      assert.equal(await next, 'new connection accepted');
+    } finally { relay.close(); }
+  });
+
+  for (const mode of ['disconnected', 'missing websocket', 'closed websocket', 'write failure']) {
+    test(`${entry}: ${mode} rejects publish/count and cleans their pending entries`, async () => {
+      const { relay, socket } = await connect();
+      try {
+        if (mode === 'disconnected') socket.close();
+        if (mode === 'missing websocket') relay.ws = undefined;
+        if (mode === 'closed websocket') socket.readyState = 3;
+        if (mode === 'write failure') socket.sendFailure = Error('synthetic write failure');
+        const expected = mode === 'write failure' ? /synthetic write failure/ : /closed connection/;
+        await Promise.all([
+          assert.rejects(relay.auth(async () => ({ ...event, id: 'd'.repeat(64) })), expected),
+          assert.rejects(relay.publish(event), expected),
+          assert.rejects(relay.count([{}], { id: 'count-fail' }), expected),
+        ]);
+        assert.equal(relay.openEventPublishes.size, 0);
+        assert.equal(relay.openCountRequests.size, 0);
+        await turn();
+      } finally { relay.close(); }
+    });
+  }
+
+  test(`${entry}: successful publish/count preserve their response contract`, async () => {
+    const { relay, socket } = await connect();
+    try {
+      const published = relay.publish(event), counted = relay.count([{}], { id: 'count-ok' });
+      await turn();
+      assert.deepEqual(socket.sent.map(frame => frame[0]), ['EVENT', 'COUNT']);
+      socket.receive(['OK', event.id, true, 'stored']);
+      socket.receive(['COUNT', 'count-ok', { count: 7 }]);
+      assert.equal(await published, 'stored');
+      assert.equal(await counted, 7);
+      assert.equal(relay.openEventPublishes.size, 0);
+      assert.equal(relay.openCountRequests.size, 0);
+    } finally { relay.close(); }
+  });
+
+  test(`${entry}: failed REQ closes once and cancels EOSE without orphaning CLOSE`, async () => {
+    const { relay, socket } = await connect();
+    let closed = 0, eosed = 0;
+    try {
+      socket.sendFailure = Error('synthetic REQ failure');
+      const sub = relay.subscribe([{}], {
+        id: 'failed-sub', eoseTimeout: 20,
+        onclose: reason => { closed++; assert.match(reason, /synthetic REQ failure/); },
+        oneose: () => eosed++,
+      });
+      await turn();
+      sub.close();
+      await new Promise(resolve => setTimeout(resolve, 40));
+      assert.equal(sub.closed, true);
+      assert.equal(relay.openSubs.size, 0);
+      assert.equal(relay.ongoingOperations, 0);
+      assert.equal(closed, 1);
+      assert.equal(eosed, 0);
+    } finally { relay.close(); }
+  });
+
+  test(`${entry}: relay CLOSED tears down once without echoing CLOSE`, async () => {
+    const { relay, socket } = await connect();
+    let closed = 0;
+    try {
+      const sub = relay.subscribe([{}], { id: 'remote-closed', onclose: () => closed++ });
+      await turn();
+      socket.receive(['CLOSED', sub.id, 'remote rejection']);
+      sub.close();
+      assert.equal(closed, 1);
+      assert.equal(relay.openSubs.size, 0);
+      assert.equal(relay.ongoingOperations, 0);
+      assert.deepEqual(socket.sent.map(frame => frame[0]), ['REQ']);
+    } finally { relay.close(); }
   });
 }
