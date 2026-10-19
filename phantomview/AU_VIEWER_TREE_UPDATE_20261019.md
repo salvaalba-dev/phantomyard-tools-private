@@ -69,9 +69,22 @@ The prior reader, projection generation and unit selection remain available for
 rollback. Installation-specific scripts, credentials and source data stay on the
 host and are not included in this report.
 
-A real human session through the normal persona-issued link has not yet been
-rechecked after this restart. Existing in-memory sessions require a new link;
-no human identity was simulated for this deployment.
+A real human session through the normal persona-issued link was verified after
+the restart. All six overview banners opened their corresponding sections.
+The live tree showed eight personas, eight roles, four humans, seven departments,
+one organization and five findings. Reporting levels placed the CEO below the
+organization, with the declared subordinate roles at their respective levels.
+The three published counterpart links appeared; missing counterparts were not
+inferred. Department, persona and human links opened the correct current records,
+and the close button returned to the tree.
+
+Keyboard focus on the training branch highlighted four cards and four edges,
+including one workflow edge, while unrelated cards dimmed. Physical mouseover
+was not exercised; mouseenter and focusin use the same highlighting function.
+The authenticated overview displayed Paco as its native assistant. No assistant
+message was submitted. No human identity was simulated. The protected host
+receipt now records these checks as completed; no services were restarted during
+this verification.
 
 ## Validation
 
