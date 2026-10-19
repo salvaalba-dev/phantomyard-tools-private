@@ -21,7 +21,7 @@ const { nsecEncode, npubEncode } = await import(pathToFileURL(source + '/node_mo
 const { getPublicKey } = await import(pathToFileURL(source + '/node_modules/nostr-tools/lib/esm/pure.js'));
 const key = new Uint8Array(32).fill(1), owner = npubEncode(getPublicKey(new Uint8Array(32).fill(2)));
 await mkdir(evidence, { recursive: true });
-for (const name of ['native', 'home', 'config', 'data', 'state', 'personas/soak']) {
+for (const name of ['native', 'home', 'config', 'data', 'state', 'personas/soak/memory']) {
   await mkdir(root + '/' + name, { recursive: true, mode: 0o750 });
 }
 await chmod(root + '/native', 0o750);
