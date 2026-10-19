@@ -13,3 +13,6 @@ source material; collected private data and credentials are not committed.
 The [private relay AUTH repair](phantomview/RELAY_AUTH_RECOVERY.md) documents the
 reviewed dependency overlay, isolated regression checks and staging acceptance.
 It does not activate a native build or change production socket recovery.
+
+The compiled candidate staging workflow records an isolated synthetic soak before
+merge; see the same recovery guide for its scope and the real-channel gate.
