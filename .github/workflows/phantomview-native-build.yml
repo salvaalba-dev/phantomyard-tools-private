@@ -51,6 +51,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUILD_BUN_VERSION }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.19.0'
       - name: Install hash-locked binary wheels and the archived reviewed verifier
         run: |
           python -m venv signer-venv
@@ -63,7 +66,7 @@ jobs:
         working-directory: phantomview
         env:
           PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/native-source
-        run: ../signer-venv/bin/python -m unittest test_authenticated_command_patch test_native_host_entry test_native_build -v
+        run: ../signer-venv/bin/python -m unittest test_authenticated_command_patch test_native_host_entry test_native_build test_relay_auth_patch -v
       - name: Prepare reviewed operator routes without changing upstream
         run: |
           python phantomview/native_host_entry.py native-source operator-build/routes.json
@@ -78,10 +81,14 @@ jobs:
       - name: Install unchanged locked native dependencies
         working-directory: native-source
         run: bun install --frozen-lockfile
+      - name: Apply the exact-byte reviewed relay AUTH overlay
+        run: python phantomview/relay_auth_patch.py native-source --manifest operator-build/relay-auth-patch.json
       - name: Verify native dispatch, authenticated channels and startup
         id: channels
         working-directory: native-source
         run: |
+          PHANTOMVIEW_NATIVE_SOURCE="$PWD" node --test --test-timeout=5000 ../phantomview/relay_auth_regression.mjs
+          PHANTOMVIEW_NATIVE_SOURCE="$PWD" bun test ../phantomview/relay_auth_regression.mjs --timeout 5000
           bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-native-link.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
           bun test tests/phantomview-command-startup.test.ts tests/phantomview-runtime-binding.test.ts tests/cli-run.test.ts
       - name: Verify existing-persona transport, private controls and real signing
@@ -103,7 +110,9 @@ jobs:
           python phantomview/native_build.py embedded
       - name: Compile Linux x64 baseline binary
         working-directory: native-source
-        run: bun run build:x64
+        run: |
+          python ../phantomview/relay_auth_patch.py . --manifest ../operator-build/relay-auth-patch.json --verify
+          bun run build:x64
       - name: Record verified source, tests, toolchain, runner and ELF provenance
         env:
           TEST_PREPARATION: ${{ steps.preparation.outcome }}
