@@ -82,8 +82,26 @@ they are not a systemd activation interlock or a record of live service state.
 
 ## Staging acceptance and rollback
 
-Keep the existing Paco pilot drop-in disabled. Build only from the reviewed
-private workflow after review/merge; its main-only dispatch guard is retained.
+Keep the existing Paco pilot drop-in disabled. The operator build workflow keeps
+its main-only dispatch guard. A separate `phantomview-native-soak.yml` builds the
+candidate on the private `fix/relay-auth-disconnect` branch with fixed synthetic
+routes, no credentials and read-only repository permissions. This permits review
+of compiled-binary evidence before merging, without relaxing the operator gate.
+
+That staging workflow runs the same source/tag checks, overlays, native tests and
+receipt generation, then executes `native_soak.mjs` in fresh Linux PID/network
+namespaces with no external route. It uses a synthetic PhantomChat identity, a
+local websocket relay and a fixture executable behind the real Claude adapter.
+The compiled daemon handles conversation-socket turns, repeated relay AUTH
+rejection/disconnection, nightly child runs and a clean shutdown for over 15
+minutes. The driver checks runtime process counts, peak RSS, socket cleanup and
+refusal to overwrite live, stale or foreign sockets. Its JSON result binds the
+measured duration and counters to the exact binary SHA-256. Failure artifacts are
+retained, and passing source tests alone cannot mark the soak passed.
+
+This is a synthetic transport/process soak, not evidence of real Telegram or
+model-provider behavior. It does not make its staging-route artifact suitable
+for Paco. For a later real-channel canary:
 Use a disposable persona, independent Telegram identity, private state directory
 and dedicated socket. Run the compiled Linux binary for at least 15 minutes and
 several turns while injecting relay disconnects and running a nightly sweep.
