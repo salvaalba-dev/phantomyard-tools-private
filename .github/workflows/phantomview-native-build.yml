@@ -89,6 +89,7 @@ jobs:
         run: |
           PHANTOMVIEW_NATIVE_SOURCE="$PWD" node --test --test-timeout=5000 ../phantomview/relay_auth_regression.mjs
           PHANTOMVIEW_NATIVE_SOURCE="$PWD" bun test ../phantomview/relay_auth_regression.mjs --timeout 5000
+          PHANTOMVIEW_NATIVE_SOURCE="$PWD" bun test ../phantomview/relay_auth_guard_integration.test.mjs --timeout 5000
           bun test tests/phantomview-authenticated-command.test.ts tests/phantomview-native-link.test.ts tests/phantomview-ingress.test.ts tests/channels-telegram.test.ts tests/channels-phantomchat-channel.test.ts tests/channels-phantomchat-server.test.ts
           bun test tests/phantomview-command-startup.test.ts tests/phantomview-runtime-binding.test.ts tests/cli-run.test.ts
       - name: Verify existing-persona transport, private controls and real signing

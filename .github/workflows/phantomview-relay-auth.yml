@@ -38,6 +38,17 @@ jobs:
           printf '%s\n' '{"private":true,"type":"module","dependencies":{"nostr-tools":"2.23.3"}}' > relay-fixture/package.json
           cd relay-fixture
           bun install --ignore-scripts
+      - name: Check out the real guard at the native build revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: phantomyard/phantombot
+          ref: 5af27060327ee8c53fe730dd8b98b6b305c62add
+          path: guard-source
+          persist-credentials: false
+          sparse-checkout: |
+            src/channels/phantomchat
+            src/lib/logger.ts
+          sparse-checkout-cone-mode: false
       - name: Demonstrate the original regression, then verify the repair
         env:
           PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/relay-fixture
@@ -52,6 +63,12 @@ jobs:
           node --test --test-timeout=5000 phantomview/relay_auth_regression.mjs
           bun test ./phantomview/relay_auth_regression.mjs --timeout 5000
           python phantomview/relay_auth_patch.py relay-fixture --manifest relay-auth-patch.json --verify
+      - name: Exercise the real pool, AUTH guard and signer with a synthetic websocket
+        env:
+          PHANTOMVIEW_NATIVE_SOURCE: ${{ github.workspace }}/guard-source
+        run: |
+          ln -s "$GITHUB_WORKSPACE/relay-fixture/node_modules" guard-source/node_modules
+          bun test ./phantomview/relay_auth_guard_integration.test.mjs --timeout 5000
       - name: Preserve non-secret test evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
