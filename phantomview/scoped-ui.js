@@ -220,6 +220,7 @@ async function startScopedWorkspace() {
   }
   function render(search=false) {
     const selected=model.selection(section);
+    const selectSection=id=>{section=id;chat.reset();render(search);loadAssistant(epoch);};
     $('organization').textContent=model.organization();$('scope-label').textContent=model.view.scope_id;
     $('page-title').textContent=search?'Search your workspace':selected?selected.label:'Your information, connected.';
     const nav=$('navigation');nav.replaceChildren();
@@ -227,12 +228,17 @@ async function startScopedWorkspace() {
     for(const item of [{id:'',label:search?'All results':'Overview'},...model.sections()]) {
       if(item.module&&item.module!==group){group=item.module;nav.append(text('span',group,'module-label'));}
       const button=text('button',item.label);button.type='button';button.className=section===item.id?'active':'';
-      button.setAttribute('aria-current',section===item.id?'page':'false');button.addEventListener('click',()=>{
-        section=item.id;chat.reset();render(search);loadAssistant(epoch);
-      });nav.append(button);
+      button.setAttribute('aria-current',section===item.id?'page':'false');button.addEventListener('click',()=>selectSection(item.id));nav.append(button);
     }
     const stats=$('stats');stats.replaceChildren();
-    for(const[kind,count]of Object.entries(model.counts())){const tile=text('div','', 'stat');tile.append(text('span',SCOPED_KINDS[kind]),text('strong',count));stats.append(tile);}
+    for(const[kind,count]of Object.entries(model.counts())){
+      const target=model.sections().find(item=>item.kind===kind),tile=text('button','', 'stat');tile.type='button';
+      tile.append(text('span',SCOPED_KINDS[kind]),text('strong',count));tile.disabled=!target;
+      tile.setAttribute('aria-label',`Show ${SCOPED_KINDS[kind]} (${count})`);
+      tile.setAttribute('aria-current',target&&section===target.id?'page':'false');
+      tile.classList.toggle('active',!!target&&section===target.id);
+      if(target)tile.addEventListener('click',()=>selectSection(target.id));stats.append(tile);
+    }
     const records=$('records');records.replaceChildren();
     records.className=selected?.view==='table'?'record-table':'cards';
     for(const row of model.resources.filter(row=>!selected||row.kind===selected.kind)) {
