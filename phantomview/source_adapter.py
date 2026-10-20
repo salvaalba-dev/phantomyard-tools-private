@@ -182,7 +182,8 @@ def prepare(snapshot, directory, *, organization_links=False, profile_fields=Fal
         from profile_documents import NAMES, validate_document
         for actor in snapshot.get('actors', []):
             parent = aliases.get(f"{oid}:actors:{actor.get('id')}")
-            if parent is None or actor.get('org') != oid or not eligible(actor):
+            if (parent is None or actor.get('org') != oid or not eligible(actor)
+                    or actor.get('searchable') is not True):
                 continue
             documents = actor.get('profile_documents', [])
             if not isinstance(documents, list) or len(documents) > len(NAMES):

@@ -110,6 +110,19 @@ class ProfileDocumentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             approve(draft, decisions, org, lambda: source, reviewer=bundle['reviewer'])
 
+    def test_profile_export_requires_explicit_searchable_actor(self):
+        for value in (None, False, 1, 'true'):
+            source = snapshot()
+            actor = source['actors'][0]
+            actor['profile_documents'] = [document()]
+            if value is None:
+                actor.pop('searchable', None)
+            else:
+                actor['searchable'] = value
+            draft = prepare(source, HumanDirectory(scoped_organization()), profile_documents=True)
+            self.assertFalse(any(row['data'].get('source') == 'reviewed-profile'
+                                 for row in draft['records']))
+
 
 if __name__ == '__main__':
     unittest.main()

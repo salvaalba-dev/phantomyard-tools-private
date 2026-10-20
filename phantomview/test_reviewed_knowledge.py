@@ -174,3 +174,17 @@ class ReviewedKnowledgeTests(unittest.TestCase):
         result = self.read()
         result['scope']['id'] = 'other-project'
         self.assertEqual(self.read()['scope']['id'], 'example')
+
+    def test_snapshot_revoked_after_second_body_read_rejects_complete_result(self):
+        count = 0
+        def changing(ident):
+            nonlocal count
+            count += 1
+            if count == 2:
+                # Mutate the same object after _current has inspected its metadata.
+                self.source['snapshot']['actors'][0]['searchable'] = False
+            return self.load(ident)
+        self.reader.note_loader = changing
+        with self.assertRaisesRegex(ValueError, 'snapshot changed'):
+            self.read()
+        self.assertEqual(count, 2)

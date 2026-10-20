@@ -5,7 +5,7 @@ import stat
 
 from organization_authority import _parse, _read
 from resource_review import MAX_REVISION_BYTES, _validate, reviewed_catalog
-from scoped_knowledge import HEX, MAX_PAYLOAD_BYTES, PrivateKBStore
+from scoped_knowledge import HEX, MAX_PAYLOAD_BYTES, PrivateKBStore, digest
 
 FIELDS = {'review_path', 'payload_directory'}
 
@@ -70,11 +70,21 @@ class ReaderKnowledgeSource:
         _protected(self.payload_directory, directory=True)
         if not isinstance(ident, str) or not HEX.fullmatch(ident):
             return None
+        review = self.review()
+        row = next((row for row in review['catalog']['resources'] if row['id'] == ident), None)
+        if row is None or row.get('secret') is True:
+            return None
         try:
             _protected(self.payload_directory / (ident + '.json'), limit=MAX_PAYLOAD_BYTES)
         except (OSError, ValueError):
             return None
-        return self.store(ident)
+        raw = self.store(ident)
+        if not isinstance(raw, bytes) or digest(raw) != row['payload_sha256']:
+            return None
+        # A direct caller receives only bytes still selected by the same approval.
+        if self.review() != review:
+            return None
+        return raw
 
     def preflight(self):
         """Validate the selected approval without reading note bodies or writing."""

@@ -64,6 +64,19 @@ class KnowledgeSourceTests(KnowledgeFixture, unittest.TestCase):
         self.fixture['snapshot']['actors'][0]['searchable'] = False
         self.assertIsNone(self.source.note(self.fixture['id']))
 
+    def test_direct_loader_rejects_searchable_unapproved_or_changed_payload(self):
+        from scoped_knowledge import digest
+        ident = digest(b'unapproved searchable note')
+        note = json.loads(self.fixture['raw'])
+        note.update(id=ident, path='kb/policies/unapproved.md')
+        self.fixture['snapshot']['actors'][0]['knowledge'].append(
+            {'id': ident, 'path': note['path'], 'searchable': True})
+        self.write(self.payloads / (ident + '.json'), json.dumps(note).encode())
+        with patch.object(type(self.source.store), '__call__', side_effect=AssertionError('No unapproved body reads')):
+            self.assertIsNone(self.source.note(ident))
+        self.write(self.payload, self.fixture['raw'] + b' ')
+        self.assertIsNone(self.source.note(self.fixture['id']))
+
     def test_review_change_is_reloaded_and_authority_drift_is_not_silently_ignored(self):
         bundle = self.fixture['bundle']
         bundle['catalog']['resources'][0]['category'] = 'category-3'

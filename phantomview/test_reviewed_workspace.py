@@ -140,3 +140,30 @@ class ReviewedWorkspaceTests(ProjectionFixture):
         self.assertNotEqual(before, self.source['bundle'])
         self.assertNotIn('knowledge', self.backend.state(self.headers)['counts'])
         self.assertEqual(self.note_reads, [])
+
+    def test_corpus_above_eight_mib_fits_independent_verification_budget(self):
+        for index in range(36):
+            ident = self.add_note('Large approved note ' + str(index))
+            note = json.loads(self.notes[ident])
+            note['content'] = 'x' * (240 * 1024)
+            raw = json.dumps(note).encode()
+            self.notes[ident] = raw
+            row = next(row for row in self.source['bundle']['catalog']['resources'] if row['id'] == ident)
+            row['payload_sha256'] = digest(raw)
+        self.revise()
+        total = sum(map(len, self.notes.values()))
+        self.assertGreater(total, 8 * 1024 * 1024)
+        self.assertLess(total, 16 * 1024 * 1024)
+        self.assertEqual(self.backend.state(self.headers)['counts']['knowledge'], 37)
+        self.assertEqual(len(self.note_reads), 74)
+
+    def test_verification_pass_remains_bounded_independently(self):
+        calls = 0
+        def growing(ident):
+            nonlocal calls
+            calls += 1
+            return self.source['raw'] if calls == 1 else b'x' * 1024
+        self.reader.note_loader = growing
+        with patch('reviewed_knowledge.MAX_SCAN_BYTES', len(self.source['raw'])), self.assertRaises(ValueError):
+            self.backend.state(self.headers)
+        self.assertEqual(calls, 2)

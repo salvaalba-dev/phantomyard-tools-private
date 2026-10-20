@@ -37,6 +37,7 @@ class ReviewedKnowledge:
         catalog = reviewed_catalog(bundle, org)
         if catalog['organization'] != recipient.organization:
             raise ValueError('Knowledge review belongs to another organization')
+        snapshot_revision = revision(self.snapshot_loader())
         notes, selected, used = [], [], 0
 
         def bounded_load(key):
@@ -62,6 +63,8 @@ class ReviewedKnowledge:
             selected.append((row, note))
         # Recheck every selected note after the complete scan, so a later read
         # cannot leave an earlier excluded/changed note in titles or counters.
+        # Each pass has its own bound: verification must not halve corpus capacity.
+        used = 0
         for row, note in selected:
             try:
                 if _current(row, recipient.organization, self.snapshot_loader(), bounded_load) != note:
@@ -79,6 +82,8 @@ class ReviewedKnowledge:
         if (revision(self.organization_loader()) != revision(org)
                 or _validate(self.review_loader()) != bundle):
             raise ValueError('Knowledge authority or review changed during the read')
+        if revision(self.snapshot_loader()) != snapshot_revision:
+            raise ValueError('Knowledge snapshot changed during the read')
         current, _ = self.gate.identified_scope(headers)
         if current != recipient:
             raise ValueError('Identified session changed during the knowledge read')

@@ -83,8 +83,11 @@ metadata projection, independent of the selected menu. It normalizes case and
 accents, returns metadata cards without excerpts, deduplicates matches and keeps
 the existing 100-result bound. It checks that knowledge and the current workspace
 remain consistent before returning results. Every scan is bounded to 16 MiB of
-loaded bytes, including final rechecks; exceeding that bound returns no partial
-corpus. Large installations may need a later bounded index rather than larger caps.
+loaded bytes per pass: up to 16 MiB for selection and independently up to
+16 MiB for final verification. Rechecks do not halve corpus capacity; exceeding
+either bound returns no partial corpus. A final snapshot revision check rejects
+metadata changes during either pass. Direct host-loader calls also require
+current approval membership and the exact approved payload fingerprint. Large installations may need a later bounded index rather than larger caps.
 
 The scoped client's Knowledge cards fetch the dedicated full-note endpoint and
 check identity and payload revision against the selected card before rendering
