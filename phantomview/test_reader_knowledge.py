@@ -131,6 +131,11 @@ class KnowledgeSourceTests(KnowledgeFixture, unittest.TestCase):
         self.review.symlink_to(original)
         with self.assertRaises(ValueError):
             self.source.review()
+        with self.assertRaises(ValueError):
+            self.source.note(self.fixture['id'])
+        # Restore the approval before independently checking the payload link.
+        self.review.unlink()
+        original.rename(self.review)
         self.payload.unlink()
         self.payload.symlink_to(original)
         self.assertIsNone(self.source.note(self.fixture['id']))
@@ -250,3 +255,4 @@ class PublishedKnowledgeHTTPTests(KnowledgeFixture, unittest.TestCase):
         self.review.unlink()
         with patch('identified_reader.signed_access', return_value=ACCESS), self.assertRaises(OSError):
             PublishedReader(**self.options)
+
