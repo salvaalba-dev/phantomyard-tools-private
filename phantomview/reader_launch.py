@@ -16,6 +16,7 @@ from identified_reader import PublishedReader, signed_access
 from issuer_routes import FIELDS as ISSUER_FIELDS, validate_routes
 from organization_authority import _parse, _read
 from projection_review import PublishedProjection
+from reader_knowledge import FIELDS as KNOWLEDGE_FIELDS, ReaderKnowledgeSource, coordinates
 from session_audit import Ledger
 from trusted_handoff import DaemonPeerPolicy
 
@@ -30,7 +31,7 @@ FIELDS = PATHS | {'schema_version', 'organization', 'actor', 'identities', 'orig
 def validate(value):
     """Validate a fixed operator document, never a browser-supplied request."""
     if (not isinstance(value, dict) or not FIELDS <= set(value)
-            or set(value) - (FIELDS | {'additional_issuers'})):
+            or set(value) - (FIELDS | {'additional_issuers', 'reviewed_knowledge'})):
         raise ValueError('Use exactly the fields in reader-launch.example.json')
     if type(value['schema_version']) is not int or value['schema_version'] != 1:
         raise ValueError('Reader launch schema_version must be 1')
@@ -62,25 +63,31 @@ def validate(value):
     except ValueError:
         raise ValueError('Configure one canonical HTTPS origin without a path or credentials') from None
     selected = PATHS | ({'conversation_socket'} if value['conversation_socket'] is not None else set())
-    for field in selected:
-        path = value[field]
+    knowledge = coordinates(value['reviewed_knowledge']) if 'reviewed_knowledge' in value else None
+    paths = [value[field] for field in selected] + (list(knowledge.values()) if knowledge else [])
+    for path in paths:
         if (not isinstance(path, str) or not path.isascii() or not path.startswith('/') or path == '/'
                 or path.startswith('//') or PurePosixPath(path).as_posix() != path
                 or '..' in PurePosixPath(path).parts or '\\' in path
                 or any(ord(c) <= 32 or ord(c) == 127 for c in path)):
             raise ValueError('Use fixed normalized absolute Linux paths')
-    if len({value[field] for field in selected}) != len(selected):
+    if len(set(paths)) != len(paths):
         raise ValueError('Reader paths must not alias one another')
+    if knowledge and not knowledge['review_path'].endswith('.json'):
+        raise ValueError('Reviewed knowledge requires a protected JSON review file')
     for field in ('socket_path', 'conversation_socket'):
         if value[field] is not None and len(value[field]) > 100:
             raise ValueError('Unix socket paths must be at most 100 bytes')
     result = dict(value, identities=list(keys))
+    if knowledge:
+        result['reviewed_knowledge'] = knowledge
     if 'additional_issuers' in value:
         if not isinstance(value['additional_issuers'], list):
             raise ValueError('Additional issuers must be an explicit route list')
         routes = validate_routes({key: value[key] for key in ISSUER_FIELDS}, value['additional_issuers'],
                                  reader_uid=value['reader_uid'],
-                                 occupied=[value[key] for key in PATHS - {'socket_path'}])
+                                 occupied=[value[key] for key in PATHS - {'socket_path'}]
+                                          + (list(knowledge.values()) if knowledge else []))
         result['additional_issuers'] = routes[1:]
     return result
 
@@ -122,6 +129,8 @@ def preflight(config):
             or catalog['organization'] != config['organization']
             or catalog['authority_revision'] != directory.authority_revision):
         raise ValueError('Current approved projection must authorize the configured issuer')
+    if 'reviewed_knowledge' in config:
+        ReaderKnowledgeSource(config['reviewed_knowledge'], authority.read, authority.snapshot)
     targets = [('socket_path', route['socket_path']) for route in routes] + [('audit_path', config['audit_path'])]
     for field, target in targets:
         path = Path(target)
@@ -151,6 +160,8 @@ def preflight(config):
 def build(config, authority):
     """Create the existing assembly only after successful preflight."""
     options = {'additional_issuers': config['additional_issuers']} if 'additional_issuers' in config else {}
+    if 'reviewed_knowledge' in config:
+        options['reviewed_knowledge'] = {key: config['reviewed_knowledge'][key] for key in KNOWLEDGE_FIELDS}
     return PublishedReader(authority=authority, projection_root=config['projection_root'],
         actor=config['actor'], identities=config['identities'], origin=config['origin'], port=config['port'],
         issuer_uid=config['issuer_uid'], socket_path=config['socket_path'], socket_group=config['socket_group'],

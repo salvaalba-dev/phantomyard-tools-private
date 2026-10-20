@@ -13,10 +13,13 @@ with a parent that is not writable by group/others. Neither links nor duplicate
 JSON fields are supported. Never put private keys, channel credentials, human
 contacts, tokens or transcripts in this file or in repository examples.
 
-All fields are required. `conversation_socket: null` explicitly disables the
+All fields in the example are required. `conversation_socket: null` explicitly disables the
 assistant for the primary issuer. An optional protected `additional_issuers` list
 adds fixed routes in the same reader; see [multiple issuers](MULTI_ISSUER_READER.md).
 An additional issuer may enable its own conversation socket independently.
+The optional `reviewed_knowledge` object connects existing approved KB resources;
+see the configuration and protection requirements below. Omitting it preserves
+the existing metadata-only reader behavior.
 `reader_uid` and every `issuer_uid` must be distinct nonroot
 Linux accounts. `socket_group` is the already-provisioned group allowed to reach
 the reader's handoff listener, not the conversation socket group.
@@ -40,6 +43,48 @@ The launcher sets umask `077` before creating the audit database during serving.
 Permissions of existing directories and all ancestor ownership remain an
 operator deployment review, not a claim established by configuration parsing.
 
+### Optional reviewed knowledge
+
+Add this object only after independently reviewing and approving exact captured
+resources with the existing `resource_review` workflow:
+
+```json
+"reviewed_knowledge": {
+  "review_path": "/var/lib/example-view/knowledge-reviews/approved.json",
+  "payload_directory": "/var/lib/example-view/private-kb"
+}
+```
+
+`review_path` selects one full existing approval bundle, not a draft, catalog,
+source note or browser request. `payload_directory` is the existing collector's
+private captured KB store. The same published organization authority, selected
+snapshot and identified session gate govern these notes and the visual metadata.
+This configuration grants no categories, scopes or project membership and does
+not carry approvals forward to changed or newly detected notes.
+
+The selected review, its parent, the payload directory and served payload files
+must be root/reader-owned and not writable by group or others on POSIX. Parent
+directories are checked too; root-owned sticky system ancestors such as `/tmp`
+are permitted. Regular files, bounded sizes and paths without links are required.
+Protect Windows ACLs independently from browser and model writers. Do
+not point this binding at persona-owned memory or an unreviewed live KB folder.
+
+Preflight validates the current approval without opening note bodies, creating
+files, approving content or starting another service. Missing or invalid optional
+configuration fails closed; it is never silently disabled. Requests authorize
+before reading note bodies, then recheck current source provenance, review,
+organization, content fingerprints and session. Denied, incomplete, removed or
+changed notes cannot contribute titles, counts, search matches or displayed text.
+Notes remain untrusted plain text; cross-references do not grant access.
+
+After independent review, the operator may atomically replace the selected full
+approval file with another valid bundle. The existing request path reloads it;
+no review watcher or additional database is introduced. Retain immutable review
+revisions with `save_revision` before selecting a replacement. A new authority or
+metadata snapshot still requires a matching valid visual publication. Changing
+the launch coordinates themselves requires restarting the reader as before.
+This binding is opt-in source integration, not evidence of activation in AU.
+
 ## Commands and check boundaries
 
 Run as the configured reader account using the reviewed Python environment:
@@ -52,6 +97,8 @@ Run as the configured reader account using the reviewed Python environment:
 `--check` verifies Linux account separation, existing handoff group membership,
 signature dependency availability, current published authority, issuer eligibility,
 approved projection generation, protected target parents and absent handoff path.
+When reviewed knowledge is configured, it also validates its existing approval
+and protected fixed locations without scanning note bodies.
 If an assistant is configured, its native socket must already exist with the
 expected daemon owner, group membership and mode `0660`. The check does not
 connect to it, authenticate a human, issue a link, bind HTTP/IPC, create audit

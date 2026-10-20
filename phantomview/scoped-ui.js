@@ -159,7 +159,7 @@ class ScopedModel {
     }
     // Reviewed note ownership is an exact collector identity, never a title/path guess.
     if(row.kind==='persona'&&scalar(data.id))for(const note of this.resources.filter(item=>item.kind==='knowledge'&&ScopedModel.isReviewedNote(item))){
-      if(note.data.actor===this.view.organization+':actors:'+data.id)add(note,'Reviewed knowledge');
+      if(note.data.actor===data.id||note.data.actor===this.view.organization+':actors:'+data.id)add(note,'Reviewed knowledge');
     }
     const contacts=data.contacts&&typeof data.contacts==='object'?data.contacts:data.channels&&typeof data.channels==='object'?data.channels:{};
     const contactRows=[['Website','website',contacts.website||data.website],['Email','email',contacts.email||data.email],

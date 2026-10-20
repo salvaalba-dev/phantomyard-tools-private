@@ -104,6 +104,29 @@ class LaunchContractTests(unittest.TestCase):
             launch.build(config, object())
         self.assertEqual(reader.call_args.kwargs['additional_issuers'], config['additional_issuers'])
 
+    def test_optional_knowledge_requires_exact_fixed_paths_and_detaches_input(self):
+        knowledge = {'review_path': '/private/reviews/approved.json', 'payload_directory': '/private/kb'}
+        config = example() | {'reviewed_knowledge': knowledge}
+        validated = launch.validate(config)
+        self.assertEqual(validated['reviewed_knowledge'], knowledge)
+        validated['reviewed_knowledge']['review_path'] = 'changed'
+        self.assertEqual(config['reviewed_knowledge'], knowledge)
+        for value in (None, False, {}, knowledge | {'category': 'category-1'},
+                      knowledge | {'review_path': '/private/../approved.json'},
+                      knowledge | {'review_path': 'https://view.example/review.json'},
+                      knowledge | {'payload_directory': config['index_path']},
+                      knowledge | {'review_path': '/private/review.yaml'}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                launch.validate(example() | {'reviewed_knowledge': value})
+
+    def test_build_forwards_only_the_operator_knowledge_coordinates(self):
+        config = example() | {'reviewed_knowledge': {
+            'review_path': '/private/reviews/approved.json', 'payload_directory': '/private/kb'}}
+        with patch.object(launch, 'Ledger'), patch.object(launch, 'PublishedReader') as reader:
+            launch.build(launch.validate(config), object())
+        self.assertEqual(reader.call_args.kwargs['reviewed_knowledge'], config['reviewed_knowledge'])
+        self.assertIsNot(reader.call_args.kwargs['reviewed_knowledge'], config['reviewed_knowledge'])
+
     def test_signal_sets_stop_event_and_original_handlers_are_restored(self):
         reader, handlers = Mock(), []
         def register(kind, handler):

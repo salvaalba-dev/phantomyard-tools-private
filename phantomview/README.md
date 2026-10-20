@@ -4,6 +4,12 @@ The optional [protected reader launcher](READER_LAUNCH.md) supplies a fixed JSON
 host configuration, a read-only preflight command and graceful shutdown for the
 identified assembly. Its AU cutover and rollback procedure is prepared, not applied.
 
+The launcher can optionally bind an existing approved KB review and captured
+payload store to the same identified reader. Authorized notes appear in Knowledge,
+global search and their persona cards. See [reviewed knowledge](REVIEWED_KNOWLEDGE_VIEW.md)
+for the opt-in configuration and unchanged source/ACL checks. No notes or access
+grants are approved by enabling the binding, and it remains unconfigured in AU.
+
 An optional [existing-persona conversation transport](PERSONA_CONVERSATION.md)
 now connects the identified reader to the issuing persona inside the existing
 native daemon. It preserves native configuration, knowledge, history, tools and

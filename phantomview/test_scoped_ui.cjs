@@ -34,6 +34,7 @@ test('profile documents require visible associations or exact reviewed persona o
   const f=organizationFixture(),note={id:'d'.repeat(64),kind:'knowledge',data:{title:'Profile',actor:'example:actors:field',source:'reviewed-knowledge'}};
   f.persona.data.id='field';f.view.resources.push(note,{id:'f'.repeat(64),kind:'knowledge',data:{...note.data,actor:'foreign:actors:field'}});
   let model=new ScopedModel(f.view),profile=model.profile(model.byId.get(f.persona.id));assert.deepEqual(profile.documents.map(row=>row.id),[note.id]);
+  note.data.actor='field';model=new ScopedModel(f.view);assert.deepEqual(model.profile(model.byId.get(f.persona.id)).documents.map(row=>row.id),[note.id]);
   note.data.actor='someone-else';model=new ScopedModel(f.view);assert.deepEqual(model.profile(model.byId.get(f.persona.id)).documents,[]);
   f.edge(f.persona,note,'profile');model=new ScopedModel(f.view);assert.deepEqual(model.profile(model.byId.get(f.persona.id)).documents.map(row=>row.id),[note.id]);
 });

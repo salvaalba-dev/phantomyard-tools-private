@@ -83,7 +83,7 @@ class PublishedReader:
     """
     def __init__(self, *, authority, projection_root, actor, identities, origin, port,
                  issuer_uid, socket_path, socket_group, audit, session_seconds=1800, conversation_socket=None,
-                 additional_issuers=None):
+                 additional_issuers=None, reviewed_knowledge=None):
         if (not isinstance(authority, PublishedAuthority) or not isinstance(audit, Ledger)
                 or not isinstance(actor, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', actor)
                 or type(identities) not in (list, tuple) or not 1 <= len(identities) <= 64
@@ -104,7 +104,16 @@ class PublishedReader:
         if not self.gate.origin.startswith('https://'):
             raise ValueError('An explicit HTTPS reader origin is required')
         self.projection = PublishedProjection(projection_root, authority.read, authority.snapshot)
-        self.backend = ScopedBackend(self.gate, self.projection.catalog, self.projection.record)
+        self.knowledge_source = None
+        knowledge = None
+        if reviewed_knowledge is not None:
+            from reader_knowledge import ReaderKnowledgeSource
+            from reviewed_knowledge import ReviewedKnowledge
+            self.knowledge_source = ReaderKnowledgeSource(reviewed_knowledge, authority.read, authority.snapshot)
+            knowledge = ReviewedKnowledge(self.gate, self.knowledge_source.review, authority.read,
+                                          authority.snapshot, self.knowledge_source.note)
+        self.backend = ScopedBackend(self.gate, self.projection.catalog, self.projection.record,
+                                     reviewed_knowledge=knowledge)
         self.consultations = None
         if any(route['conversation_socket'] is not None for route in self.routes):
             from persona_conversation import NativePersonaClient, PersonaAssistant
@@ -119,6 +128,8 @@ class PublishedReader:
         self.preflight()
 
     def preflight(self):
+        if self.knowledge_source is not None:
+            self.knowledge_source.preflight()
         directory = self.authority()
         catalog = self.projection.catalog()
         if (any(route['actor'] not in directory.scope.policy['personas'] for route in self.routes)

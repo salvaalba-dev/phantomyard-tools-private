@@ -34,6 +34,14 @@ An unclassified generated role note does not become approved just because its
 publisher or filename is recognized. No classification is inferred from a folder,
 persona, numeric category ordering or a document owner.
 
+The production `PublishedReader` now supports this same binding through the
+optional protected `reviewed_knowledge` launch object documented in
+[READER_LAUNCH.md](READER_LAUNCH.md#optional-reviewed-knowledge). It supplies the
+existing review bundle and captured payload store to these loaders, using the
+exact same gate and authority as the published metadata reader. It creates no
+review database, classifier, background service or native memory restriction.
+The launch option remains absent by default and is not enabled in AU.
+
 ## Request and disclosure contract
 
 When explicitly configured, `GET /api/reviewed-knowledge/<64-hex-note-id>` returns
@@ -57,8 +65,8 @@ the backend binding adds discovery/search. Conflicting bindings are rejected.
   note body is opened. Missing configuration or a different gate yields 403;
   expired/unidentified sessions or stale authority yield the existing generic 401.
 
-Markdown remains untrusted content. A future UI must use text rendering or its
-reviewed Markdown sanitizer; never inject raw HTML. A model consumer must preserve
+Markdown remains untrusted content. The current UI uses plain text rendering;
+never inject raw HTML. A model consumer must preserve
 untrusted evidence provenance and existing JEV handling. Retrieval executes no
 instructions and does not bypass the persona's native protections.
 
@@ -83,8 +91,8 @@ check identity and payload revision against the selected card before rendering
 with `textContent`. Markdown is displayed as plain text. Existing operation/detail
 epochs clear old content and discard stale responses after close, refresh or logout.
 
-No automatic review carry-forward, native-memory restriction or live source binding
-is added. Existing refresh remains responsible for current snapshots and payloads.
+No automatic review carry-forward or native-memory restriction is added. Existing
+refresh remains responsible for current snapshots and captured payloads.
 No extra maintenance process is installed. Upstream PhantomBot and live AU are
 unchanged. The next setup step must bind the selected installation's actual approved
 review and current loaders before activation; a private preview is not a substitute.
@@ -98,3 +106,10 @@ denied-note noninterference, project exclusions, source removal, bounded scans,
 ID collisions, search drift and stale or malformed full-note responses. A temporary
 loopback preview with synthetic fixtures verifies the menu, search, modal and close
 button. It is not deployment or live AU evidence.
+
+Host integration tests cover opt-in construction, protected review inputs,
+read-only preflight, current-source exclusion and a complete HTTP flow from the
+published reader to visible menus, global body search and plain-text note detail.
+The profile UI accepts the reader's exact simple persona ID as well as the
+existing organization-qualified form, while rejecting another organization's
+identifier. Existing payload-revision and stale-dialog checks remain unchanged.

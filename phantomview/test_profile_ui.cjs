@@ -13,7 +13,7 @@ const id='a'.repeat(64),noteId='b'.repeat(64),hash='c'.repeat(64);
 function fixture(){return {schema_version:1,complete_corpus:false,organization:'example',scope_id:'example',
   policy_revision:'1'.repeat(64),view_revision:'2'.repeat(64),
   resources:[{id,kind:'persona',data:{id:'coordinator',title:'Coordinator',description:'<img src=x onerror=alert(1)>'}},
-    {id:noteId,kind:'knowledge',data:{title:'Role profile',actor:'example:actors:coordinator',source:'reviewed-knowledge',payload_sha256:hash}}],relations:[]};}
+    {id:noteId,kind:'knowledge',data:{title:'Role profile',actor:'coordinator',source:'reviewed-knowledge',payload_sha256:hash}}],relations:[]};}
 function setup(request){
   const source=fs.readFileSync(require.resolve('./scoped-ui.js'),'utf8'),begin=source.indexOf('  function renderProfile('),end=source.indexOf('  function renderOrganizationTree(');
   assert.ok(begin>0&&end>begin);
@@ -28,7 +28,7 @@ function flatten(node){return [node,...node.children.flatMap(flatten)];}
 test('profile dialog renders plain text, preserves one dialog and reads documents in place',async()=>{
   const view=fixture(),calls=[],f=setup(async path=>{calls.push(path);if(path==='/api/state')return view;
     if(path==='/api/resource/'+id)return view.resources[0];
-    return {id:noteId,title:'Role profile',actor:'example:actors:coordinator',payload_sha256:hash,trust:'untrusted',format:'markdown',excerpt_only:false,content:'<script>doNotExecute()</script>'};});
+    return {id:noteId,title:'Role profile',actor:'coordinator',payload_sha256:hash,trust:'untrusted',format:'markdown',excerpt_only:false,content:'<script>doNotExecute()</script>'};});
   await f.ui.showDetails(view.resources[0]);assert.equal(f.$('detail').open,true);assert.deepEqual(f.failures,[]);
   const nodes=flatten(f.$('detail-content'));assert.ok(nodes.some(n=>n.textContent==='<img src=x onerror=alert(1)>'));
   assert.ok(!nodes.some(n=>n.tag==='img'||n.tag==='script'));
