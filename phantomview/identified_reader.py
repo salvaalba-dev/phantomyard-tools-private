@@ -111,7 +111,8 @@ class PublishedReader:
             from reviewed_knowledge import ReviewedKnowledge
             self.knowledge_source = ReaderKnowledgeSource(reviewed_knowledge, authority.read, authority.snapshot)
             knowledge = ReviewedKnowledge(self.gate, self.knowledge_source.review, authority.read,
-                                          authority.snapshot, self.knowledge_source.note)
+                                          authority.snapshot, self.knowledge_source.note,
+                                          scan_source=self.knowledge_source._scan_review)
         self.backend = ScopedBackend(self.gate, self.projection.catalog, self.projection.record,
                                      reviewed_knowledge=knowledge)
         self.consultations = None

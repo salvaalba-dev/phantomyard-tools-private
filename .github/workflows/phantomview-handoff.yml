@@ -209,4 +209,3 @@ jobs:
         env:
           PHANTOMVIEW_ACCOUNT_TESTS: '1'
         run: sudo -n --preserve-env=PHANTOMVIEW_ACCOUNT_TESTS -- "$(command -v python)" -m unittest test_handoff_accounts test_conversation_accounts -v
-

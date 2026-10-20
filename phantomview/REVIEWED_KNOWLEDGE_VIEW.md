@@ -87,7 +87,13 @@ loaded bytes per pass: up to 16 MiB for selection and independently up to
 16 MiB for final verification. Rechecks do not halve corpus capacity; exceeding
 either bound returns no partial corpus. A final snapshot revision check rejects
 metadata changes during either pass. Direct host-loader calls also require
-current approval membership and the exact approved payload fingerprint. Large installations may need a later bounded index rather than larger caps.
+current approval membership and the exact approved payload fingerprint.
+The production binding reads and validates the approval once per scan, then uses
+only its request-local approved rows for both body passes. The protected file's
+identity, size, timestamps and permissions must still match at completion;
+replacement, edits or permission changes discard the response. No approval or
+payload cache survives the request. Direct `note()` calls retain their independent
+approval and fingerprint checks. Large installations may need a later bounded index rather than larger caps.
 
 The scoped client's Knowledge cards fetch the dedicated full-note endpoint and
 check identity and payload revision against the selected card before rendering

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import stat
 
-from organization_authority import _parse, _read
+from organization_authority import _parse, _read, _stamp
 from resource_review import MAX_REVISION_BYTES, _validate, reviewed_catalog
 from scoped_knowledge import HEX, MAX_PAYLOAD_BYTES, PrivateKBStore, digest
 
@@ -65,6 +65,46 @@ class ReaderKnowledgeSource:
         reviewed_catalog(document, self.organization_loader())
         return document
 
+    def _review_stamp(self):
+        _protected(self.review_path.parent, directory=True)
+        _protected(self.review_path, limit=MAX_REVISION_BYTES)
+        info = self.review_path.lstat()
+        return _stamp(info), info.st_mode, info.st_uid, info.st_gid, info.st_nlink
+
+    def _scan_review(self, organization):
+        """One request-local approval read; no cross-request cache or extra body reads.
+
+        ReviewedKnowledge authenticates first and authorizes each row before using
+        this internal loader. Its _current checks retain provenance and digest
+        verification. The final protected file stamp rejects approval replacement
+        or edits, including same-size edits and permission changes, during a scan.
+        """
+        before = self._review_stamp()
+        bundle = _parse(_read(self.review_path), '.json')
+        catalog = reviewed_catalog(bundle, organization)
+        if self._review_stamp() != before:
+            raise ValueError('Knowledge approval changed while opening the scan')
+        rows = {row['id']: row for row in catalog['resources']}
+
+        def load(ident):
+            row = rows.get(ident)
+            if row is None or row.get('secret') is True:
+                return None
+            return self._note_payload(ident)
+
+        def current():
+            return self._review_stamp() == before
+
+        return bundle, catalog, load, current
+
+    def _note_payload(self, ident):
+        _protected(self.payload_directory, directory=True)
+        try:
+            _protected(self.payload_directory / (ident + '.json'), limit=MAX_PAYLOAD_BYTES)
+        except (OSError, ValueError):
+            return None
+        return self.store(ident)
+
     def note(self, ident):
         # ReviewedKnowledge authorizes the session before calling this loader.
         _protected(self.payload_directory, directory=True)
@@ -74,11 +114,7 @@ class ReaderKnowledgeSource:
         row = next((row for row in review['catalog']['resources'] if row['id'] == ident), None)
         if row is None or row.get('secret') is True:
             return None
-        try:
-            _protected(self.payload_directory / (ident + '.json'), limit=MAX_PAYLOAD_BYTES)
-        except (OSError, ValueError):
-            return None
-        raw = self.store(ident)
+        raw = self._note_payload(ident)
         if not isinstance(raw, bytes) or digest(raw) != row['payload_sha256']:
             return None
         # A direct caller receives only bytes still selected by the same approval.

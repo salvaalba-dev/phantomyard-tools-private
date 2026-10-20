@@ -16,10 +16,13 @@ class _ScanLimit(ValueError):
 
 
 class ReviewedKnowledge:
-    def __init__(self, gate, review_loader, organization_loader, snapshot_loader, note_loader):
+    def __init__(self, gate, review_loader, organization_loader, snapshot_loader, note_loader, *, scan_source=None):
         if not isinstance(gate, IdentifiedGate) or not all(callable(loader) for loader in (
                 review_loader, organization_loader, snapshot_loader, note_loader)):
             raise ValueError('The identified gate and protected current knowledge loaders are required')
+        if scan_source is not None and not callable(scan_source):
+            raise ValueError('A trusted request-local knowledge scan source is required')
+        self.scan_source = scan_source
         self.gate = gate
         self.review_loader, self.organization_loader = review_loader, organization_loader
         self.snapshot_loader, self.note_loader = snapshot_loader, note_loader
@@ -33,8 +36,13 @@ class ReviewedKnowledge:
         org = json.loads(raw_org)
         if HumanDirectory(org).revision != directory.revision:
             raise ValueError('Knowledge source and identified session use different authority')
-        bundle = _validate(self.review_loader())
-        catalog = reviewed_catalog(bundle, org)
+        if self.scan_source is None:
+            bundle = _validate(self.review_loader())
+            catalog = reviewed_catalog(bundle, org)
+            note_loader = self.note_loader
+            review_current = lambda: _validate(self.review_loader()) == bundle
+        else:
+            bundle, catalog, note_loader, review_current = self.scan_source(org)
         if catalog['organization'] != recipient.organization:
             raise ValueError('Knowledge review belongs to another organization')
         snapshot_revision = revision(self.snapshot_loader())
@@ -42,7 +50,7 @@ class ReviewedKnowledge:
 
         def bounded_load(key):
             nonlocal used
-            raw = self.note_loader(key)
+            raw = note_loader(key)
             if isinstance(raw, bytes):
                 used += len(raw)
                 if used > MAX_SCAN_BYTES:
@@ -80,7 +88,7 @@ class ReviewedKnowledge:
                           'trust': 'untrusted', 'format': 'markdown', 'excerpt_only': False,
                           'review_revision': bundle['revision'], 'payload_sha256': row['payload_sha256']})
         if (revision(self.organization_loader()) != revision(org)
-                or _validate(self.review_loader()) != bundle):
+                or not review_current()):
             raise ValueError('Knowledge authority or review changed during the read')
         if revision(self.snapshot_loader()) != snapshot_revision:
             raise ValueError('Knowledge snapshot changed during the read')

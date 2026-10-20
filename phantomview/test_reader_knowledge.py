@@ -218,6 +218,80 @@ class PublishedKnowledgeHTTPTests(KnowledgeFixture, unittest.TestCase):
         self.assertNotIn('DO_NOT_DISCLOSE', json.dumps(detail))
         self.assertIs(self.application.backend.reviewed_knowledge.gate, self.application.gate)
 
+    def test_state_reads_approval_once_per_scan_with_real_host_loader(self):
+        from reader_knowledge import _read
+        from resource_review import source_key
+        from scoped_knowledge import digest
+        # Exercise a real protected file store with more than 8 MiB of content.
+        rows = self.fixture['bundle']['catalog']['resources']
+        for index in range(36):
+            ident = digest(('approved large note ' + str(index)).encode())
+            note = json.loads(self.fixture['raw'])
+            note.update(id=ident, path='kb/policies/' + ident + '.md', content='x' * (240 * 1024))
+            raw = json.dumps(note).encode()
+            self.write(self.payloads / (ident + '.json'), raw)
+            rows.append(rows[0] | {'id': ident, 'path': note['path'], 'payload_sha256': digest(raw)})
+            self.fixture['snapshot']['actors'][0]['knowledge'].append(
+                {'id': ident, 'path': note['path'], 'searchable': True})
+        bundle = self.fixture['bundle']
+        bundle['sources'] = [{'source_key': source_key('example', row['actor'], row['path']),
+                              'id': row['id'], 'payload_sha256': row['payload_sha256']} for row in rows]
+        bundle['revision'] = revision({k: v for k, v in bundle.items() if k != 'revision'})
+        self.write(self.review, json.dumps(bundle).encode())
+        # Use the existing projected metadata; only the KB source grows.
+        reader = self.application.backend.reviewed_knowledge
+        source = ReaderKnowledgeSource(self.config, lambda: self.org, lambda: self.fixture['snapshot'])
+        reader.scan_source = source._scan_review
+        reader.snapshot_loader = lambda: self.fixture['snapshot']
+        headers = {'Cookie': self.cookie}
+        with patch('reader_knowledge._read', wraps=_read) as reads:
+            state = self.application.backend.state(headers)
+            self.assertEqual(state['counts']['knowledge'], 37)
+            self.assertEqual(reads.call_count, 1)
+            self.application.backend.state(headers)
+            self.assertEqual(reads.call_count, 2)
+        self.assertIsNotNone(source.note(self.fixture['id']))
+
+    def test_production_state_uses_scan_loader_instead_of_direct_note(self):
+        from reader_knowledge import _read
+        source = self.application.knowledge_source
+        with patch('reader_knowledge._read', wraps=_read) as reads:
+            with patch.object(source, 'note', side_effect=AssertionError('Direct loader in scan')):
+                status, state = self.request('GET', '/api/state')
+            self.assertEqual(status, 200)
+            self.assertEqual(state['counts']['knowledge'], 1)
+            self.assertEqual(reads.call_count, 1)
+
+    def test_review_replacement_during_final_body_read_discards_response(self):
+        source = self.application.knowledge_source
+        original = source._note_payload
+        calls = 0
+        def changing(ident):
+            nonlocal calls
+            raw = original(ident)
+            calls += 1
+            if calls == 2:
+                replacement = self.root / 'replacement.json'
+                self.write(replacement, self.review.read_bytes())
+                replacement.replace(self.review)
+            return raw
+        with patch.object(source, '_note_payload', side_effect=changing):
+            with self.assertRaisesRegex(ValueError, 'authority or review changed'):
+                self.application.backend.state({'Cookie': self.cookie})
+        self.assertEqual(calls, 2)
+
+    def test_same_size_review_edit_during_scan_discards_response(self):
+        source = self.application.knowledge_source
+        original = source._note_payload
+        def changing(ident):
+            raw = original(ident)
+            # No second parse is necessary to reject an in-place same-size edit.
+            self.write(self.review, self.review.read_bytes().replace(b'owner', b'other'))
+            return raw
+        with patch.object(source, '_note_payload', side_effect=changing):
+            with self.assertRaisesRegex(ValueError, 'authority or review changed'):
+                self.application.backend.state({'Cookie': self.cookie})
+
     def test_reclassified_note_disappears_without_body_reads_or_hidden_titles(self):
         bundle = self.fixture['bundle']
         bundle['catalog']['resources'][0]['category'] = 'category-3'
@@ -255,4 +329,3 @@ class PublishedKnowledgeHTTPTests(KnowledgeFixture, unittest.TestCase):
         self.review.unlink()
         with patch('identified_reader.signed_access', return_value=ACCESS), self.assertRaises(OSError):
             PublishedReader(**self.options)
-
