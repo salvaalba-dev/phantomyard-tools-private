@@ -27,6 +27,7 @@ def collect(root, permitted):
     root = Path(root)
     if not root.is_absolute() or any(p.is_symlink() for p in (root, *root.parents)):
         raise ValueError('An explicit persona root without symlinks is required')
+    owner = root.stat()
     result = []
     for name in sorted(NAMES):
         path = root / name
@@ -35,7 +36,9 @@ def collect(root, permitted):
             with os.fdopen(fd, 'rb') as stream:
                 info = os.fstat(stream.fileno())
                 if (path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-                        or os.name == 'posix' and info.st_mode & 0o022 or info.st_size > MAX_BYTES):
+                        or os.name == 'posix' and (info.st_uid != owner.st_uid or info.st_mode & 0o002
+                            or info.st_mode & 0o020 and info.st_gid != owner.st_gid)
+                        or info.st_size > MAX_BYTES):
                     continue
                 raw = stream.read(MAX_BYTES + 1)
                 after = os.fstat(stream.fileno())

@@ -82,7 +82,7 @@ and `SOUL.md` files from explicitly configured local persona roots. Memory, appl
 prompts, tool configuration, KB notes and remote personas are excluded. Collection
 is off by default and assigns no category. Files are bounded to 16 KiB, decoded
 as UTF-8, checked for links, nonregular files, hard links, changing reads, POSIX
-group/world write permissions, source exclusions and obvious credential patterns.
+world-write permissions, owner/group mismatch, source exclusions and credential patterns.
 Pattern checks are a preliminary exclusion, not proof that a file contains no
 sensitive information. Operators must review the exact contents. Windows source
 ACLs must be protected by the operator; POSIX mode checks are not Windows ACL checks.
@@ -99,3 +99,8 @@ alter the existing metadata-only adapter output or grant access through the pare
 persona. Existing ACL decisions still filter document records and their links.
 The current card reader displays the authorized Markdown as plain text in place.
 No native persona instructions are changed or executed, and no service is added.
+
+Group-writable sources are accepted only with the explicitly selected persona root's
+owner and group. They are untrusted display data, not authority or executable code.
+Their exact content still requires independent operator approval. Source permissions
+are never changed by collection.

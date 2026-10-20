@@ -34,7 +34,7 @@ class ProfileDocumentTests(unittest.TestCase):
             self.assertEqual(collect(root, lambda _: True), [])
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX links and modes')
-    def test_links_and_writable_sources_are_not_exported(self):
+    def test_links_and_world_writable_sources_are_not_exported(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             hidden = root / 'MEMORY.md'
@@ -43,6 +43,8 @@ class ProfileDocumentTests(unittest.TestCase):
             soul = root / 'SOUL.md'
             soul.write_text('Mutable profile', encoding='utf-8')
             soul.chmod(0o664)
+            self.assertEqual([r['name'] for r in collect(root, lambda _: True)], ['SOUL.md'])
+            soul.chmod(0o666)
             self.assertEqual(collect(root, lambda _: True), [])
 
     def test_collector_collection_is_explicit_and_memory_stays_unread(self):
