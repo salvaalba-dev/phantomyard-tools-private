@@ -41,6 +41,9 @@ def source_revision(collection, source):
             diagnostics['checks'] = [{key: value for key, value in check.items() if key != 'age_minutes'}
                                      if isinstance(check, dict) else check for check in diagnostics['checks']]
         source = source | {'diagnostics': diagnostics}
+    if collection == 'actors':
+        # Bodies have independent provenance and must not alter the metadata mode.
+        source = {key: value for key, value in source.items() if key != 'profile_documents'}
     return revision(source)
 
 
@@ -92,7 +95,7 @@ def profile_data(source, collection):
     return result
 
 
-def prepare(snapshot, directory, *, organization_links=False, profile_fields=False):
+def prepare(snapshot, directory, *, organization_links=False, profile_fields=False, profile_documents=False):
     """Create bounded draft records with raw-source fingerprints and no ACL grants.
 
     Findings/procedures retain source dependencies. KB bodies, diagnostics, source
@@ -110,6 +113,8 @@ def prepare(snapshot, directory, *, organization_links=False, profile_fields=Fal
         rows = snapshot.get(collection, [])
         if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
             raise ValueError('Collector collections must contain objects in lists')
+    if type(profile_documents) is not bool:
+        raise ValueError('Profile documents must be an explicit boolean adapter option')
     oid = directory.scope.policy['organization']
     organizations = [row for row in snapshot.get('organizations', []) if row.get('id') == oid]
     if len(organizations) != 1 or not eligible(organizations[0]):
@@ -172,6 +177,28 @@ def prepare(snapshot, directory, *, organization_links=False, profile_fields=Fal
             return aliases[value]
         matches = [ident for alias, ident in aliases.items() if alias.startswith(oid + ':') and alias.endswith(':' + value)]
         return matches[0] if len(matches) == 1 else None
+
+    if profile_documents:
+        from profile_documents import NAMES, validate_document
+        for actor in snapshot.get('actors', []):
+            parent = aliases.get(f"{oid}:actors:{actor.get('id')}")
+            if parent is None or actor.get('org') != oid or not eligible(actor):
+                continue
+            documents = actor.get('profile_documents', [])
+            if not isinstance(documents, list) or len(documents) > len(NAMES):
+                raise ValueError('Only the selected allowlisted profile files may be adapted')
+            seen = set()
+            for raw in documents:
+                document = validate_document(raw)
+                if document['name'] in seen:
+                    raise ValueError('Duplicate profile document')
+                seen.add(document['name'])
+                identity = actor['id'] + ':' + document['name']
+                ident = add('profile_documents', identity, 'document', document,
+                    {'title': NAMES[document['name']], 'filename': document['name'],
+                     'format': 'markdown', 'content': document['content'], 'source': 'reviewed-profile'}, [parent])
+                edge = {'source': parent, 'target': ident, 'type': 'profile', 'label': NAMES[document['name']]}
+                add('profile_links', identity, 'relationship', document, edge, endpoints=[parent, ident])
 
     for source in snapshot.get('findings', []):
         if not eligible(source) or source.get('org', oid) != oid:
@@ -272,6 +299,8 @@ def prepare(snapshot, directory, *, organization_links=False, profile_fields=Fal
         draft['organization_links'] = True
     if profile_fields:
         draft['profile_fields'] = True
+    if profile_documents:
+        draft['profile_documents'] = True
     if len(encode(draft)) > MAX_SCAN_BYTES:
         raise ValueError('Private adapter draft exceeds output bounds')
     return draft
@@ -285,7 +314,10 @@ def prepare_like(snapshot, directory, reference):
     profiles = reference.get('profile_fields', False)
     if 'profile_fields' in reference and profiles is not True:
         raise ValueError('Only an explicit enabled profile mode may be recorded')
-    return prepare(snapshot, directory, organization_links=enabled, profile_fields=profiles)
+    documents = reference.get('profile_documents', False)
+    if 'profile_documents' in reference and documents is not True:
+        raise ValueError('Only an explicit enabled profile-document mode may be recorded')
+    return prepare(snapshot, directory, organization_links=enabled, profile_fields=profiles, profile_documents=documents)
 
 
 def write_draft(path, draft):
@@ -313,6 +345,8 @@ def main():
                         help='Include declared role assignments, departments and human counterparts as unclassified links')
     parser.add_argument('--profile-fields', action='store_true',
                         help='Include selected contact and profile metadata in a new unclassified review draft')
+    parser.add_argument('--profile-documents', action='store_true',
+                        help='Include allowlisted profile texts as separately unclassified documents')
     args = parser.parse_args()
     def read_json(path):
         with Path(path).open('rb') as stream:
@@ -323,7 +357,7 @@ def main():
     source = read_json(args.snapshot)
     org = read_json(args.organization)
     draft = prepare(source.get('snapshot', source), HumanDirectory(org), organization_links=args.organization_links,
-                    profile_fields=args.profile_fields)
+                    profile_fields=args.profile_fields, profile_documents=args.profile_documents)
     write_draft(args.output, draft)
 
 

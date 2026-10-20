@@ -74,3 +74,28 @@ actual render/read functions against inert DOM and HTTP fixtures, checking plain
 text, in-place reading, current-view binding and cancelled/stale responses.
 Adapter and publication tests verify opt-in selection, excluded sensitive fields,
 unchanged default behavior and new approval fingerprints.
+
+## Opt-in profile document sources
+
+The collector option `profile_documents: true` selects only complete `IDENTITY.md`
+and `SOUL.md` files from explicitly configured local persona roots. Memory, applied
+prompts, tool configuration, KB notes and remote personas are excluded. Collection
+is off by default and assigns no category. Files are bounded to 16 KiB, decoded
+as UTF-8, checked for links, nonregular files, hard links, changing reads, POSIX
+group/world write permissions, source exclusions and obvious credential patterns.
+Pattern checks are a preliminary exclusion, not proof that a file contains no
+sensitive information. Operators must review the exact contents. Windows source
+ACLs must be protected by the operator; POSIX mode checks are not Windows ACL checks.
+
+The source adapter option `--profile-documents` includes each selected text as an
+independent unclassified document and an exact persona/document relationship.
+Both require explicit category, scope, project and secret decisions before
+publication. Their mode and content fingerprints survive approval and are checked
+on every current projection read. Changed, removed or newly excluded source text
+invalidates publication; old approvals never approve future file contents.
+
+Profile bodies have separate source provenance. Merely collecting them does not
+alter the existing metadata-only adapter output or grant access through the parent
+persona. Existing ACL decisions still filter document records and their links.
+The current card reader displays the authorized Markdown as plain text in place.
+No native persona instructions are changed or executed, and no service is added.

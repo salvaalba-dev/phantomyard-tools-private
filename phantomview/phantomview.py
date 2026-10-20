@@ -171,6 +171,8 @@ class Observatory:
             raise ValueError("Invalid mode")
         if type(config.get("auto_procedures", True)) is not bool:
             raise ValueError("Automatic procedure discovery must be a boolean")
+        if type(config.get("profile_documents", False)) is not bool:
+            raise ValueError("Profile document collection must be explicitly enabled")
         if type(config.get("profile_metadata", False)) is not bool:
             raise ValueError("Profile metadata collection must be a boolean")
         for key in ("org_files", "docs_manifests"):
@@ -346,6 +348,9 @@ class Observatory:
                     if not clean["installed"]:
                         finding("warning", key, "Declared persona is not installed", source)
                     else:
+                        if config.get("profile_documents", False) and clean["searchable"]:
+                            from profile_documents import collect
+                            clean["profile_documents"] = collect(persona, note_search_policy)
                         for file in ("IDENTITY.md", "SOUL.md", "tools.md"):
                             if file == "tools.md" and (persona / "tools").is_dir():
                                 continue

@@ -21,9 +21,10 @@ def validate(bundle):
               'organization_revision', 'draft_revision', 'decision_revision',
               'catalog', 'sources', 'revision'}
     if (not isinstance(bundle, dict) or not fields <= set(bundle)
-            or set(bundle) - (fields | {'organization_links', 'profile_fields'})
+            or set(bundle) - (fields | {'organization_links', 'profile_fields', 'profile_documents'})
             or 'organization_links' in bundle and bundle['organization_links'] is not True
             or 'profile_fields' in bundle and bundle['profile_fields'] is not True
+            or 'profile_documents' in bundle and bundle['profile_documents'] is not True
             or type(bundle['schema_version']) is not int or bundle['schema_version'] != 1
             or type(bundle['sequence']) is not int or bundle['sequence'] < 1
             or not isinstance(bundle['reviewer'], str) or not bundle['reviewer']):
@@ -110,6 +111,8 @@ def approve(draft, decisions, org, snapshot_loader, *, reviewer, previous=None):
         bundle['organization_links'] = True
     if draft.get('profile_fields') is True:
         bundle['profile_fields'] = True
+    if draft.get('profile_documents') is True:
+        bundle['profile_documents'] = True
     # Recheck sources after classification work; no stale approval is returned.
     if prepare_like(snapshot_loader(), HumanDirectory(org), draft) != draft:
         raise ValueError('Sources changed during review')
