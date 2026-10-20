@@ -26,6 +26,11 @@ on:
       - 'phantomview/issuer_routes.py'
       - 'phantomview/test_issuer_routes.py'
       - 'phantomview/reader_launch.py'
+      - 'phantomview/reader_knowledge.py'
+      - 'phantomview/reviewed_knowledge.py'
+      - 'phantomview/test_reader_knowledge.py'
+      - 'phantomview/test_reviewed_knowledge.py'
+      - 'phantomview/test_reviewed_workspace.py'
       - 'phantomview/reader-launch.example.json'
       - 'phantomview/test_reader_launch.py'
       - 'phantomview/persona_conversation.py'
@@ -107,6 +112,11 @@ on:
       - 'phantomview/issuer_routes.py'
       - 'phantomview/test_issuer_routes.py'
       - 'phantomview/reader_launch.py'
+      - 'phantomview/reader_knowledge.py'
+      - 'phantomview/reviewed_knowledge.py'
+      - 'phantomview/test_reader_knowledge.py'
+      - 'phantomview/test_reviewed_knowledge.py'
+      - 'phantomview/test_reviewed_workspace.py'
       - 'phantomview/reader-launch.example.json'
       - 'phantomview/test_reader_launch.py'
       - 'phantomview/persona_conversation.py'
@@ -199,3 +209,4 @@ jobs:
         env:
           PHANTOMVIEW_ACCOUNT_TESTS: '1'
         run: sudo -n --preserve-env=PHANTOMVIEW_ACCOUNT_TESTS -- "$(command -v python)" -m unittest test_handoff_accounts test_conversation_accounts -v
+
