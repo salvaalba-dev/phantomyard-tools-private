@@ -175,6 +175,8 @@ class Observatory:
             raise ValueError("Profile document collection must be explicitly enabled")
         if type(config.get("profile_metadata", False)) is not bool:
             raise ValueError("Profile metadata collection must be a boolean")
+        from working_documents import bindings
+        bindings(config.get("working_documents", []))
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
                 raise ValueError(f"Invalid configuration: {key}")
@@ -419,6 +421,8 @@ class Observatory:
             heads = manifest.get("currentVersions", {})
             nodes = rows(manifest.get("nodes", []))
             parent_urns = {text(n.get("mac")): text(n.get("urn")) for n in nodes if n.get("mac")}
+            from working_documents import collect as collect_working_documents
+            working = collect_working_documents(manifest, filename, config.get("working_documents", []), result["actors"], search_policy)
             for node in nodes:
                 if heads and node.get("urn") in heads and node.get("mac") != heads[node["urn"]]:
                     continue
@@ -427,6 +431,11 @@ class Observatory:
                     "category": node.get("category") if isinstance(node.get("category"), (int, str)) else None,
                     "location": text(node.get("location")), "source": str(Path(filename).resolve()), "integrity": "Sin comprobar",
                     "searchable": search_policy(node)})
+                if node.get("urn") in working:
+                    document = result["documents"][-1]
+                    document["working_document"] = working[node["urn"]]
+                    result["edges"].append({"from": f"{oid}:actors:{working[node['urn']]['actor']}", "to": node["urn"],
+                        "type": "documentation", "label": "Working document", "org": oid})
             result["sources"].append({"kind": "documents", "path": str(Path(filename).resolve()), "checked_at": now()})
         if config.get("auto_procedures", True):
             from procedures import discover

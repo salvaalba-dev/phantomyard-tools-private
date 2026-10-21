@@ -1,0 +1,157 @@
+"""Selected document texts remain bounded, inert and separately classified."""
+import copy
+import hashlib
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+
+from working_documents import MAX_BYTES, bindings, collect, text_content, validated
+
+
+class WorkingDocumentTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.root.chmod(0o700)
+        (self.root / 'blobs').mkdir(mode=0o700)
+        self.path = self.root / 'blobs' / 'source'
+        self.path.write_bytes(b'<html><head><style>HIDDEN_STYLE</style></head><body><h1>Code of conduct</h1><p>Act with integrity.</p><script>NEVER_RUN()</script></body></html>')
+        self.path.chmod(0o600)
+        self.actor = {'id': 'coordinator', 'org': 'example', 'role': 'executive', 'searchable': True}
+        self.node = {'urn': 'urn:example:conduct', 'kind': 'doc', 'slug': 'conduct', 'owners': ['executive'],
+                     'parentMac': 'folder', 'category': 'category-2',
+                     'locations': [{'backend': 'local', 'path': str(self.path)}]}
+        self.manifest = {'manifest': {'org': 'example'}, 'nodes': [self.node,
+            {'kind': 'folder', 'mac': 'folder', 'slug': 'Policies'}]}
+        self.binding = {'urn': self.node['urn'], 'actor': self.actor['id'], 'format': 'html-text',
+                        'sha256': hashlib.sha256(self.path.read_bytes()).hexdigest()}
+
+    def collect(self):
+        return collect(self.manifest, self.root / 'manifest.yaml', [self.binding], [self.actor], lambda _: True)
+
+    def test_unconfigured_documents_are_never_opened(self):
+        self.path.unlink()
+        self.assertEqual(collect({}, '/missing/manifest.yaml', [], [], lambda _: True), {})
+
+    def test_exact_owner_and_folder_with_inert_html_extraction(self):
+        value = self.collect()[self.node['urn']]
+        self.assertEqual(value['folder'], 'Policies')
+        self.assertEqual(value['format'], 'text/plain')
+        self.assertEqual(value['content'], 'Code of conduct\n\nAct with integrity.')
+        self.assertNotIn('HIDDEN_STYLE', value['content'])
+        self.assertNotIn('NEVER_RUN', value['content'])
+        self.assertEqual(value['source_sha256'], self.binding['sha256'])
+
+    def test_text_formats_preserve_exact_text(self):
+        for format in ['markdown', 'text/plain']:
+            self.assertEqual(text_content('Exact text\n', format), ('Exact text\n', format))
+
+    def test_owner_exclusions_and_unclassified_sources_are_rejected(self):
+        for patch in [{'owners': ['another-role']}, {'owners': 'executive'}, {'category': None},
+                      {'secret': True}, {'visibility': 'restricted'}]:
+            with self.subTest(patch=patch):
+                manifest = copy.deepcopy(self.manifest)
+                manifest['nodes'][0].update(patch)
+                with self.assertRaises(ValueError):
+                    collect(manifest, self.root / 'manifest.yaml', [self.binding], [self.actor], lambda _: True)
+        with self.assertRaises(ValueError):
+            collect(self.manifest, self.root / 'manifest.yaml', [self.binding], [self.actor], lambda _: False)
+
+    def test_duplicate_versions_and_cross_organization_owners_are_rejected(self):
+        self.manifest['nodes'].append(dict(self.node))
+        with self.assertRaises(ValueError):
+            self.collect()
+        self.manifest['nodes'].pop()
+        self.actor['org'] = 'other'
+        with self.assertRaises(ValueError):
+            self.collect()
+
+    def test_external_paths_changed_blobs_and_non_text_sources_are_rejected(self):
+        self.node['locations'][0]['path'] = str(self.root / 'outside')
+        with self.assertRaises(ValueError):
+            self.collect()
+        self.node['locations'][0]['path'] = str(self.path)
+        self.path.write_bytes(b'Changed source')
+        with self.assertRaises(ValueError):
+            self.collect()
+        for raw in [b'x' * (MAX_BYTES + 1), b'password: PRIVATE_SENTINEL', b'\xff']:
+            self.path.write_bytes(raw)
+            self.binding['sha256'] = hashlib.sha256(raw).hexdigest()
+            with self.assertRaises((ValueError, UnicodeError)):
+                self.collect()
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX links')
+    def test_symlinks_cannot_redirect_selected_sources(self):
+        outside = self.root / 'outside'
+        self.path.rename(outside)
+        self.path.symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.collect()
+
+    def test_circular_folder_paths_are_rejected(self):
+        self.manifest['nodes'][1]['parentMac'] = 'folder'
+        with self.assertRaises(ValueError):
+            self.collect()
+
+    def test_only_the_declared_store_root_terminates_folder_ancestry(self):
+        self.manifest['nodes'][1]['parentMac'] = 'root'
+        with self.assertRaises(ValueError):
+            self.collect()
+        self.manifest['manifest']['rootMac'] = 'root'
+        self.assertEqual(self.collect()[self.node['urn']]['folder'], 'Policies')
+        self.manifest['nodes'][1].pop('parentMac')
+        self.manifest['nodes'][1]['slug'] = '..'
+        with self.assertRaises(ValueError):
+            self.collect()
+
+    def test_bindings_and_payloads_have_strict_shapes(self):
+        for value in [None, [self.binding, self.binding], [self.binding | {'format': 'text/html'}],
+                      [self.binding | {'unexpected': 'value'}]]:
+            with self.assertRaises(ValueError):
+                bindings(value)
+        value = self.collect()[self.node['urn']]
+        for changes in [{'format': []}, {'folder': '../private'}, {'content': '<script>changed</script>'}]:
+            with self.assertRaises(ValueError):
+                validated(value | changes)
+
+    def test_adapter_exports_only_opted_in_text_without_inferred_acl(self):
+        from channel_identity import HumanDirectory
+        from source_adapter import prepare
+        from test_source_adapter import snapshot
+        from test_view_permissions import scoped_organization
+        source = snapshot()
+        source['documents'][0]['working_document'] = self.collect()[self.node['urn']]
+        directory = HumanDirectory(scoped_organization())
+        plain = prepare(source, directory)
+        draft = prepare(source, directory, profile_fields=True)
+        old = next(row for row in plain['records'] if row['kind'] == 'document')
+        new = next(row for row in draft['records'] if row['kind'] == 'document')
+        self.assertEqual(old['id'], new['id'])
+        self.assertNotIn('content', old['data'])
+        self.assertEqual(new['data']['folder'], 'Policies')
+        self.assertEqual(new['data']['source'], 'reviewed-working-document')
+        self.assertNotIn(str(self.path), json.dumps(new))
+        row = next(row for row in draft['resources'] if row['id'] == new['id'])
+        self.assertIsNone(row['category'])
+        self.assertIsNone(row['scope'])
+
+    def test_collector_links_only_the_selected_document_to_its_declared_owner(self):
+        import phantomview as pv
+        manifest = copy.deepcopy(self.manifest)
+        manifest['manifest']['org'] = 'demo'
+        manifest['nodes'][0]['owners'] = [pv.read_source(pv.default_config()['org_files'][0])['actors'][0]['role']]
+        manifest['nodes'].append({'urn': 'urn:demo:other', 'kind': 'doc', 'slug': 'Other', 'owners': ['ceo']})
+        path = self.root / 'manifest.json'
+        path.write_text(json.dumps(manifest))
+        observer = pv.Observatory(self.root / 'config.json')
+        result = observer.configure(pv.default_config() | {'mode': 'existing', 'docs_manifests': [str(path)],
+            'working_documents': [self.binding | {'actor': 'atlas'}]})
+        self.assertIsNone(result['error'])
+        selected = [row for row in result['snapshot']['documents'] if 'working_document' in row]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]['working_document']['actor'], 'atlas')
+        links = [row for row in result['snapshot']['edges'] if row.get('type') == 'documentation']
+        self.assertEqual([(row['from'], row['to']) for row in links], [('demo:actors:atlas', self.node['urn'])])
