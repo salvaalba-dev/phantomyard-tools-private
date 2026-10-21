@@ -36,6 +36,27 @@ class OriginalMetadataTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 descriptor(SOURCE, node, 'html-text')
 
+    def test_binary_metadata_is_explicit_and_bound_to_the_exact_current_blob(self):
+        raw = b'%PDF-1.7\nopaque document bytes\n%%EOF'
+        node = {'contentHash': hashlib.sha256(raw).hexdigest(), 'size': len(raw), 'meta': {'version': 'v1.0'}}
+        value = descriptor(raw, node, 'application/pdf', {'title': 'Policy', 'version': 'v1.0'})
+        self.assertEqual(value['media_type'], 'application/pdf')
+        self.assertTrue(value['filename'].endswith('.pdf'))
+        self.assertNotIn('opaque document', json.dumps(value))
+        with self.assertRaises(ValueError):
+            descriptor(raw, node, 'application/pdf', {'title': 'Policy', 'version': 'v2.0'})
+        with self.assertRaises(ValueError):
+            descriptor(raw, node, 'application/pdf')
+
+    def test_truncated_or_mislabeled_binary_sources_are_rejected(self):
+        for media, raw in [('application/pdf', b'%PDF-1.7\ntruncated'),
+                           ('application/pdf', b'<html>not a PDF</html>'),
+                           ('image/png', b'\x89PNG\r\n\x1a\ntruncated'),
+                           ('image/jpeg', b'\xff\xd8\xfftruncated')]:
+            node = {'contentHash': hashlib.sha256(raw).hexdigest(), 'size': len(raw)}
+            with self.subTest(media=media), self.assertRaises(ValueError):
+                descriptor(raw, node, media, {'title': 'Reviewed source'})
+
     def test_unknown_template_never_invents_a_version(self):
         value = sample(b'<h1>Guide</h1><p>Version v9.0 is discussed here.</p>')
         self.assertNotIn('version', value)

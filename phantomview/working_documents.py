@@ -1,4 +1,4 @@
-"""Explicit, fingerprinted text documents from a selected PhantomDocs store."""
+"""Explicit, fingerprinted text and original documents from a selected store."""
 import hashlib
 from html.parser import HTMLParser
 import json
@@ -52,14 +52,21 @@ def bindings(value):
         raise ValueError('At most sixteen explicit working document bindings are supported')
     seen = set()
     for row in value:
-        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original'}
+        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display'}
                 or any(not isinstance(row[key], str) or not row[key] for key in ('urn', 'actor', 'sha256', 'format'))
                 or 'original' in row and row['original'] is not True
                 or not row['urn'].startswith('urn:') or len(row['urn']) > 512
                 or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', row['actor'])
                 or not re.fullmatch(r'[a-f0-9]{64}', row['sha256'])
-                or row['format'] not in {'markdown', 'text/plain', 'html-text'} or row['urn'] in seen):
+                or row['format'] not in {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg'} or row['urn'] in seen):
             raise ValueError('A unique document, persona, reviewed fingerprint and text format are required')
+        from original_documents import BINARY_MEDIA, display_metadata
+        if row['format'] in BINARY_MEDIA:
+            if row.get('original') is not True:
+                raise ValueError('Binary documents require explicit original-file delivery')
+            display_metadata(row.get('display'))
+        elif 'display' in row:
+            raise ValueError('Text document labels come from the selected source')
         seen.add(row['urn'])
     return value
 
@@ -70,7 +77,7 @@ def validated(value):
             or not isinstance(value['content'], str) or not value['content'].strip()
             or len(value['content'].encode()) > MAX_BYTES or '\x00' in value['content']
             or SECRET.search(value['content']) or not isinstance(value['format'], str)
-            or value['format'] not in {'markdown', 'text/plain'}
+            or value['format'] not in {'markdown', 'text/plain', 'application/pdf', 'image/png', 'image/jpeg'}
             or not isinstance(value['folder'], str) or len(value['folder']) > 512
             or not value['folder'] or len(value['folder'].split('/')) > 8
             or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}', part)
@@ -85,6 +92,9 @@ def validated(value):
         original = validate_descriptor(value['original'])
         if original['sha256'] != value['source_sha256']:
             raise ValueError('Original must match the reviewed source fingerprint')
+    from original_documents import BINARY_MEDIA
+    if value['format'] in BINARY_MEDIA and ('original' not in value or value['original']['media_type'] != value['format']):
+        raise ValueError('Binary publications must bind their reviewed original media type')
     return dict(value)
 
 
@@ -124,12 +134,15 @@ def collect(manifest, source, selected, actors, permitted):
         if (not path.is_absolute() or '..' in path.parts or not path.is_relative_to(root)
                 or any(parent.is_symlink() for parent in (path, *path.parents))):
             raise ValueError('Working documents must remain inside the selected local blob store')
+        from original_documents import BINARY_MEDIA, MAX_ORIGINAL_BYTES
+        binary = binding['format'] in BINARY_MEDIA
+        limit = MAX_ORIGINAL_BYTES if binary else MAX_BYTES
         with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
                                | getattr(os, 'O_NONBLOCK', 0)), 'rb') as stream:
             before = os.fstat(stream.fileno())
-            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > MAX_BYTES:
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit:
                 raise ValueError('A bounded complete regular document is required')
-            raw = stream.read(MAX_BYTES + 1)
+            raw = stream.read(limit + 1)
             after = os.fstat(stream.fileno())
         if ((before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns)
                 or hashlib.sha256(raw).hexdigest() != binding['sha256']):
@@ -146,15 +159,22 @@ def collect(manifest, source, selected, actors, permitted):
                 raise ValueError('Explicit folder labels are required')
             parts.insert(0, slug)
             parent_mac = parents[0].get('parentMac')
-        source_text = raw.decode('utf-8')
-        if SECRET.search(source_text):
-            raise ValueError('Credential-like source content is excluded from document publication')
-        content, format = text_content(source_text, binding['format'])
+        original = None
+        if binary:
+            from original_documents import descriptor
+            original = descriptor(raw, node, binding['format'], binding['display'])
+            content = ' '.join(original[key] for key in ('title', 'code', 'version') if key in original)
+            format = binding['format']
+        else:
+            source_text = raw.decode('utf-8')
+            if SECRET.search(source_text):
+                raise ValueError('Credential-like source content is excluded from document publication')
+            content, format = text_content(source_text, binding['format'])
         value = {'content': content, 'format': format, 'folder': '/'.join(parts),
                  'source_sha256': binding['sha256'], 'sha256': hashlib.sha256(content.encode()).hexdigest(),
                  'actor': binding['actor']}
         if binding.get('original') is True:
             from original_documents import descriptor
-            value['original'] = descriptor(raw, node, binding['format'])
+            value['original'] = original if binary else descriptor(raw, node, binding['format'])
         result[binding['urn']] = validated(value)
     return result

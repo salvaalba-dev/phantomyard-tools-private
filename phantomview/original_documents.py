@@ -9,6 +9,26 @@ import stat
 MAX_ORIGINAL_BYTES = 32 * 1024 * 1024
 MEDIA = {'text/html': 'html', 'text/plain': 'txt', 'text/markdown': 'md',
          'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg'}
+BINARY_MEDIA = {'application/pdf', 'image/png', 'image/jpeg'}
+
+
+def display_metadata(value):
+    if (not isinstance(value, dict) or 'title' not in value
+            or set(value) - {'title', 'code', 'version'}):
+        raise ValueError('Original display metadata needs a reviewed title and optional reference')
+    for key, limit in [('title', 240), ('code', 80), ('version', 40)]:
+        if key in value and (not isinstance(value[key], str) or not value[key].strip()
+                or len(value[key]) > limit or any(ord(c) < 32 or ord(c) == 127 for c in value[key])):
+            raise ValueError('Invalid original-file display metadata')
+    return dict(value)
+
+
+def binary_signature(raw, media):
+    valid = (media == 'application/pdf' and raw.startswith(b'%PDF-') and b'%%EOF' in raw[-1024:]
+             or media == 'image/png' and raw.startswith(b'\x89PNG\r\n\x1a\n') and raw[-8:-4] == b'IEND'
+             or media == 'image/jpeg' and raw.startswith(b'\xff\xd8\xff') and raw.endswith(b'\xff\xd9'))
+    if not valid:
+        raise ValueError('Original signature or ending does not match its reviewed media type')
 
 
 class _Metadata(HTMLParser):
@@ -64,14 +84,23 @@ def validate_descriptor(value):
     return dict(value)
 
 
-def descriptor(raw, node, format):
+def descriptor(raw, node, format, display=None):
     """Use the selected current manifest entry; never rank filenames or dates."""
     if node.get('contentHash') != hashlib.sha256(raw).hexdigest() or node.get('size') != len(raw):
         raise ValueError('Original must match the current manifest content hash and size')
-    media = {'html-text': 'text/html', 'markdown': 'text/markdown', 'text/plain': 'text/plain'}[format]
+    media = format if format in BINARY_MEDIA else {'html-text': 'text/html', 'markdown': 'text/markdown', 'text/plain': 'text/plain'}[format]
     meta = node.get('meta', {})
     title = meta.get('title') if isinstance(meta, dict) else None
     values = {key: meta[key] for key in ('code', 'version') if isinstance(meta, dict) and key in meta}
+    if media in BINARY_MEDIA:
+        binary_signature(raw, media)
+        reviewed = display_metadata(display)
+        title = reviewed['title']
+        for key in ('code', 'version'):
+            if key in reviewed:
+                if key in values and values[key] != reviewed[key]:
+                    raise ValueError('Manifest and reviewed binary metadata disagree')
+                values[key] = reviewed[key]
     if format == 'html-text':
         parser = _Metadata()
         parser.feed(raw.decode('utf-8'))

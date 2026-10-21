@@ -56,6 +56,45 @@ class WorkingDocumentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.collect()
 
+    def test_pdf_and_images_publish_reviewed_metadata_without_decoding_binary_content(self):
+        for media, raw in [('application/pdf', b'%PDF-1.7\n\xff\xfe Reviewed binary\n%%EOF'),
+                           ('image/png', b'\x89PNG\r\n\x1a\n' + b'\x00\x00\x00\x00IEND\xaeB`\x82'),
+                           ('image/jpeg', b'\xff\xd8\xff\xe0image\xff\xd9')]:
+            with self.subTest(media=media):
+                self.path.write_bytes(raw)
+                digest = hashlib.sha256(raw).hexdigest()
+                self.node.update(contentHash=digest, size=len(raw))
+                self.binding.update(format=media, sha256=digest, original=True,
+                                    display={'title': 'Reviewed policy', 'version': 'v1.2'})
+                value = self.collect()[self.node['urn']]
+                self.assertEqual(value['format'], media)
+                self.assertEqual(value['content'], 'Reviewed policy v1.2')
+                self.assertEqual(value['original']['size_bytes'], len(raw))
+                self.assertEqual(value['original']['sha256'], digest)
+                self.assertNotIn('Reviewed binary', json.dumps(value))
+
+    def test_binary_bindings_require_reviewed_display_metadata_and_original_opt_in(self):
+        base = dict(self.binding, format='application/pdf', original=True, display={'title': 'Policy'})
+        for patch in [{'original': False}, {'display': {}}, {'display': {'title': 'Policy', 'url': 'https://other.example'}},
+                      {'display': {'title': 'Policy\nInjected'}}]:
+            with self.subTest(patch=patch), self.assertRaises(ValueError):
+                bindings([base | patch])
+        with self.assertRaises(ValueError):
+            bindings([base | {'format': 'html-text'}])
+        self.binding.update(base)
+        with self.assertRaises(ValueError):
+            self.collect()  # An HTML blob must not be labeled as PDF.
+
+    def test_pdf_original_larger_than_the_text_limit_keeps_the_projection_small(self):
+        raw = b'%PDF-1.7\n' + b'x' * (MAX_BYTES + 1) + b'\n%%EOF'
+        self.path.write_bytes(raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        self.node.update(contentHash=digest, size=len(raw))
+        self.binding.update(format='application/pdf', sha256=digest, original=True, display={'title': 'Large policy'})
+        value = self.collect()[self.node['urn']]
+        self.assertLess(len(json.dumps(value)), 2000)
+        self.assertEqual(value['original']['size_bytes'], len(raw))
+
     def test_text_formats_preserve_exact_text(self):
         for format in ['markdown', 'text/plain']:
             self.assertEqual(text_content('Exact text\n', format), ('Exact text\n', format))

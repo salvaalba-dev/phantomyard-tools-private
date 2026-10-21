@@ -24,14 +24,15 @@ folder names, prose or a numeric category hierarchy.
 
 Only one local blob location under that manifest's `blobs/` tree is supported.
 Symlinks, ambiguous versions, unresolved or circular folder ancestry, incomplete
-or changed sources, non-UTF-8 data, credential-like content and sources larger
+or changed sources, non-UTF-8 or credential-like text and text sources larger
 than 128 KiB are rejected. The configured fingerprint binds the complete source.
 The complete encoded text payload is additionally bounded to 32 KiB so it fits
 inside the existing projection record limit.
 Supported input modes are `markdown`, `text/plain` and `html-text`. HTML extraction
 uses the standard library parser to produce plain text; styles, scripts, comments
 and document-head content are omitted. It never renders HTML, executes document
-instructions or retrieves external assets. PDFs and remote locations are excluded.
+instructions or retrieves external assets. Remote locations are excluded; reviewed
+binary originals are described below.
 
 The existing `profile_fields` export carries the selected text and folder labels
 only through the reviewed projection. Host paths and raw HTML are not exported.
@@ -73,8 +74,43 @@ are private and non-cacheable, disable MIME sniffing and referrers, and apply a
 sandbox policy without scripts, same-origin privileges, external assets, forms
 or embedding. HTML therefore retains its original print headers; the viewer no
 longer duplicates them in a separate transcription. External fonts are blocked.
-The initial collector opt-in supports its existing HTML, Markdown and plain-text
-inputs. Delivery also recognizes PDF, PNG and JPEG descriptors for future reviewed
-adapters; those formats are not auto-discovered or published by this collector.
+The collector supports HTML, Markdown and plain-text inputs, plus explicitly
+reviewed PDF, PNG and JPEG originals. Binary files are not decoded or transcribed;
+only their reviewed display metadata enters the searchable projection.
 Original delivery is bounded to 32 MiB; larger files and range streaming require
 a separate adapter. Full originals load only on demand, never in `/api/state`.
+
+
+## Reviewed binary originals
+
+PDF, PNG and JPEG bindings require `original: true` and an explicit reviewed
+`display` object. The display metadata is bound to the same complete source
+fingerprint as the original. A friendly label may distinguish alternate formats;
+no relationship or version ordering is inferred from similar names.
+
+```json
+{"working_documents": [{
+  "urn": "urn:example:doc:policies/conduct-pdf",
+  "actor": "coordinator",
+  "sha256": "<reviewed source SHA-256>",
+  "format": "application/pdf",
+  "original": true,
+  "display": {"title": "Code of conduct (PDF)", "code": "EX-20260101-001", "version": "v1.0"}
+}]}
+```
+
+A title is required; code and version are optional and must never be invented.
+If the current manifest also declares a code or version, conflicting reviewed
+metadata is rejected. The collector checks the exact manifest hash, real size,
+media signature and file ending, while retaining existing owner, scope, category
+and filesystem checks. Binary reads are bounded to 32 MiB; large originals never
+enter `/api/state`. Search and assistant projection evidence contain only the
+reviewed title and reference, not the binary document's full contents.
+
+Signature checks do not replace content review or a full format parser. Operators
+must verify that each exact original opens correctly and that its contents match
+the intended classification before publishing. Binary contents are not scanned
+for credential-like text or automatically declared safe by the collector. No
+OCR, PDF conversion, third-party retrieval or new dependency is installed. The
+reader uses the same original-file route, current session authorization and
+content fingerprint checks as the text-original pilot.
