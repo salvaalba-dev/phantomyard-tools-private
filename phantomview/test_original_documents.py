@@ -99,6 +99,21 @@ class OriginalDeliveryTests(ProjectionFixture):
         self.assertNotIn('allow-scripts', headers['Content-Security-Policy'])
         self.assertNotIn('allow-same-origin', headers['Content-Security-Policy'])
 
+    def test_pdf_delivery_downloads_exact_original_with_a_readable_safe_filename(self):
+        raw = b'%PDF-1.7\noriginal PDF bytes\n%%EOF'
+        node = {'contentHash': hashlib.sha256(raw).hexdigest(), 'size': len(raw)}
+        value = descriptor(raw, node, 'application/pdf', {'title': 'Code of conduct (PDF)', 'code': 'EX-20260101-001', 'version': 'v1.2'})
+        path = self.root / value['sha256']
+        path.write_bytes(raw)
+        path.chmod(0o600)
+        self.replace(self.ident, {'source': 'reviewed-working-document', 'original': value})
+        serve(self.handler, self.backend, self.store, self.ident)
+        headers = dict(call.args for call in self.handler.send_header.call_args_list)
+        self.assertEqual(self.handler.wfile.getvalue(), raw)
+        self.assertEqual(headers['Content-Type'], 'application/pdf')
+        self.assertEqual(headers['Content-Disposition'], 'attachment; filename="EX-20260101-001-v1.2-Code-of-conduct-PDF.pdf"')
+        self.assertTrue(headers['Content-Security-Policy'].startswith('sandbox;'))
+
     def test_denied_document_and_unknown_ids_do_not_open_the_store(self):
         store = Mock()
         for ident in (self.hidden, 'f' * 64):

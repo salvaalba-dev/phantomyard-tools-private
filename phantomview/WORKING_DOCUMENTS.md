@@ -69,7 +69,9 @@ size, complete content hash and regular-file integrity, then rechecks session
 and resource authorization before releasing bytes. No filesystem path or URL
 is accepted from a browser. No extra service or dependency is introduced.
 
-The original opens in another tab without conversion or rewriting. Responses
+HTML and images open directly; PDF originals download with a readable filename
+for consistent handling by browsers without an inline PDF viewer. No original
+is converted or rewritten. Responses
 are private and non-cacheable, disable MIME sniffing and referrers, and apply a
 sandbox policy without scripts, same-origin privileges, external assets, forms
 or embedding. HTML therefore retains its original print headers; the viewer no
@@ -114,3 +116,10 @@ for credential-like text or automatically declared safe by the collector. No
 OCR, PDF conversion, third-party retrieval or new dependency is installed. The
 reader uses the same original-file route, current session authorization and
 content fingerprint checks as the text-original pilot.
+
+
+PDF downloads preserve the complete original bytes and all existing response
+protections. A bounded ASCII download filename derives from the reviewed code,
+version and title; it is display metadata, never a source path. This avoids blank
+PDF tabs in browsers without a built-in PDF renderer. HTML sandbox behavior is
+unchanged. The original-file endpoint and its ACL remain the same.

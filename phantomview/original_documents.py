@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import unicodedata
 
 MAX_ORIGINAL_BYTES = 32 * 1024 * 1024
 MEDIA = {'text/html': 'html', 'text/plain': 'txt', 'text/markdown': 'md',
@@ -121,6 +122,11 @@ def descriptor(raw, node, format, display=None):
                     values[key] = found
     value = {'title': title, 'sha256': node['contentHash'], 'size_bytes': len(raw), 'media_type': media,
              'filename': node['contentHash'] + '.' + MEDIA[media], **values}
+    if media in BINARY_MEDIA:
+        stem = '-'.join(value[key] for key in ('code', 'version', 'title') if key in value)
+        stem = unicodedata.normalize('NFKD', stem).encode('ascii', 'ignore').decode()
+        stem = re.sub(r'[^A-Za-z0-9_.-]+', '-', stem).strip('-._')[:110].rstrip('-._')
+        value['filename'] = (stem or node['contentHash']) + '.' + MEDIA[media]
     return validate_descriptor(value)
 
 
@@ -169,7 +175,8 @@ def serve(handler, backend, store, ident):
     handler.send_response(200)
     handler.send_header('Content-Type', value['media_type'])
     handler.send_header('Content-Length', str(len(raw)))
-    handler.send_header('Content-Disposition', 'inline; filename="' + value['filename'] + '"')
+    disposition = 'attachment' if value['media_type'] == 'application/pdf' else 'inline'
+    handler.send_header('Content-Disposition', disposition + '; filename="' + value['filename'] + '"')
     handler.send_header('Cache-Control', 'no-store, private')
     handler.send_header('X-Content-Type-Options', 'nosniff')
     handler.send_header('Referrer-Policy', 'no-referrer')
