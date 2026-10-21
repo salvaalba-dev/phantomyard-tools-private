@@ -488,7 +488,7 @@ async function startScopedWorkspace() {
     const assigned=profile.roles.filter(role=>view.relations.some(edge=>edge.data.type==='assignment'&&edge.data.source===role.id&&edge.data.target===profile.record.id));
     const humans=profile.people.filter(row=>row.kind==='human'&&view.relations.some(edge=>edge.data.type==='counterpart'&&edge.data.source===row.id&&edge.data.target===profile.record.id));
     const organizationIds=new Set(view.relations.filter(edge=>edge.data.type==='context'&&[profile.record.id,...assigned.map(row=>row.id)].includes(edge.data.source)).map(edge=>edge.data.target));
-    const organizations=view.resources.filter(row=>row.kind==='organization'&&organizationIds.has(row.id));
+    const organizations=view.resources.filter(row=>row.kind==='organization'&&(organizationIds.has(row.id)||row.data.id===view.view.organization));
     const summary=text('div','', 'persona-summary');
     summary.append(text('span',assigned.map(row=>view.title(row)).join(' / ')||'Role not published','persona-role'));
     if(humans.length)summary.append(text('span',humans.map(row=>view.title(row)).join(' / '),'persona-counterpart'));
@@ -549,7 +549,7 @@ async function startScopedWorkspace() {
       const managers=profile.roles.filter(row=>!assigned.some(role=>role.id===row.id));if(managers.length){pane.append(text('h4','Reporting destinations'));links(managers,'');}
     },assigned.map(row=>view.title(row)).join(' / '));
     addLabel('Department',()=>{heading('Departments');links(profile.departments,'No department association is published.');},profile.departments.map(row=>view.title(row)).join(' / '));
-    addLabel('Organization',()=>{heading('Organization');links(organizations,'No explicit organization connection is published.');},organizations.map(row=>view.title(row)).join(' / '));
+    addLabel('Organization',()=>{heading('Workspace organization');links(organizations,'No explicit organization connection is published.');},organizations.map(row=>view.title(row)).join(' / '));
     addLabel('Documents',()=>{
       heading('Working documents');empty('Only published documents linked to this persona and authorized for this session are shown.');
       const documents=profile.documents.filter(row=>!files.some(file=>file.id===row.id));

@@ -177,3 +177,12 @@ test('lateral document reads still reject policy changes and cannot repopulate a
   const read=label(g,'SOUL').events.click();g.ui.close();release(view.resources[2]);await read;
   assert.equal(g.$('detail-content').children.length,0);assert.deepEqual(g.failures,[]);
 });
+
+test('organization context uses the exact visible workspace identity without guessing another organization',async()=>{
+  const view=fixture();view.resources=view.resources.slice(0,1);
+  view.resources.push({id:'c'.repeat(64),kind:'organization',data:{id:'example',name:'Workspace Organization'}},
+    {id:'d'.repeat(64),kind:'organization',data:{id:'different',name:'Other Organization'}});
+  const f=setup(async path=>path==='/api/state'?view:view.resources[0]);await f.ui.showDetails(view.resources[0]);label(f,'Organization').events.click();
+  const nodes=flatten(pane(f));assert.ok(nodes.some(n=>n.textContent==='Workspace Organization'));
+  assert.ok(!nodes.some(n=>n.textContent==='Other Organization'));assert.deepEqual(f.failures,[]);
+});
