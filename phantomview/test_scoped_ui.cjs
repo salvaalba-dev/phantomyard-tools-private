@@ -276,3 +276,12 @@ test('fitted peers wrap into rows and retain bounded cycle diagnostics',()=>{
   assert.equal(tree.nodes.length,source.nodes.length);assert.ok(tree.height>source.height);
   assert.throws(()=>ScopedModel.fitTree(source,NaN));assert.throws(()=>ScopedModel.fitTree(source,0));
 });
+
+
+test('published document text uses the existing resource route and rejects another record',()=>{
+  const row={id:a,kind:'document',data:{title:'Identity',format:'markdown',content:'# Profile'}};
+  assert.equal(ScopedModel.detailPath(row),'/api/resource/'+a);
+  assert.equal(ScopedModel.detailText(row,row),'# Profile');
+  assert.throws(()=>ScopedModel.detailText(row,{...row,id:b}));
+  assert.throws(()=>ScopedModel.detailText(row,{...row,kind:'persona'}));
+});

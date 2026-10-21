@@ -46,3 +46,27 @@ test('a changed authorized view prevents rendering and stale requests cannot rep
   const read=g.ui.showDetails(view.resources[0]);g.ui.close();resolve(view);await read;
   assert.equal(g.$('detail').open,false);assert.equal(g.$('detail-content').children.length,0);assert.deepEqual(g.failures,[]);
 });
+
+
+test('Documents cards open their own published text instead of an empty entity profile',async()=>{
+  const view=fixture(),body='# Identity\n<script>doNotExecute()</script>';
+  const row={id:noteId,kind:'document',data:{title:'Identity',filename:'IDENTITY.md',source:'reviewed-profile',format:'markdown',content:body}};
+  view.resources=[row];
+  const calls=[],f=setup(async path=>{calls.push(path);return path==='/api/state'?view:row;});
+  await f.ui.showDetails(row);
+  assert.deepEqual(f.failures,[]);assert.equal(f.$('detail-title').textContent,'Identity');
+  const nodes=flatten(f.$('detail-content'));
+  assert.ok(nodes.some(n=>n.tag==='pre'&&n.textContent===body));
+  assert.ok(!nodes.some(n=>n.tag==='script'||n.textContent==='Identity & contact'));
+  assert.deepEqual(calls,['/api/state','/api/resource/'+noteId,'/api/state']);
+});
+
+test('Documents without published readable text explain the missing content',async()=>{
+  for(const data of [{title:'Minutes'},{title:'Minutes',format:'text/html',content:'<script>doNotExecute()</script>'}]){
+    const row={id:noteId,kind:'document',data},view=fixture();view.resources=[row];
+    const f=setup(async path=>path==='/api/state'?view:row);await f.ui.showDetails(row);
+    const nodes=flatten(f.$('detail-content'));assert.deepEqual(f.failures,[]);
+    assert.ok(nodes.some(n=>n.tag==='pre'&&n.textContent.includes('its text has not been published')));
+    assert.ok(!nodes.some(n=>n.textContent.includes('<script>')));
+  }
+});

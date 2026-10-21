@@ -96,6 +96,8 @@ class ScopedModel {
     }
     scopedRecord(current);
     if(current.id!==row.id||current.kind!==row.kind)throw Error('Record identity changed');
+    if(row.kind==='document')return typeof current.data.content==='string'&&['markdown','text/plain'].includes(current.data.format)
+      ?current.data.content:'Document information is available, but its text has not been published for this session.';
     return JSON.stringify(current.data,null,2);
   }
   organization() {
@@ -485,7 +487,7 @@ async function startScopedWorkspace() {
       const content=ScopedModel.detailText(selected,current),fresh=new ScopedModel(await api('/api/state',undefined,controller?.signal));
       if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
       if(fresh.view.view_revision!==view.view.view_revision||fresh.view.policy_revision!==view.view.policy_revision||fresh.view.scope_id!==view.view.scope_id)throw Error('Record information changed');
-      if(ScopedModel.isReviewedNote(selected))$('detail-content').replaceChildren(text('pre',content,'profile-document-body'));
+      if(ScopedModel.isReviewedNote(selected)||selected.kind==='document')$('detail-content').replaceChildren(text('pre',content,'profile-document-body'));
       else renderProfile(view.profile(current),view,ticket,detailTicket);
       const title=ScopedModel.isReviewedNote(selected)?current.title:view.title(current);
       $('detail-title').textContent=title;
