@@ -8,6 +8,7 @@ class Element {
   replaceChildren(...children){this.children=[];this.textContent='';this.append(...children);}
   addEventListener(name,fn){this.events[name]=fn;}
   showModal(){this.open=true;}
+  setAttribute(name,value){this.attrs[name]=value;}
 }
 const id='a'.repeat(64),noteId='b'.repeat(64),hash='c'.repeat(64);
 function fixture(){return {schema_version:1,complete_corpus:false,organization:'example',scope_id:'example',
@@ -69,4 +70,45 @@ test('Documents without published readable text explain the missing content',asy
     assert.ok(nodes.some(n=>n.tag==='pre'&&n.textContent.includes('its text has not been published')));
     assert.ok(!nodes.some(n=>n.textContent.includes('<script>')));
   }
+});
+
+function profileFiles(){
+  const view=fixture();view.resources=view.resources.slice(0,1);
+  for(const [index,filename]of ['IDENTITY.md','SOUL.md'].entries()){
+    const doc={id:String(index+4).repeat(64),kind:'document',data:{title:index?'Persona profile':'Identity',filename,format:'markdown',content:'# '+filename}};
+    view.resources.push(doc);view.relations.push({id:String(index+6).repeat(64),kind:'relationship',data:{source:id,target:doc.id,type:'profile'}});
+  }
+  return view;
+}
+
+test('persona profile labels open adjacent readers and collapse without another dialog',async()=>{
+  const view=profileFiles(),f=setup(async path=>path==='/api/state'?view:view.resources.find(row=>path.endsWith(row.id)));
+  await f.ui.showDetails(view.resources[0]);
+  assert.equal(f.$('detail').attrs['data-kind'],'persona');
+  const rows=flatten(f.$('detail-content')).filter(node=>node.className==='profile-document-row');
+  assert.deepEqual(rows.map(row=>row.children[0].textContent),['IDENTITY','SOUL']);
+  const [identity,soul]=rows.map(row=>row.children[0]);
+  await soul.events.click();assert.equal(soul.attrs['aria-expanded'],'true');
+  assert.equal(rows[1].children[1].hidden,false);
+  assert.ok(flatten(rows[1]).some(node=>node.tag==='pre'&&node.textContent==='# SOUL.md'));
+  assert.equal(rows[0].children[1].hidden,true);
+  await identity.events.click();assert.equal(rows[1].children[1].hidden,true);
+  assert.equal(soul.attrs['aria-expanded'],'false');
+  assert.ok(flatten(rows[0]).some(node=>node.tag==='pre'&&node.textContent==='# IDENTITY.md'));
+  await identity.events.click();assert.equal(rows[0].children[1].hidden,true);
+  assert.equal(f.$('detail').open,true);assert.deepEqual(f.failures,[]);
+});
+
+test('switching profile labels discards the earlier document response',async()=>{
+  const view=profileFiles();let release;
+  const delayed=new Promise(resolve=>release=resolve);
+  const f=setup(async path=>path==='/api/state'?view:path.endsWith(view.resources[1].id)?delayed:view.resources.find(row=>path.endsWith(row.id)));
+  await f.ui.showDetails(view.resources[0]);
+  const rows=flatten(f.$('detail-content')).filter(node=>node.className==='profile-document-row');
+  const pending=rows[0].children[0].events.click();
+  await rows[1].children[0].events.click();release(view.resources[1]);await pending;
+  assert.equal(rows[0].children[1].hidden,true);
+  assert.ok(!flatten(rows[0]).some(node=>node.tag==='pre'));
+  assert.ok(flatten(rows[1]).some(node=>node.tag==='pre'&&node.textContent==='# SOUL.md'));
+  assert.deepEqual(f.failures,[]);
 });

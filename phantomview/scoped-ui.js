@@ -424,6 +424,7 @@ async function startScopedWorkspace() {
   }
   function renderProfile(profile, view, ticket, detailTicket) {
     const host=$('detail-content');host.replaceChildren();
+    const persona=profile.record.kind==='persona';
     const section=(title,parent)=>{const box=text('section','', 'profile-section');box.append(text('h3',title));parent.append(box);return box;};
     const value=(parent,label,content)=>{const line=text('div','', 'profile-field');line.append(text('span',label,'profile-label'),text('span',content));parent.append(line);};
     const links=(parent,rows,empty)=>{
@@ -449,10 +450,19 @@ async function startScopedWorkspace() {
       for(const item of profile.functions)list.append(text('li',item));box.append(list);}
     if(profile.tools.length||profile.excluded.length){const box=section('Declared tools',host);value(box,'Available',profile.tools.join(', ')||'None declared');
       if(profile.excluded.length)value(box,'Excluded',profile.excluded.join(', '));}
-    const docs=section('Profiles & working documents',host),reader=text('section','', 'profile-reader');reader.hidden=true;
+    const docs=section('Profiles & working documents',host);
+    let activeDocument=null;
+    const closeDocument=()=>{profileReadEpoch++;if(activeDocument){activeDocument.reader.replaceChildren();activeDocument.reader.hidden=true;activeDocument.button.setAttribute('aria-expanded','false');activeDocument=null;}};
     if(!profile.documents.length)docs.append(text('p','No document or profile text has been published for this record.','profile-empty'));
-    for(const row of profile.documents){const button=text('button',view.title(row),'profile-link profile-document');button.type='button';
+    for(const row of profile.documents){
+      const filename=row.data.filename, label=persona&&['IDENTITY.md','SOUL.md'].includes(filename)?filename.slice(0,-3):view.title(row);
+      const line=text('div','',persona?'profile-document-row':'profile-document-entry'),reader=text('section','', 'profile-reader');reader.hidden=true;
+      const button=text('button',label,'profile-link profile-document');button.type='button';
+      button.setAttribute('aria-expanded','false');reader.setAttribute('aria-label',filename||view.title(row));
+      line.append(button,reader);docs.append(line);
       button.addEventListener('click',async()=>{
+        if(activeDocument?.button===button){closeDocument();return;}
+        closeDocument();activeDocument={button,reader};button.setAttribute('aria-expanded','true');
         const readTicket=++profileReadEpoch;reader.hidden=false;reader.replaceChildren(text('p','Loading current document...'));
         try{const current=await api(ScopedModel.detailPath(row),undefined,controller?.signal);
           if(ticket!==epoch||detailTicket!==detailEpoch||readTicket!==profileReadEpoch||!$('detail').open)return;
@@ -462,10 +472,9 @@ async function startScopedWorkspace() {
           const body=ScopedModel.isReviewedNote(row)?content:typeof current.data?.content==='string'&&['markdown','text/plain'].includes(current.data.format)
             ?current.data.content:'Document information is available, but its text has not been published for this session.';
           reader.replaceChildren();const close=text('button','Close document','profile-reader-close');close.type='button';
-          close.addEventListener('click',()=>{profileReadEpoch++;reader.replaceChildren();reader.hidden=true;});reader.append(close,text('h3',view.title(row)),text('pre',body,'profile-document-body'));
+          close.addEventListener('click',closeDocument);reader.append(close,text('h3',filename||view.title(row)),text('pre',body,'profile-document-body'));
         }catch(error){if(readTicket===profileReadEpoch&&detailTicket===detailEpoch)failure(error,ticket);}
-      });docs.append(button);}
-    docs.append(reader);
+      });}
     if(profile.fields.length){const extra=text('details','', 'profile-extra');extra.append(text('summary','Organization & record details'));
       for(const field of profile.fields)value(extra,field.label,field.value);host.append(extra);}
     const other=profile.relations.filter(item=>!['persona','human','role','department'].includes(item.record.kind));
@@ -477,6 +486,7 @@ async function startScopedWorkspace() {
     // Remove old contents before any new read; never show a cached fallback.
     detailFocus=null;$('assistant-about').hidden=true;
     profileReadEpoch++;
+    $('detail').setAttribute('data-kind',row.kind);
     $('detail-content').textContent='Loading current record\u2026';$('detail-title').textContent='Record';if(!$('detail').open)$('detail').showModal();
     try{
       const view=new ScopedModel(await api('/api/state',undefined,controller?.signal));
