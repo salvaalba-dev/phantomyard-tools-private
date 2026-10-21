@@ -99,14 +99,78 @@ def validated(value):
     return dict(value)
 
 
+def current_nodes(manifest):
+    """Resolve a structural lineage; native identity verification remains in PhantomDocs."""
+    nodes = manifest.get('nodes', [])
+    heads = manifest.get('currentVersions', {})
+    if (not isinstance(nodes, list) or any(not isinstance(node, dict) for node in nodes)
+            or not isinstance(heads, dict)):
+        raise ValueError('Document nodes and current version references must be structured')
+    groups = {}
+    for node in nodes:
+        if node.get('kind') == 'doc':
+            urn = node.get('urn')
+            if not isinstance(urn, str) or not urn:
+                raise ValueError('Document versions require an explicit URN')
+            groups.setdefault(urn, []).append(node)
+    resolved = {}
+    hex64 = lambda value: isinstance(value, str) and re.fullmatch(r'[a-f0-9]{64}', value) is not None
+    for urn, versions in groups.items():
+        if len(versions) == 1:
+            tip = versions[0]
+            if tip.get('previous') is not None:
+                raise ValueError('Document history is incomplete')
+        else:
+            if len(versions) > 1024:
+                raise ValueError('Document history exceeds the review bound')
+            by_mac, successors = {}, {}
+            roots = []
+            for node in versions:
+                mac, previous = node.get('mac'), node.get('previous')
+                parent, slug, content_hash = node.get('parentMac'), node.get('slug'), node.get('contentHash')
+                if (not hex64(mac) or not hex64(parent) or not hex64(content_hash)
+                        or not isinstance(slug, str) or not slug or mac in by_mac
+                        or previous is not None and not hex64(previous)):
+                    raise ValueError('Document revision identity is invalid or duplicated')
+                by_mac[mac] = node
+                if previous is None:
+                    roots.append(node)
+                elif previous in successors:
+                    raise ValueError('Document history branches')
+                else:
+                    successors[previous] = node
+            if len(roots) != 1 or any(key not in by_mac for key in successors):
+                raise ValueError('Document history is disconnected or circular')
+            tip, visited = roots[0], set()
+            parent, slug = tip['parentMac'], tip['slug']
+            while True:
+                if tip['mac'] in visited or tip['parentMac'] != parent or tip['slug'] != slug:
+                    raise ValueError('Document history changes identity or is circular')
+                visited.add(tip['mac'])
+                if tip['mac'] not in successors:
+                    break
+                tip = successors[tip['mac']]
+            if len(visited) != len(versions):
+                raise ValueError('Document history is incomplete')
+        if urn in heads and heads[urn] != tip.get('mac'):
+            raise ValueError('Current document reference must identify the lineage tip')
+        resolved[urn] = tip
+    result, seen = [], set()
+    for node in nodes:
+        if node.get('kind') != 'doc':
+            result.append(node)
+        elif node['urn'] not in seen:
+            result.append(resolved[node['urn']])
+            seen.add(node['urn'])
+    return result
+
+
 def collect(manifest, source, selected, actors, permitted):
     """Read selected local blobs only; ownership is a link, never an ACL grant."""
     selected = bindings(selected)
     if not selected:
         return {}
-    nodes = manifest.get('nodes', [])
-    if not isinstance(nodes, list) or any(not isinstance(node, dict) for node in nodes):
-        raise ValueError('Document nodes must be objects')
+    nodes = current_nodes(manifest)
     root = Path(source).parent / 'blobs'
     oid = manifest['manifest']['org']
     result = {}

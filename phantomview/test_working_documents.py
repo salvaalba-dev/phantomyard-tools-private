@@ -135,6 +135,52 @@ class WorkingDocumentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             collect(self.manifest, self.root / 'manifest.yaml', [self.binding], [self.actor], lambda _: False)
 
+    def history(self):
+        first = dict(self.node, parentMac='a' * 64, previous=None,
+                     contentHash=self.binding['sha256'])
+        def identify(node):
+            slug = node['slug'].encode()
+            return hashlib.sha256(bytes.fromhex(node['previous'] or node['parentMac'])
+                + len(slug).to_bytes(4, 'big') + slug + bytes.fromhex(node['contentHash'])).hexdigest()
+        first['mac'] = identify(first)
+        latest = dict(first, previous=first['mac'], contentHash='b' * 64)
+        latest['mac'] = identify(latest)
+        return first, latest
+
+    def test_native_history_resolves_the_tip_independently_of_array_order(self):
+        from working_documents import current_nodes
+        first, latest = self.history()
+        for nodes in ([first, latest], [latest, first]):
+            for head in ({}, {self.node['urn']: latest['mac']}):
+                with self.subTest(order=nodes[0]['mac'], head=head):
+                    manifest = {'nodes': nodes, 'currentVersions': head}
+                    self.assertEqual(current_nodes(manifest), [latest])
+                    self.assertEqual(len(manifest['nodes']), 2)
+
+    def test_native_history_rejects_stale_heads_branches_and_tampered_predecessors(self):
+        from working_documents import current_nodes
+        first, latest = self.history()
+        for manifest in ({'nodes': [first, latest], 'currentVersions': {first['urn']: first['mac']}},
+                         {'nodes': [latest]}, {'nodes': [first, latest, dict(latest)]},
+                         {'nodes': [first, dict(latest, previous='c' * 64)]}):
+            with self.subTest(manifest=manifest), self.assertRaises(ValueError):
+                current_nodes(manifest)
+
+    def test_working_document_fingerprint_must_match_the_current_revision(self):
+        first, latest = self.history()
+        raw = b'<h1>Updated policy</h1>'
+        self.path.write_bytes(raw)
+        latest['contentHash'] = hashlib.sha256(raw).hexdigest()
+        slug = latest['slug'].encode()
+        latest['mac'] = hashlib.sha256(bytes.fromhex(first['mac']) + len(slug).to_bytes(4, 'big')
+            + slug + bytes.fromhex(latest['contentHash'])).hexdigest()
+        latest['parentMac'] = first['parentMac'] = 'a' * 64
+        self.manifest['nodes'] = [latest, first, {'kind': 'folder', 'mac': 'a' * 64, 'slug': 'Policies'}]
+        with self.assertRaises(ValueError):
+            self.collect()
+        self.binding['sha256'] = latest['contentHash']
+        self.assertEqual(self.collect()[first['urn']]['content'], 'Updated policy')
+
     def test_duplicate_versions_and_cross_organization_owners_are_rejected(self):
         self.manifest['nodes'].append(dict(self.node))
         with self.assertRaises(ValueError):

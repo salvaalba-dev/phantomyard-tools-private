@@ -136,3 +136,18 @@ previous original, record the reason and previous fingerprint, and review the
 new current fingerprint before changing a viewer binding. A presentation-only
 HTML revision does not change the official PDF edition. PhantomView does not
 rewrite source documents or create an independent document history.
+
+
+Native document revisions are resolved by a complete, bounded linear history,
+not by array position. Multi-version records require unique identifiers, complete predecessor links
+and consistent document identity. An explicit `currentVersions`
+reference, when present, must point to the lineage tip. Duplicate, forked,
+truncated or disconnected histories fail closed. Both document
+metadata and selected original bindings use the same current-node resolver;
+older versions remain in the native manifest and audit trail but do not create
+extra viewer rows. A stale selected fingerprint still requires a fresh review.
+
+This resolver checks structure and current-version selection, not native MACs or
+signatures. Those remain the responsibility of PhantomDocs and its existing
+verification tools. The collector continues to bind the exact reviewed current
+source bytes by SHA-256; it does not reimplement a native cryptographic scheme.

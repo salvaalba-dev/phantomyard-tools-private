@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -181,9 +182,16 @@ class ObservatoryTests(unittest.TestCase):
             pv.validate_org(org)
 
     def test_current_document_head_excludes_old_versions(self):
-        doc = {"manifest":{"org":"demo"},"currentVersions":{"u":"new"},"nodes":[
-            {"urn":"u","mac":"old","slug":"old","kind":"doc"},
-            {"urn":"u","mac":"new","slug":"current","kind":"doc"}]}
+        def version(previous, content_hash):
+            parent, slug = "a" * 64, "current"
+            component = len(slug).to_bytes(4, "big") + slug.encode() + bytes.fromhex(content_hash)
+            mac = hashlib.sha256(bytes.fromhex(previous or parent) + component).hexdigest()
+            return {"urn": "u", "mac": mac, "slug": slug, "kind": "doc",
+                    "parentMac": parent, "previous": previous, "contentHash": content_hash}
+        old = version(None, "b" * 64)
+        current = version(old["mac"], "c" * 64)
+        doc = {"manifest": {"org": "demo"}, "currentVersions": {"u": current["mac"]},
+               "nodes": [current, old]}
         file = self.root / "docs.json"
         pv.atomic_json(file, doc)
         self.obs.config["docs_manifests"] = [str(file)]

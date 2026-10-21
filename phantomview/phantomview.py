@@ -419,7 +419,8 @@ class Observatory:
             if oid not in {o["id"] for o in result["organizations"]}:
                 raise ValueError("The manifest belongs to an unselected organization")
             heads = manifest.get("currentVersions", {})
-            nodes = rows(manifest.get("nodes", []))
+            from working_documents import current_nodes
+            nodes = current_nodes(manifest)
             parent_urns = {text(n.get("mac")): text(n.get("urn")) for n in nodes if n.get("mac")}
             from working_documents import collect as collect_working_documents
             working = collect_working_documents(manifest, filename, config.get("working_documents", []), result["actors"], search_policy)
