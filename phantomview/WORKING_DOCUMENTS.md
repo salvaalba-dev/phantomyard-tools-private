@@ -25,7 +25,8 @@ folder names, prose or a numeric category hierarchy.
 Only one local blob location under that manifest's `blobs/` tree is supported.
 Symlinks, ambiguous versions, unresolved or circular folder ancestry, incomplete
 or changed sources, non-UTF-8 or credential-like text and text sources larger
-than 128 KiB are rejected. The configured fingerprint binds the complete source.
+than 128 KiB are rejected, except for the explicitly enabled self-contained HTML
+original allowance described below. The configured fingerprint binds the complete source.
 The complete encoded text payload is additionally bounded to 32 KiB so it fits
 inside the existing projection record limit.
 Supported input modes are `markdown`, `text/plain` and `html-text`. HTML extraction
@@ -123,3 +124,15 @@ protections. A bounded ASCII download filename derives from the reviewed code,
 version and title; it is display metadata, never a source path. This avoids blank
 PDF tabs in browsers without a built-in PDF renderer. HTML sandbox behavior is
 unchanged. The original-file endpoint and its ACL remain the same.
+
+
+Self-contained HTML originals may include embedded logos. An explicit
+`html-text` binding with `original: true` permits a complete source up to 1 MiB;
+ordinary text sources remain limited to 128 KiB. Extracted text retains its
+existing bounds, credential screening, complete fingerprint and ACL checks.
+No remote asset is fetched by collection or delivery. A correction belongs in
+the existing document intake and native PhantomDocs version chain: preserve the
+previous original, record the reason and previous fingerprint, and review the
+new current fingerprint before changing a viewer binding. A presentation-only
+HTML revision does not change the official PDF edition. PhantomView does not
+rewrite source documents or create an independent document history.

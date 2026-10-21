@@ -10,6 +10,7 @@ import stat
 from profile_documents import SECRET
 
 MAX_BYTES = 128 * 1024
+MAX_HTML_ORIGINAL_BYTES = 1024 * 1024
 
 
 class _Text(HTMLParser):
@@ -136,7 +137,8 @@ def collect(manifest, source, selected, actors, permitted):
             raise ValueError('Working documents must remain inside the selected local blob store')
         from original_documents import BINARY_MEDIA, MAX_ORIGINAL_BYTES
         binary = binding['format'] in BINARY_MEDIA
-        limit = MAX_ORIGINAL_BYTES if binary else MAX_BYTES
+        limit = (MAX_ORIGINAL_BYTES if binary else MAX_HTML_ORIGINAL_BYTES
+                 if binding['format'] == 'html-text' and binding.get('original') is True else MAX_BYTES)
         with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
                                | getattr(os, 'O_NONBLOCK', 0)), 'rb') as stream:
             before = os.fstat(stream.fileno())

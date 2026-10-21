@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from working_documents import MAX_BYTES, bindings, collect, text_content, validated
+from working_documents import MAX_BYTES, MAX_HTML_ORIGINAL_BYTES, bindings, collect, text_content, validated
 
 
 class WorkingDocumentTests(unittest.TestCase):
@@ -94,6 +94,31 @@ class WorkingDocumentTests(unittest.TestCase):
         value = self.collect()[self.node['urn']]
         self.assertLess(len(json.dumps(value)), 2000)
         self.assertEqual(value['original']['size_bytes'], len(raw))
+
+    def test_large_embedded_html_asset_requires_original_opt_in_and_keeps_text_small(self):
+        raw = (b'<h1>Policy</h1><img src="data:image/jpeg;base64,'
+               + b'A' * (MAX_BYTES + 1) + b'"><p>Policy text.</p>')
+        self.path.write_bytes(raw)
+        self.binding['sha256'] = hashlib.sha256(raw).hexdigest()
+        self.node.update(contentHash=self.binding['sha256'], size=len(raw))
+        with self.assertRaises(ValueError):
+            self.collect()
+        self.binding['original'] = True
+        value = self.collect()[self.node['urn']]
+        self.assertEqual(value['content'], 'Policy\n\nPolicy text.')
+        self.assertEqual(value['original']['size_bytes'], len(raw))
+        self.assertLess(len(json.dumps(value)), 2000)
+
+    def test_html_original_asset_allowance_preserves_source_and_text_bounds(self):
+        self.binding['original'] = True
+        for raw in (b'<h1>Policy</h1>' + b'x' * MAX_HTML_ORIGINAL_BYTES,
+                    b'<h1>Policy</h1><p>' + b'x' * (MAX_BYTES + 1) + b'</p>'):
+            with self.subTest(size=len(raw)):
+                self.path.write_bytes(raw)
+                self.binding['sha256'] = hashlib.sha256(raw).hexdigest()
+                self.node.update(contentHash=self.binding['sha256'], size=len(raw))
+                with self.assertRaises(ValueError):
+                    self.collect()
 
     def test_text_formats_preserve_exact_text(self):
         for format in ['markdown', 'text/plain']:
