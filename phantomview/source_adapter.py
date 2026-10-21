@@ -93,6 +93,9 @@ def profile_data(source, collection):
         document = validated(source['working_document'])
         result.update({key: document[key] for key in ('content', 'format', 'folder')})
         result['source'] = 'reviewed-working-document'
+        if 'original' in document:
+            result['original'] = document['original']
+            result['title'] = document['original']['title']
     if collection == 'actors' and 'tool_files' in source:
         from tool_files import validated
         result['tool_files'] = validated(source['tool_files'], source.get('tools', []))
@@ -170,6 +173,8 @@ def prepare(snapshot, directory, *, organization_links=False, profile_fields=Fal
                 data.update(profile_data(source, collection))
             data['title'] = next((source[key] for key in ('display_name', 'name', 'slug', 'id', 'urn')
                                   if isinstance(source.get(key), str) and source[key]), '')[:4000]
+            if collection == 'documents' and data.get('original'):
+                data['title'] = data['original']['title']
             ident = add(collection, identity, kind, source, data)
             alias = identity if collection in ('organizations', 'documents') else f'{oid}:{collection}:{identity}'
             if source.get('key', alias) != alias:

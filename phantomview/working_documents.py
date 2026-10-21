@@ -52,8 +52,9 @@ def bindings(value):
         raise ValueError('At most sixteen explicit working document bindings are supported')
     seen = set()
     for row in value:
-        if (not isinstance(row, dict) or set(row) != {'urn', 'actor', 'sha256', 'format'}
-                or any(not isinstance(row[key], str) or not row[key] for key in row)
+        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original'}
+                or any(not isinstance(row[key], str) or not row[key] for key in ('urn', 'actor', 'sha256', 'format'))
+                or 'original' in row and row['original'] is not True
                 or not row['urn'].startswith('urn:') or len(row['urn']) > 512
                 or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', row['actor'])
                 or not re.fullmatch(r'[a-f0-9]{64}', row['sha256'])
@@ -64,7 +65,8 @@ def bindings(value):
 
 
 def validated(value):
-    if (not isinstance(value, dict) or set(value) != {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor'}
+    if (not isinstance(value, dict) or not {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor'} <= set(value)
+            or set(value) - {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor', 'original'}
             or not isinstance(value['content'], str) or not value['content'].strip()
             or len(value['content'].encode()) > MAX_BYTES or '\x00' in value['content']
             or SECRET.search(value['content']) or not isinstance(value['format'], str)
@@ -78,6 +80,11 @@ def validated(value):
             or hashlib.sha256(value['content'].encode()).hexdigest() != value['sha256']
             or len(json.dumps(value, ensure_ascii=True).encode()) > 32768):
         raise ValueError('Invalid reviewed working document text')
+    if 'original' in value:
+        from original_documents import validate_descriptor
+        original = validate_descriptor(value['original'])
+        if original['sha256'] != value['source_sha256']:
+            raise ValueError('Original must match the reviewed source fingerprint')
     return dict(value)
 
 
@@ -146,5 +153,8 @@ def collect(manifest, source, selected, actors, permitted):
         value = {'content': content, 'format': format, 'folder': '/'.join(parts),
                  'source_sha256': binding['sha256'], 'sha256': hashlib.sha256(content.encode()).hexdigest(),
                  'actor': binding['actor']}
+        if binding.get('original') is True:
+            from original_documents import descriptor
+            value['original'] = descriptor(raw, node, binding['format'])
         result[binding['urn']] = validated(value)
     return result

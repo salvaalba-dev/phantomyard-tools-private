@@ -221,3 +221,26 @@ test('Tools rejects paths, arguments and malformed states and retains the existi
   assert.ok(!flatten(original).some(n=>n.tag==='code'));assert.ok(flatten(original).some(n=>n.textContent==='No file binding published'));
   label(f,'Contact').events.click();assert.equal(pane(f),original);assert.deepEqual(f.failures,[]);
 });
+
+
+test('original document labels retain name, current reference and automatic size in one link',async()=>{
+  const view=fixture(),row={id:noteId,kind:'document',data:{title:'Code of conduct',source:'reviewed-working-document',folder:'direction/policies',format:'text/plain',content:'Searchable text',original:{title:'Code of conduct',code:'EX-20260101-001',version:'v1.2',size_bytes:17507}}};
+  const model=new ScopedModel({...view,resources:[row],relations:[]});
+  assert.equal(model.documentLabel(row),'Code of conduct \u00b7 EX-20260101-001 \u00b7 v1.2 (17.5 kB)');
+  for(const [bytes,expected]of [[500000,'500 kB'],[1500000,'1.5 MB'],[1500000000,'1.5 GB'],[23,'23 B']]){
+    row.data.original.size_bytes=bytes;assert.ok(model.documentLabel(row).endsWith('('+expected+')'));
+  }
+  row.data.original.size_bytes=17507;
+  view.resources=[view.resources[0],row];view.relations=[{id:'4'.repeat(64),kind:'relationship',data:{source:id,target:noteId,type:'document'}}];
+  const calls=[],f=setup(async path=>{calls.push(path);return path==='/api/state'?view:view.resources[0];});
+  await f.ui.showDetails(view.resources[0]);label(f,'Documents').events.click();
+  const link=flatten(f.$('detail-content')).find(n=>n.tag==='a'&&n.className==='profile-link profile-document');
+  assert.ok(link);assert.equal(link.href,'/api/document-original/'+noteId);assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener noreferrer');
+  assert.ok(link.textContent.startsWith('Code of conduct \u00b7 EX-'));assert.ok(!calls.some(path=>path.startsWith('/api/document-original/')));
+});
+
+test('missing document versions are omitted rather than invented',()=>{
+  const view=fixture(),model=new ScopedModel(view),row={id:noteId,kind:'document',data:{source:'reviewed-working-document',original:{title:'Guide',size_bytes:1000}}};
+  assert.equal(model.documentLabel(row),'Guide (1 kB)');
+  row.kind='persona';assert.equal(model.originalPath(row),null);
+});

@@ -181,3 +181,31 @@ class ScopedHTTPTests(ProjectionFixture):
         self.assertEqual(self.loaded, [])
         self.server.scoped_backend = None
         self.assertIn('/app.js', get('/')[1])
+
+
+    def test_original_delivery_uses_current_acl_and_rejects_query_credentials(self):
+        from original_documents import descriptor
+        raw = b'<h1>Guide</h1>'
+        import hashlib
+        value = descriptor(raw, {'contentHash': hashlib.sha256(raw).hexdigest(), 'size': len(raw)}, 'html-text')
+        ident = self.add('Original guide', 'document')
+        self.replace(ident, {'source': 'reviewed-working-document', 'title': 'Guide', 'original': value})
+        self.server.original_documents = Mock()
+        self.server.original_documents.read.return_value = raw
+        connection = HTTPConnection('127.0.0.1', self.server.server_port, timeout=3)
+        try:
+            connection.request('GET', '/api/document-original/' + ident, headers=self.headers)
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(response.read(), raw)
+            self.assertEqual(response.getheader('Cache-Control'), 'no-store, private')
+            self.assertTrue(response.getheader('Content-Security-Policy').startswith('sandbox;'))
+        finally:
+            connection.close()
+        self.server.original_documents.read.reset_mock()
+        for path, cookie, expected in [('/api/document-original/' + self.hidden, None, 404),
+                ('/api/document-original/' + ident + '?token=refused', None, 400),
+                ('/api/document-original/' + ident, 'phantomview=expired', 401)]:
+            status, _ = self.request('GET', path, cookie=cookie)
+            self.assertEqual(status, expected)
+        self.server.original_documents.read.assert_not_called()

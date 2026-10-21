@@ -38,3 +38,43 @@ only through the reviewed projection. Host paths and raw HTML are not exported.
 Source and extracted-text fingerprints remain bound into the review. Changed
 documents require another source review before the binding is updated. Authorized
 clients use the existing document reader, freshness checks and global search.
+
+
+## Opening reviewed originals
+
+Set `"original": true` on an existing explicit working-document binding to opt
+that one document into original-file delivery. The current manifest entry must
+have the exact reviewed `contentHash` and real byte `size`. Duplicate URNs,
+changed fingerprints and conflicting explicit version metadata fail closed.
+The reader never chooses a version by filename, timestamp or numeric ranking.
+A newer current entry requires renewed review and publication; an old copy is
+not silently substituted when the source changes.
+
+The collector exports only bounded display metadata: the document name, optional
+code and version, media type, real byte count and source fingerprint. Known HTML
+metadata uses its unique H1 and unique `doc-code` block. Missing version metadata
+is omitted. The UI displays `Name · Code · Version (size)` on one line, using
+B, kB, MB or GB automatically with at most one decimal. Long labels retain the
+complete accessible name and hover title. Profile documents keep their reader.
+
+The operator stages an exact reviewed copy under
+`<projection_root>/originals/<source SHA-256>`, in a protected directory readable
+by the existing reader account. No original, local host path or private source
+configuration belongs in GitHub. Original copies are independent of immutable
+projection generations; a copy alone never grants access. The existing server
+serves `/api/document-original/<opaque resource ID>` only after the current
+identified session and projection authorize that exact document. It verifies
+size, complete content hash and regular-file integrity, then rechecks session
+and resource authorization before releasing bytes. No filesystem path or URL
+is accepted from a browser. No extra service or dependency is introduced.
+
+The original opens in another tab without conversion or rewriting. Responses
+are private and non-cacheable, disable MIME sniffing and referrers, and apply a
+sandbox policy without scripts, same-origin privileges, external assets, forms
+or embedding. HTML therefore retains its original print headers; the viewer no
+longer duplicates them in a separate transcription. External fonts are blocked.
+The initial collector opt-in supports its existing HTML, Markdown and plain-text
+inputs. Delivery also recognizes PDF, PNG and JPEG descriptors for future reviewed
+adapters; those formats are not auto-discovered or published by this collector.
+Original delivery is bounded to 32 MiB; larger files and range streaming require
+a separate adapter. Full originals load only on demand, never in `/api/state`.

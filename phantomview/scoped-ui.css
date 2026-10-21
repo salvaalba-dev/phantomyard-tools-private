@@ -85,3 +85,6 @@ button.stat{text-align:left}button.stat:hover:not(:disabled),button.stat:focus-v
 .persona-tool-table th:first-child{width:30%}.persona-tool-table tbody th{color:var(--green)}
 .persona-tool-file+.persona-tool-file{margin-top:8px}.persona-tool-file code{font-size:12px;white-space:normal;overflow-wrap:anywhere}
 .persona-tool-file small{display:block;margin-top:2px}
+
+/* Keep original-file titles compact; the complete label remains accessible. */
+.profile-document[href]{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--green);text-decoration:none}.profile-document[href]:hover,.profile-document[href]:focus-visible{text-decoration:underline}

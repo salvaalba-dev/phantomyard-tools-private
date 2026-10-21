@@ -72,6 +72,12 @@ def dispatch(handler, method):
             handler.send(200 if note else 404, note or {'error': 'Resource unavailable'})
         elif method == 'GET' and parsed.path == '/api/review' and getattr(handler.server, 'review_service', None):
             handler.send(200, handler.server.review_service.view(handler.headers))
+        elif method == 'GET' and parsed.path.startswith('/api/document-original/'):
+            from original_documents import serve
+            store = getattr(handler.server, 'original_documents', None)
+            if store is None:
+                return reject(handler, method, 403, 'Original-file delivery is not configured')
+            serve(handler, backend, store, parsed.path.removeprefix('/api/document-original/'))
         elif method == 'GET' and parsed.path.startswith('/api/resource/'):
             resource = backend.detail(handler.headers, parsed.path.removeprefix('/api/resource/'))
             handler.send(200 if resource else 404, resource or {'error': 'Resource unavailable'})

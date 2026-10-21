@@ -66,6 +66,16 @@ class ScopedModel {
     return info?.available===true&&info.scope_id===this.view.scope_id
       &&(!route||(route.eligible&&route.persona===info.persona));
   }
+  documentLabel(row) {
+    const original=row.data.original;if(!original)return this.title(row);
+    if(typeof original.title!=='string'||!Number.isSafeInteger(original.size_bytes)||original.size_bytes<=0)throw Error('Invalid original-file metadata');
+    const bytes=original.size_bytes,unit=bytes>=1e9?'GB':bytes>=1e6?'MB':bytes>=1e3?'kB':'B',scale=unit==='GB'?1e9:unit==='MB'?1e6:unit==='kB'?1e3:1;
+    const size=new Intl.NumberFormat((typeof document!=='undefined'&&document.documentElement?.lang)||'en',{maximumFractionDigits:1}).format(bytes/scale);
+    return [original.title,original.code,original.version].filter(Boolean).join(' · ')+' ('+size+' '+unit+')';
+  }
+  originalPath(row) {
+    return row.kind==='document'&&row.data.source==='reviewed-working-document'&&row.data.original&&scopedHex(row.id)?'/api/document-original/'+row.id:null;
+  }
   counts() {
     const counts = {};
     for (const row of this.resources) counts[row.kind] = (counts[row.kind] || 0) + 1;
@@ -534,7 +544,8 @@ async function startScopedWorkspace() {
         const content=ScopedModel.detailText(row,resource),fresh=new ScopedModel(await api('/api/state',undefined,controller?.signal));if(!current(readTicket))return;
         if(fresh.view.view_revision!==view.view.view_revision||fresh.view.policy_revision!==view.view.policy_revision||fresh.view.scope_id!==view.view.scope_id)throw Error('Profile information changed');
         pane.replaceChildren();const close=text('button','Close document','profile-reader-close');close.type='button';close.addEventListener('click',()=>choose(contactButton,contact));
-        pane.append(close);heading(row.data.filename||view.title(row));pane.append(text('pre',ScopedModel.isReviewedNote(row)||row.kind==='document'?content:'No readable text has been published.','profile-document-body'));
+        pane.append(close);heading(row.data.filename||view.title(row));if(view.originalPath(resource))pane.append(originalDocumentLink(resource,view));
+        else pane.append(text('pre',ScopedModel.isReviewedNote(row)||row.kind==='document'?content:'No readable text has been published.','profile-document-body'));
       }catch(error){if(current(readTicket))failure(error,ticket);}
     };
     const contactButton=addLabel('Contact',contact);
@@ -562,7 +573,9 @@ async function startScopedWorkspace() {
         const valid=parts.length<=8&&!parts.some(part=>part==='.'||part==='..');
         const path=valid&&parts.length?parts:['Unfiled documents'];let parent=tree,key='';
         for(const part of path){key+='/'+part;if(!folders.has(key)){const branch=text('details','', 'persona-folder'),title=text('summary',part);branch.append(title);parent.append(branch);folders.set(key,branch);}parent=folders.get(key);}
-        const file=text('button',view.title(row),'profile-link profile-document');file.type='button';file.addEventListener('click',()=>openDocument(row));parent.append(file);
+        const originalPath=view.originalPath(row),file=text(originalPath?'a':'button',view.documentLabel(row),'profile-link profile-document');
+        if(originalPath){file.href=originalPath;file.target='_blank';file.rel='noopener noreferrer';file.title=file.textContent;file.setAttribute('aria-label','Open original: '+view.documentLabel(row));}
+        else{file.type='button';file.addEventListener('click',()=>openDocument(row));}parent.append(file);
       }
     });
     addLabel('Tools',()=>{
@@ -596,6 +609,9 @@ async function startScopedWorkspace() {
     choose(contactButton,contact);
   }
 
+  function originalDocumentLink(row,model) {
+    const link=text('a',model.documentLabel(row),'profile-link profile-document');link.href=model.originalPath(row);link.target='_blank';link.rel='noopener noreferrer';link.title=link.textContent;link.setAttribute('aria-label','Open original: '+model.documentLabel(row));return link;
+  }
   async function showDetails(row) {
     const ticket=epoch, detailTicket=++detailEpoch;
     // Remove old contents before any new read; never show a cached fallback.
@@ -612,7 +628,8 @@ async function startScopedWorkspace() {
       const content=ScopedModel.detailText(selected,current),fresh=new ScopedModel(await api('/api/state',undefined,controller?.signal));
       if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
       if(fresh.view.view_revision!==view.view.view_revision||fresh.view.policy_revision!==view.view.policy_revision||fresh.view.scope_id!==view.view.scope_id)throw Error('Record information changed');
-      if(ScopedModel.isReviewedNote(selected)||selected.kind==='document')$('detail-content').replaceChildren(text('pre',content,'profile-document-body'));
+      if(view.originalPath(current))$('detail-content').replaceChildren(originalDocumentLink(current,view));
+      else if(ScopedModel.isReviewedNote(selected)||selected.kind==='document')$('detail-content').replaceChildren(text('pre',content,'profile-document-body'));
       else renderProfile(view.profile(current),view,ticket,detailTicket);
       const title=ScopedModel.isReviewedNote(selected)?current.title:view.title(current);
       $('detail-title').textContent=title;

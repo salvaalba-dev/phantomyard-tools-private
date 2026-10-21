@@ -45,6 +45,17 @@ class WorkingDocumentTests(unittest.TestCase):
         self.assertNotIn('NEVER_RUN', value['content'])
         self.assertEqual(value['source_sha256'], self.binding['sha256'])
 
+    def test_original_opt_in_binds_the_current_manifest_version_and_real_size(self):
+        self.binding['original'] = True
+        self.node.update(contentHash=self.binding['sha256'], size=self.path.stat().st_size)
+        value = self.collect()[self.node['urn']]
+        self.assertEqual(value['original']['title'], 'Code of conduct')
+        self.assertEqual(value['original']['size_bytes'], self.path.stat().st_size)
+        self.assertEqual(value['original']['sha256'], self.binding['sha256'])
+        self.node['contentHash'] = 'a' * 64
+        with self.assertRaises(ValueError):
+            self.collect()
+
     def test_text_formats_preserve_exact_text(self):
         for format in ['markdown', 'text/plain']:
             self.assertEqual(text_content('Exact text\n', format), ('Exact text\n', format))
