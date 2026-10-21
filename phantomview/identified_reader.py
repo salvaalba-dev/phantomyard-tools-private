@@ -6,6 +6,7 @@ import threading
 from authority_publication import PublishedAuthority
 from identified_access import IdentifiedGate
 from issuer_routes import validate_routes
+from original_documents import OriginalStore
 from phantomview import Handler
 from projection_review import PublishedProjection
 from reader_handoff import ReaderHandoff
@@ -143,7 +144,6 @@ class PublishedReader:
         server.gate, server.scoped_backend = self.gate, self.backend
         server.access_errors = (ValueError, self.gate.access.core.Invalid)
         server.scoped_consultations = self.consultations
-        from original_documents import OriginalStore
         server.original_documents = OriginalStore(self.projection.root / 'originals')
         server.review_service = None
         return server

@@ -107,6 +107,8 @@ class OriginalStore:
                 or os.name == 'posix' and self.root.stat().st_mode & 0o022):
             raise ValueError('A protected original-file store is required')
         path = self.root / value['sha256']
+        if path.is_symlink():
+            raise ValueError('Original files cannot be symlinks')
         with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
                                | getattr(os, 'O_NONBLOCK', 0)), 'rb') as stream:
             before = os.fstat(stream.fileno())
