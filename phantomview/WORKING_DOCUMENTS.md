@@ -151,3 +151,7 @@ This resolver checks structure and current-version selection, not native MACs or
 signatures. Those remain the responsibility of PhantomDocs and its existing
 verification tools. The collector continues to bind the exact reviewed current
 source bytes by SHA-256; it does not reimplement a native cryptographic scheme.
+
+For deterministic batch preparation from an existing document matrix, see
+[Document refresh batches](DOCUMENT_REFRESH.md). The offline adapter resolves
+current fingerprints and reports exceptions without publishing or changing ACL.
