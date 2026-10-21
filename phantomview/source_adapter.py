@@ -88,6 +88,9 @@ def profile_data(source, collection):
     # Human login identifiers stay in the authority, not in profile exports.
     if contacts and collection != 'humans':
         result['contacts'] = contacts
+    if collection == 'actors' and 'tool_files' in source:
+        from tool_files import validated
+        result['tool_files'] = validated(source['tool_files'], source.get('tools', []))
     if collection == 'organizations' and isinstance(source.get('legal'), dict):
         legal = clean(source['legal'], ('legal_name', 'legal_form', 'nif', 'country', 'constitution_date'))
         if legal:

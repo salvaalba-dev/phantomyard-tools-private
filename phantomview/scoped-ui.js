@@ -565,7 +565,25 @@ async function startScopedWorkspace() {
         const file=text('button',view.title(row),'profile-link profile-document');file.type='button';file.addEventListener('click',()=>openDocument(row));parent.append(file);
       }
     });
-    addLabel('Tools',()=>{heading('Declared tools');field('Available',profile.tools.join(', ')||'None published');if(profile.excluded.length)field('Excluded',profile.excluded.join(', '));});
+    addLabel('Tools',()=>{
+      heading('Declared tools');
+      const table=text('table','', 'persona-tool-table'),head=text('thead',''),titles=text('tr','');
+      table.setAttribute('aria-label','Declared tools and implementation files');
+      for(const title of ['Tool','Implementation file']){const cell=text('th',title);cell.setAttribute('scope','col');titles.append(cell);}
+      head.append(titles);table.append(head);const body=text('tbody','');table.append(body);pane.append(table);
+      const files=profile.record.data.tool_files;
+      const validFile=value=>typeof value==='string'&&value.length<=240&&/^tools\/(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:py|sh|js|mjs|ts|md)$/.test(value)&&!value.split('/').some(part=>part==='.'||part==='..');
+      for(const tool of profile.tools){
+        const row=text('tr',''),name=text('th',tool),implementation=text('td','');name.setAttribute('scope','row');row.append(name,implementation);body.append(row);
+        const references=Array.isArray(files)&&files.length<=128?files.filter(file=>file&&file.tool===tool&&validFile(file.file)&&['file','symlink','missing','unavailable'].includes(file.state)):[];
+        if(!references.length)implementation.append(text('span','No file binding published','profile-empty'));
+        else for(const file of references){const item=text('div','', 'persona-tool-file');item.append(text('code',file.file));
+          if(file.state!=='file')item.append(text('small',file.state==='symlink'?'Symbolic link':file.state==='missing'?'File missing':'Not checked','profile-empty'));
+          implementation.append(item);}
+      }
+      if(!profile.tools.length)empty('No tools have been published.');
+      if(profile.excluded.length)field('Excluded',profile.excluded.join(', '));
+    });
     addLabel('Access',()=>{heading('Access');field('Current scope',view.view.scope_id);empty('PhantomOrg and the current identified session determine visibility. This card does not grant or infer permissions.');});
     addLabel('Status',()=>{heading('Published status');const data=profile.record.data;
       field('Operation',scalar(data.operational_status)||'No operational check published');

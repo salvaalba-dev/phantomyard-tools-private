@@ -186,3 +186,38 @@ test('organization context uses the exact visible workspace identity without gue
   const nodes=flatten(pane(f));assert.ok(nodes.some(n=>n.textContent==='Workspace Organization'));
   assert.ok(!nodes.some(n=>n.textContent==='Other Organization'));assert.deepEqual(f.failures,[]);
 });
+
+test('Tools uses two columns and matches only published references for each declared tool',async()=>{
+  const view=fixture();view.resources=view.resources.slice(0,1);
+  view.resources[0].data.tools=['email','drive','printing'];
+  view.resources[0].data.tool_files=[
+    {tool:'email',file:'tools/workspace.py',state:'file'},
+    {tool:'drive',file:'tools/workspace.py',state:'file'},
+    {tool:'drive',file:'tools/drive-helper.sh',state:'symlink'},
+    {tool:'calendar',file:'tools/calendar.py',state:'file'},
+    {tool:'printing',file:'javascript:alert(1)',state:'file'}];
+  const f=setup(async path=>path==='/api/state'?view:view.resources[0]);await f.ui.showDetails(view.resources[0]);label(f,'Tools').events.click();
+  const nodes=flatten(pane(f)),table=nodes.find(n=>n.tag==='table');assert.ok(table);
+  assert.deepEqual(table.children[0].children[0].children.map(n=>n.textContent),['Tool','Implementation file']);
+  const rows=table.children[1].children;assert.equal(rows.length,3);
+  assert.deepEqual(rows.map(n=>n.children.length),[2,2,2]);
+  assert.deepEqual(rows.map(n=>n.children[0].textContent),['email','drive','printing']);
+  assert.deepEqual(nodes.filter(n=>n.tag==='code').map(n=>n.textContent),['tools/workspace.py','tools/workspace.py','tools/drive-helper.sh']);
+  assert.ok(flatten(rows[2]).some(n=>n.textContent==='No file binding published'));
+  assert.ok(!nodes.some(n=>n.tag==='a'||n.tag==='script'||n.textContent==='tools/calendar.py'));
+  assert.equal(f.$('detail').open,true);assert.equal(flatten(f.$('detail-content')).filter(n=>n.className==='persona-pane').length,1);
+});
+
+test('Tools rejects paths, arguments and malformed states and retains the existing card format',async()=>{
+  const view=fixture();view.resources=view.resources.slice(0,1);view.resources[0].data.tools=['email'];
+  view.resources[0].data.tool_files=[
+    {tool:'email',file:'tools/../mail.py',state:'file'},
+    {tool:'email',file:'tools/mail.py --token secret',state:'file'},
+    {tool:'email',file:'/root/mail.py',state:'file'},
+    {tool:'email',file:'tools/mail.py',state:'running'},
+  ];
+  const f=setup(async path=>path==='/api/state'?view:view.resources[0]);await f.ui.showDetails(view.resources[0]);const original=pane(f);
+  label(f,'Tools').events.click();assert.equal(pane(f),original);
+  assert.ok(!flatten(original).some(n=>n.tag==='code'));assert.ok(flatten(original).some(n=>n.textContent==='No file binding published'));
+  label(f,'Contact').events.click();assert.equal(pane(f),original);assert.deepEqual(f.failures,[]);
+});

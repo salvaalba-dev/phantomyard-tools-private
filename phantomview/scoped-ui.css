@@ -77,3 +77,11 @@ button.stat{text-align:left}button.stat:hover:not(:disabled),button.stat:focus-v
 .persona-folder .profile-document{padding:6px 0}
 @media(max-width:600px){#detail[data-kind="persona"]{height:auto;max-height:80vh;overflow:auto}.persona-workspace{grid-template-columns:minmax(0,1fr);gap:10px;flex:none}.persona-labels{flex-direction:row;flex-wrap:wrap;overflow:visible}.persona-label{width:auto;max-width:100%;flex:0 1 auto}.persona-label-target{display:none}.persona-label[aria-pressed="true"]:after{display:none}.persona-pane{max-height:300px;min-height:140px}.persona-legend{margin-top:10px}#detail[data-kind="persona"] #detail-content{flex:none}.persona-pane .profile-field{grid-template-columns:76px minmax(0,1fr)}}
 @media(pointer:coarse){.persona-label,.persona-destination{min-height:44px}}
+
+/* Tool references occupy two columns within the existing persona information pane. */
+.persona-tool-table{width:100%;border-collapse:collapse;table-layout:fixed;text-align:left;font-size:12px}
+.persona-tool-table th,.persona-tool-table td{padding:9px 6px;border-bottom:1px solid var(--border);vertical-align:top;overflow-wrap:anywhere;font-weight:400}
+.persona-tool-table thead th{color:var(--muted);font-size:11px}
+.persona-tool-table th:first-child{width:30%}.persona-tool-table tbody th{color:var(--green)}
+.persona-tool-file+.persona-tool-file{margin-top:8px}.persona-tool-file code{font-size:12px;white-space:normal;overflow-wrap:anywhere}
+.persona-tool-file small{display:block;margin-top:2px}

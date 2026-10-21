@@ -475,8 +475,14 @@ class Observatory:
         if installation_file:
             from installation import collect as collect_installation
             source = str(Path(installation_file).resolve())
-            result["installation"] = collect_installation(read_source(source), result["actors"],
+            manifest = read_source(source)
+            result["installation"] = collect_installation(manifest, result["actors"],
                 {org["id"] for org in result["organizations"]}, source)
+            from tool_files import collect as collect_tool_files
+            tool_files = collect_tool_files(manifest, result["actors"])
+            for actor in result["actors"]:
+                if actor["key"] in tool_files:
+                    actor["tool_files"] = tool_files[actor["key"]]
             result["sources"].append({"kind": "installation", "path": source, "checked_at": now()})
         else:
             result["installation"] = {"components": [], "relations": [], "source": ""}
