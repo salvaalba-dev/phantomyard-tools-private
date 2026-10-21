@@ -45,3 +45,35 @@ button.stat{text-align:left}button.stat:hover:not(:disabled),button.stat:focus-v
 .profile-reader[hidden]{display:none}
 @media(max-width:520px){#detail[data-kind="persona"]{width:calc(100% - 24px);padding:16px;max-height:80vh}.profile-document-row{grid-template-columns:minmax(0,1fr);gap:6px}.profile-document-row>.profile-document{width:auto;justify-self:start;min-width:100px}.profile-document-row .profile-document-body{max-height:200px}}
 @media(pointer:coarse){.profile-document-row>.profile-document{min-height:44px}}
+
+/* One stable persona card: labels at left, one changing information pane at right. */
+#detail[data-kind="persona"]{height:min(580px,80vh);max-height:80vh;overflow:hidden;display:flex;flex-direction:column}
+#detail[data-kind="persona"]:not([open]){display:none}
+#detail[data-kind="persona"] #close-detail{position:absolute;right:18px;top:16px}
+#detail[data-kind="persona"] #detail-title{flex:none;margin:0;padding-right:38px;font-size:23px}
+#detail[data-kind="persona"] #assistant-about{align-self:flex-start;flex:none;order:3;margin-top:8px}
+#detail[data-kind="persona"] #detail-content{display:flex;flex-direction:column;flex:1;min-height:0;margin-top:8px}
+.persona-summary{display:flex;gap:8px 18px;flex-wrap:wrap;font-size:12px;margin-bottom:12px;flex:none;overflow-wrap:anywhere}
+.persona-role{color:var(--green)}.persona-counterpart{color:var(--muted)}
+.persona-workspace{display:grid;grid-template-columns:160px minmax(0,1fr);gap:26px;flex:1;min-height:0}
+.persona-labels{display:flex;flex-direction:column;gap:4px;margin:0;overflow:auto;min-height:0;padding:0 20px 0 1px}
+.persona-label{position:relative;flex:none;display:block;width:100%;padding:6px 9px;text-align:left;background:#111e16;border:1px solid var(--border);font-size:12px;min-height:32px;overflow-wrap:anywhere}
+.persona-label-target{display:block;font-size:11px;color:var(--muted);overflow-wrap:anywhere;margin-top:1px}
+.persona-label[aria-pressed="true"]{border-color:var(--green);background:#203b29;color:var(--green)}
+.persona-pane{position:relative;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:14px;background:#132219;border:1px solid #3e5a46;border-radius:8px}
+.persona-pane-title{font-size:14px;font-weight:500;margin:0 0 14px;overflow-wrap:anywhere}
+.persona-pane .profile-field{grid-template-columns:88px minmax(0,1fr);gap:8px;font-size:12px}
+.persona-pane .profile-empty{white-space:normal}.persona-pane .profile-document-body{margin-top:10px;font-size:13px}
+.persona-pane .profile-reader-close{float:right;padding:0 0 6px 8px}
+.persona-description{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;border-top:1px solid var(--border);padding-top:12px}
+.persona-destination{display:block;padding:8px 10px;margin:0 0 8px;width:100%;text-align:left;overflow-wrap:anywhere;font-size:12px;background:#1b3022}
+.persona-destination:hover,.persona-destination:focus-visible{border-color:var(--green);color:var(--green)}
+.persona-workspace[data-highlight="true"] .persona-pane{border-color:var(--green);box-shadow:inset 3px 0 #89dc9a44}
+.persona-workspace[data-highlight="true"] .persona-label[aria-pressed="true"]{box-shadow:inset 3px 0 var(--green)}
+.persona-label[aria-pressed="true"]:after{content:'→';position:absolute;left:calc(100% + 5px);top:5px;width:18px;color:var(--green);font-size:16px;pointer-events:none}
+.persona-legend{margin:10px 0 0;color:var(--muted);font-size:11px;flex:none}
+.persona-folder{margin:5px 0 5px 8px;padding-left:10px;border-left:1px solid var(--border)}
+.persona-folder summary{font-size:12px;color:var(--green);padding:4px 0;cursor:pointer;overflow-wrap:anywhere}
+.persona-folder .profile-document{padding:6px 0}
+@media(max-width:600px){#detail[data-kind="persona"]{height:auto;max-height:80vh;overflow:auto}.persona-workspace{grid-template-columns:minmax(0,1fr);gap:10px;flex:none}.persona-labels{flex-direction:row;flex-wrap:wrap;overflow:visible}.persona-label{width:auto;max-width:100%;flex:0 1 auto}.persona-label-target{display:none}.persona-label[aria-pressed="true"]:after{display:none}.persona-pane{max-height:300px;min-height:140px}.persona-legend{margin-top:10px}#detail[data-kind="persona"] #detail-content{flex:none}.persona-pane .profile-field{grid-template-columns:76px minmax(0,1fr)}}
+@media(pointer:coarse){.persona-label,.persona-destination{min-height:44px}}

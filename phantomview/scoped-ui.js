@@ -423,6 +423,7 @@ async function startScopedWorkspace() {
     if(!response.ok){const error=Error('Scoped request unavailable');error.status=response.status;throw error;}return response.json();
   }
   function renderProfile(profile, view, ticket, detailTicket) {
+    if(profile.record.kind==='persona'){renderPersonaProfile(profile,view,ticket,detailTicket);return;}
     const host=$('detail-content');host.replaceChildren();
     const persona=profile.record.kind==='persona';
     const section=(title,parent)=>{const box=text('section','', 'profile-section');box.append(text('h3',title));parent.append(box);return box;};
@@ -481,6 +482,102 @@ async function startScopedWorkspace() {
     if(other.length)links(section('Related information',host),other.map(item=>item.record),'');
     host.append(text('p','Source: current authorized organization records. Documents are shown only when separately available to this session.','profile-source'));
   }
+  function renderPersonaProfile(profile,view,ticket,detailTicket) {
+    const host=$('detail-content');host.replaceChildren();
+    const scalar=value=>typeof value==='string'&&value.trim()?value:null;
+    const assigned=profile.roles.filter(role=>view.relations.some(edge=>edge.data.type==='assignment'&&edge.data.source===role.id&&edge.data.target===profile.record.id));
+    const humans=profile.people.filter(row=>row.kind==='human'&&view.relations.some(edge=>edge.data.type==='counterpart'&&edge.data.source===row.id&&edge.data.target===profile.record.id));
+    const organizationIds=new Set(view.relations.filter(edge=>edge.data.type==='context'&&[profile.record.id,...assigned.map(row=>row.id)].includes(edge.data.source)).map(edge=>edge.data.target));
+    const organizations=view.resources.filter(row=>row.kind==='organization'&&organizationIds.has(row.id));
+    const summary=text('div','', 'persona-summary');
+    summary.append(text('span',assigned.map(row=>view.title(row)).join(' / ')||'Role not published','persona-role'));
+    if(humans.length)summary.append(text('span',humans.map(row=>view.title(row)).join(' / '),'persona-counterpart'));
+    host.append(summary);
+    const layout=text('div','', 'persona-workspace'),labels=text('nav','', 'persona-labels'),pane=text('section','', 'persona-pane');
+    labels.setAttribute('aria-label','Persona information');pane.setAttribute('aria-live','polite');pane.id='persona-information';
+    layout.append(labels,pane);host.append(layout);
+    let selected=null;
+    const controls=[];
+    const empty=message=>pane.append(text('p',message,'profile-empty'));
+    const heading=title=>pane.append(text('h3',title,'persona-pane-title'));
+    const links=(rows,message)=>{if(!rows.length){empty(message);return;}
+      for(const row of rows){const link=text('button',view.title(row),'persona-destination');link.type='button';
+        link.addEventListener('click',()=>showDetails(row));pane.append(link);}};
+    const field=(label,value)=>{const line=text('div','', 'profile-field');line.append(text('span',label,'profile-label'),text('span',value));pane.append(line);};
+    const contact=()=>{heading('Contact');
+      for(const row of profile.contacts){const line=text('div','', 'profile-field');line.append(text('span',row.label,'profile-label'));
+        if(row.value&&row.href){const link=text('a',row.value,'profile-contact');link.href=row.href;link.rel='noopener noreferrer';if(row.href.startsWith('https:'))link.target='_blank';line.append(link);}
+        else line.append(text('span',row.value||'Not published',row.value?'':'profile-empty'));pane.append(line);}
+      const extra=profile.record.data.contacts||profile.record.data.channels||{};
+      for(const [label,key]of [['Phone','phone'],['PhantomChat','phantomchat'],['Signal','signal'],['WhatsApp','whatsapp'],['Matrix','matrix'],['Discord','discord']])if(scalar(extra[key]))field(label,extra[key]);
+      if(scalar(profile.description))pane.append(text('p',profile.description,'persona-description'));
+    };
+    const choose=(button,draw)=>{
+      profileReadEpoch++;selected=button;pane.replaceChildren();
+      for(const control of controls)control.setAttribute('aria-pressed',String(control===button));
+      layout.setAttribute('data-highlight','false');return draw();
+    };
+    const addLabel=(label,draw,hint='')=>{
+      const button=text('button',label,'persona-label');button.type='button';button.setAttribute('aria-label',label);button.setAttribute('aria-controls',pane.id);button.setAttribute('aria-pressed','false');
+      if(hint)button.append(text('small',hint,'persona-label-target'));
+      button.addEventListener('click',()=>choose(button,draw));
+      const highlight=()=>{if(selected===button)layout.setAttribute('data-highlight','true');};
+      button.addEventListener('mouseenter',highlight);button.addEventListener('focus',highlight);
+      button.addEventListener('mouseleave',()=>layout.setAttribute('data-highlight','false'));
+      button.addEventListener('blur',()=>layout.setAttribute('data-highlight','false'));
+      controls.push(button);labels.append(button);return button;
+    };
+    const current=readTicket=>ticket===epoch&&detailTicket===detailEpoch&&readTicket===profileReadEpoch&&$('detail').open;
+    const openDocument=async row=>{
+      const readTicket=++profileReadEpoch;pane.replaceChildren(text('p','Loading current document...','profile-empty'));
+      try{const resource=await api(ScopedModel.detailPath(row),undefined,controller?.signal);if(!current(readTicket))return;
+        const content=ScopedModel.detailText(row,resource),fresh=new ScopedModel(await api('/api/state',undefined,controller?.signal));if(!current(readTicket))return;
+        if(fresh.view.view_revision!==view.view.view_revision||fresh.view.policy_revision!==view.view.policy_revision||fresh.view.scope_id!==view.view.scope_id)throw Error('Profile information changed');
+        pane.replaceChildren();const close=text('button','Close document','profile-reader-close');close.type='button';close.addEventListener('click',()=>choose(contactButton,contact));
+        pane.append(close);heading(row.data.filename||view.title(row));pane.append(text('pre',ScopedModel.isReviewedNote(row)||row.kind==='document'?content:'No readable text has been published.','profile-document-body'));
+      }catch(error){if(current(readTicket))failure(error,ticket);}
+    };
+    const contactButton=addLabel('Contact',contact);
+    const files=profile.documents.filter(row=>row.kind==='document'&&row.data.source==='reviewed-profile'&&['IDENTITY.md','SOUL.md'].includes(row.data.filename));
+    for(const filename of ['IDENTITY.md','SOUL.md']){
+      const rows=files.filter(row=>row.data.filename===filename);
+      addLabel(filename.slice(0,-3),()=>{if(rows.length===1)return openDocument(rows[0]);heading(filename);empty(rows.length?'Multiple profile sources require review.':'This profile file has not been published for this session.');},filename);
+    }
+    addLabel('Human',()=>{heading('Human counterpart');links(humans,'No human counterpart is published.');},humans.map(row=>view.title(row)).join(' / '));
+    addLabel('Role',()=>{heading('Role & responsibilities');links(assigned,'No assigned role is published.');
+      if(profile.functions.length){const list=text('ul','', 'profile-functions');for(const item of profile.functions)list.append(text('li',item));pane.append(list);}
+      const managers=profile.roles.filter(row=>!assigned.some(role=>role.id===row.id));if(managers.length){pane.append(text('h4','Reporting destinations'));links(managers,'');}
+    },assigned.map(row=>view.title(row)).join(' / '));
+    addLabel('Department',()=>{heading('Departments');links(profile.departments,'No department association is published.');},profile.departments.map(row=>view.title(row)).join(' / '));
+    addLabel('Organization',()=>{heading('Organization');links(organizations,'No explicit organization connection is published.');},organizations.map(row=>view.title(row)).join(' / '));
+    addLabel('Documents',()=>{
+      heading('Working documents');empty('Only published documents linked to this persona and authorized for this session are shown.');
+      const documents=profile.documents.filter(row=>!files.some(file=>file.id===row.id));
+      if(!documents.length){empty('No working documents have been published. IDENTITY and SOUL remain in their own labels.');return;}
+      const tree=text('div','', 'persona-document-tree'),folders=new Map();pane.append(tree);
+      for(const row of documents){
+        const folder=row.data.folder;
+        const parts=typeof folder==='string'&&folder.length<=512&&!/[\\\x00-\x1f]/.test(folder)&&!folder.startsWith('/')&&!folder.includes(':')
+          ?folder.split('/').filter(Boolean):[];
+        const valid=parts.length<=8&&!parts.some(part=>part==='.'||part==='..');
+        const path=valid&&parts.length?parts:['Unfiled documents'];let parent=tree,key='';
+        for(const part of path){key+='/'+part;if(!folders.has(key)){const branch=text('details','', 'persona-folder'),title=text('summary',part);branch.append(title);parent.append(branch);folders.set(key,branch);}parent=folders.get(key);}
+        const file=text('button',view.title(row),'profile-link profile-document');file.type='button';file.addEventListener('click',()=>openDocument(row));parent.append(file);
+      }
+    });
+    addLabel('Tools',()=>{heading('Declared tools');field('Available',profile.tools.join(', ')||'None published');if(profile.excluded.length)field('Excluded',profile.excluded.join(', '));});
+    addLabel('Access',()=>{heading('Access');field('Current scope',view.view.scope_id);empty('PhantomOrg and the current identified session determine visibility. This card does not grant or infer permissions.');});
+    addLabel('Status',()=>{heading('Published status');const data=profile.record.data;
+      field('Operation',scalar(data.operational_status)||'No operational check published');
+      for(const item of profile.fields)field(item.label,item.value);
+      if(scalar(data.status))field('Declared status',data.status);
+      empty('Declared information is not a live health check.');});
+    pane.addEventListener('mouseenter',()=>layout.setAttribute('data-highlight','true'));
+    pane.addEventListener('mouseleave',()=>layout.setAttribute('data-highlight','false'));
+    host.append(text('p','Selected label \u2192 linked information. Hover or focus highlights the connection. Visibility follows the current access matrix.','persona-legend'));
+    choose(contactButton,contact);
+  }
+
   async function showDetails(row) {
     const ticket=epoch, detailTicket=++detailEpoch;
     // Remove old contents before any new read; never show a cached fallback.
