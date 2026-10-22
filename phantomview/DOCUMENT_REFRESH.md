@@ -88,6 +88,11 @@ seeing a document in a native manifest is not that policy. Until that integratio
 is configured, production keeps its existing explicit bindings and fail-closed
 behavior. Do not describe batch preparation as active automatic publication.
 
+For automatic comparison on the existing collector schedule, see
+[Periodic document observation](DOCUMENT_WATCH.md). That optional hook writes a
+private change report even when stale bindings prevent normal collection. It
+does not activate the publication transitions described above.
+
 Organization and project inputs remain separate. No installation-specific matrix,
 document, source path, human identifier or operational receipt belongs in this
 repository. Review the initial mapping as a batch; handle later exceptions using
