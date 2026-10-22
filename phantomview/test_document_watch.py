@@ -136,6 +136,29 @@ class DocumentWatchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.observe()
 
+    @unittest.skipUnless(os.name == 'posix', 'Explicit POSIX native writer identity')
+    def test_native_manifest_accepts_only_explicit_owner_and_group_without_weakening_other_inputs(self):
+        import grp
+        import pwd
+        writer, group = pwd.getpwuid(os.geteuid()).pw_name, grp.getgrgid(self.manifest.stat().st_gid).gr_name
+        self.manifest.chmod(0o664)
+        self.assertEqual(self.observe()['status'], 'unavailable')
+        args = (self.manifest, self.matrix, self.snapshot, self.config, self.report, 'example')
+        report = document_watch.observe(*args, native_writer=writer, native_group=group)
+        self.assertEqual(report['status'], 'observed')
+        self.manifest.chmod(0o666)
+        self.assertEqual(document_watch.observe(*args, native_writer=writer, native_group=group)['status'], 'unavailable')
+        self.manifest.chmod(0o664)
+        self.matrix.chmod(0o664)
+        self.assertEqual(document_watch.observe(*args, native_writer=writer, native_group=group)['status'], 'unavailable')
+        self.matrix.chmod(0o600)
+        with patch('pwd.getpwnam') as account:
+            account.return_value.pw_uid = os.geteuid() + 1
+            self.assertEqual(document_watch.observe(*args, native_writer=writer, native_group=group)['status'], 'unavailable')
+        with patch('grp.getgrnam') as selected:
+            selected.return_value.gr_gid = self.manifest.stat().st_gid + 1
+            self.assertEqual(document_watch.observe(*args, native_writer=writer, native_group=group)['status'], 'unavailable')
+
 
 if __name__ == '__main__':
     unittest.main()

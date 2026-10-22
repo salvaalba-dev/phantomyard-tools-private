@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import tempfile
 import time
 
@@ -11,15 +12,39 @@ import yaml
 
 from authority_publication import private_directory
 from document_refresh import fingerprint, prepare
-from organization_authority import MAX_BYTES, _parse, _read
+from organization_authority import MAX_BYTES, _parse, _read, _stamp
 
 
-def source(path):
+def native_read(path, writer, group):
+    """Observe an explicitly trusted native writer; this read never authorizes publication."""
+    if os.name != 'posix':
+        raise ValueError('Native writer trust requires POSIX identity checks')
+    import grp
+    import pwd
+    uid, gid = pwd.getpwnam(writer).pw_uid, grp.getgrnam(group).gr_gid
+    for component in (path, *path.parents):
+        if component.is_symlink():
+            raise ValueError('Linked native manifest')
+    before = path.lstat()
+    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > MAX_BYTES
+            or before.st_uid != uid or before.st_gid != gid or before.st_mode & 0o002):
+        raise ValueError('Unexpected native manifest writer or permissions')
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), 'rb') as stream:
+        if _stamp(os.fstat(stream.fileno())) != _stamp(before):
+            raise ValueError('Native manifest changed while opening')
+        raw = stream.read(MAX_BYTES + 1)
+        if (_stamp(os.fstat(stream.fileno())) != _stamp(before)
+                or _stamp(path.lstat()) != _stamp(before) or len(raw) != before.st_size):
+            raise ValueError('Native manifest changed while reading')
+    return raw
+
+
+def source(path, reader=_read):
     path = Path(path)
     if not path.is_absolute() or '..' in path.parts or path.suffix.lower() not in {'.json', '.yaml', '.yml'}:
         raise ValueError('Explicit protected structured source required')
-    raw = _read(path)
-    return path, raw, _parse(raw, path.suffix.lower())
+    raw = reader(path)
+    return path, raw, _parse(raw, path.suffix.lower()), reader
 
 
 def replace(path, value):
@@ -45,7 +70,8 @@ def replace(path, value):
             os.unlink(temporary)
 
 
-def observe(manifest_path, matrix_path, snapshot_path, config_path, directory, organization, *, clock=time.time):
+def observe(manifest_path, matrix_path, snapshot_path, config_path, directory, organization, *,
+            clock=time.time, native_writer=None, native_group=None):
     """Write a private latest observation, including explicit failure without cached plans."""
     if not isinstance(organization, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,99}', organization):
         raise ValueError('Explicit organization required')
@@ -66,7 +92,10 @@ def observe(manifest_path, matrix_path, snapshot_path, config_path, directory, o
     report = {'schema_version': 1, 'organization': organization, 'checked_at': checked_at,
               'publication_performed': False, 'status': 'unavailable'}
     try:
-        inputs = [source(path) for path in paths]
+        if bool(native_writer) != bool(native_group):
+            raise ValueError('Native writer and group must be explicitly paired')
+        manifest_reader = (lambda path: native_read(path, native_writer, native_group)) if native_writer else _read
+        inputs = [source(manifest_path, manifest_reader), *[source(path) for path in paths[1:]]]
         manifest, matrix, state, config = [item[2] for item in inputs]
         snapshot = state.get('snapshot', state) if isinstance(state, dict) else None
         if (not isinstance(config, dict) or not isinstance(snapshot, dict)
@@ -79,7 +108,7 @@ def observe(manifest_path, matrix_path, snapshot_path, config_path, directory, o
         plan = prepare(manifest, inputs[0][0], matrix, snapshot['actors'], search_policy,
                        config.get('working_documents', []))
         # Refuse a mixed observation if any structured input changed during the scan.
-        if any(_read(path) != raw for path, raw, _ in inputs):
+        if any(reader(path) != raw for path, raw, _, reader in inputs):
             raise ValueError('Document inputs changed during observation')
         comparison = dict(plan)
         comparison['input_revisions'] = plan['input_revisions'] | {
@@ -100,8 +129,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('manifest', 'matrix', 'snapshot', 'config', 'report-dir', 'organization'):
         parser.add_argument('--' + name, required=True)
+    parser.add_argument('--native-writer', help='Explicit trusted POSIX owner of the native manifest only')
+    parser.add_argument('--native-group', help='Explicit trusted POSIX group of the native manifest only')
     args = parser.parse_args(argv)
-    report = observe(args.manifest, args.matrix, args.snapshot, args.config, args.report_dir, args.organization)
+    report = observe(args.manifest, args.matrix, args.snapshot, args.config, args.report_dir, args.organization,
+                     native_writer=args.native_writer, native_group=args.native_group)
     print(json.dumps({'status': report['status'], 'publication_performed': False,
                       'changed': report.get('changed')}, sort_keys=True))
     return 0 if report['status'] == 'observed' else 1

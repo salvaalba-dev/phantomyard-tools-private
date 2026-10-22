@@ -23,6 +23,15 @@ read the existing protected inputs and local blobs; it needs no new network or
 reader permissions. Bootstrap requires an existing successful persona snapshot.
 Both an exported index envelope and a plain snapshot with `actors` are accepted.
 
+If the native registry intentionally shares write access with its existing daemon
+group, an operator may explicitly add `--native-writer registry-user --native-group
+registry-group`. Only the native manifest uses that trust: its exact POSIX owner
+and group must match, world writes and links remain rejected, and bounded stable
+reads and the unchanged structured parser still apply. Matrix, snapshot, config
+and report protections remain strict. This permits observation of a trusted native
+registry; it grants no publication authority or viewer access and changes no
+native permissions. Windows does not support this optional POSIX trust mode.
+
 The leading `-` leaves the normal collector running when observation fails, so an
 observation problem does not disable the collector's independent invalidation and
 ACL checks. The observer returns exit code 1 and prints only a fixed summary on
