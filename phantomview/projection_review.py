@@ -4,6 +4,7 @@ No web routes, model tools or automatic classification are registered here.
 Hashes provide consistency, not reviewer authentication. Root ownership and write
 access are trusted deployment responsibilities.
 """
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -184,6 +185,22 @@ class PublishedProjection:
         manifest = {'organization': bundle['catalog']['organization'], 'resources': [
             {'id': row['id'], 'available': True, 'searchable': True} for row in bundle['catalog']['resources']]}
         return PrivateRecordStore(generation, lambda: manifest, manifest['organization'])(ident)
+
+    @contextmanager
+    def scan(self):
+        """Bind one request to a generation and revalidate live sources before release.
+
+        No result survives the request. Resource bytes still receive the backend's
+        authorization, fingerprint and second-read checks. The closing active()
+        rejects source, authority, approval or pointer changes during the scan.
+        """
+        generation, bundle = self.active()
+        manifest = {'organization': bundle['catalog']['organization'], 'resources': [
+            {'id': row['id'], 'available': True, 'searchable': True} for row in bundle['catalog']['resources']]}
+        store = PrivateRecordStore(generation, lambda: manifest, manifest['organization'])
+        yield lambda: bundle['catalog'], store
+        if self.active() != (generation, bundle):
+            raise ValueError('Publication changed during the selected resource scan')
 
     def publish(self, bundle, draft, *, expected_revision, authorize=None):
         """CAS publication with an exclusive writer lock; never overwrite history.

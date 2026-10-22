@@ -115,7 +115,7 @@ class PublishedReader:
                                           authority.snapshot, self.knowledge_source.note,
                                           scan_source=self.knowledge_source._scan_review)
         self.backend = ScopedBackend(self.gate, self.projection.catalog, self.projection.record,
-                                     reviewed_knowledge=knowledge)
+                                     reviewed_knowledge=knowledge, projection_scan=self.projection.scan)
         self.consultations = None
         if any(route['conversation_socket'] is not None for route in self.routes):
             from persona_conversation import NativePersonaClient, PersonaAssistant

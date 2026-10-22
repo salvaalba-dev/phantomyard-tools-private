@@ -117,10 +117,13 @@ class PrivateRecordStore:
 
 class ScopedBackend:
     def __init__(self, gate, catalog_loader, record_loader, *, modules=(), default_report_loader=None,
-                 reviewed_knowledge=None):
+                 reviewed_knowledge=None, projection_scan=None):
         if not isinstance(gate, IdentifiedGate) or not callable(catalog_loader) or not callable(record_loader):
             raise ValueError('An identified gate and protected projection loaders are required')
         self.gate, self.catalog_loader, self.record_loader = gate, catalog_loader, record_loader
+        if projection_scan is not None and not callable(projection_scan):
+            raise ValueError('A trusted request-local projection scan factory is required')
+        self.projection_scan = projection_scan
         self.modules = ModuleRegistry(modules)
         if default_report_loader is not None and not callable(default_report_loader):
             raise ValueError('A server-owned runtime default reader is required')
@@ -147,8 +150,16 @@ class ScopedBackend:
         return dict(view, navigation=navigation)
 
     def state(self, headers):
+        if self.projection_scan is None:
+            return self._state(headers, self.catalog_loader, self.record_loader)
+        # Reject unauthenticated callers before opening the protected scan.
+        self.gate.identified_scope(headers)
+        with self.projection_scan() as (catalog_loader, record_loader):
+            return self._state(headers, catalog_loader, record_loader)
+
+    def _state(self, headers, catalog_loader, record_loader):
         recipient, directory = self.gate.identified_scope(headers)
-        catalog = ProjectionCatalog(self.catalog_loader())
+        catalog = ProjectionCatalog(catalog_loader())
         if catalog.document['organization'] != recipient.organization:
             raise ValueError('Projection catalog belongs to another organization')
         if catalog.document['authority_revision'] != directory.authority_revision:
@@ -163,7 +174,7 @@ class ScopedBackend:
                 continue
             if row['kind'] == 'relationship' and not all(key in visible for key in row['endpoints']):
                 continue  # Do not even load an edge touching a denied, stale or missing node.
-            raw = self.record_loader(row['id'])
+            raw = record_loader(row['id'])
             if raw is None:
                 continue
             if not isinstance(raw, bytes) or len(raw) > MAX_RECORD_BYTES:
@@ -188,7 +199,7 @@ class ScopedBackend:
                     continue
             visible[row['id']], raw_records[row['id']] = record, raw
         for ident, raw in raw_records.items():
-            if self.record_loader(ident) != raw:
+            if record_loader(ident) != raw:
                 raise ValueError('A selected resource changed or was excluded; refresh the view')
         if self.reviewed_knowledge is not None:
             if self.reviewed_knowledge.gate is not self.gate:
@@ -198,7 +209,7 @@ class ScopedBackend:
                     raise ValueError('Knowledge IDs collide or exceed projection bounds')
                 visible[record['id']] = record
         current, _ = self.gate.identified_scope(headers)
-        if current != recipient or ProjectionCatalog(self.catalog_loader()).revision != catalog.revision:
+        if current != recipient or ProjectionCatalog(catalog_loader()).revision != catalog.revision:
             raise ValueError('Session or projection classification changed')
         resources = [record for record in visible.values() if record['kind'] != 'relationship']
         relations = [record for record in visible.values() if record['kind'] == 'relationship']

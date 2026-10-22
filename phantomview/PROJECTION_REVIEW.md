@@ -82,3 +82,20 @@ Automatic reuse of unchanged classifications, native channel isolation,
 assistant/JEV integration and actual deployment remain pending. The AU reader
 and default CLI are unchanged.
 Organization-wide ingestion ACL enforcement remains deferred F01.
+
+
+## Request-local projection scans
+
+The identified reader uses `PublishedProjection.scan` to bind a single backend
+state read to one protected generation. Complete live source and authority
+validation runs at entry and exit, instead of being repeated for each record.
+The backend still authenticates before opening the scan, authorizes each resource
+before loading it, enforces all size and fingerprint bounds, reads selected bytes
+twice, and rechecks the identified session. A changed pointer, approval, source,
+authority or selected record rejects the response.
+
+The scan holds no state between requests and introduces no TTL, stale fallback,
+background cache or shared mutable request context. Other backend loaders retain
+their existing behavior unless a trusted scan factory is explicitly configured.
+Tests pin two complete source validations per successful scan, identical results
+to the legacy path, and rejection of revocation and concurrent modifications.
