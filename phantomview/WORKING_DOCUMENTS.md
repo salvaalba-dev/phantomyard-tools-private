@@ -155,3 +155,33 @@ source bytes by SHA-256; it does not reimplement a native cryptographic scheme.
 For deterministic batch preparation from an existing document matrix, see
 [Document refresh batches](DOCUMENT_REFRESH.md). The offline adapter resolves
 current fingerprints and reports exceptions without publishing or changing ACL.
+
+
+## Logical documents and formats
+
+A document edition may have several independently registered original formats.
+An optional `document_group` in each selected working-document binding declares
+that relationship explicitly. It contains an organization-bound `id`, a `title`,
+a `version`, and an optional `code`. For example:
+
+```json
+{"id":"urn:example:document:conduct","title":"Code of conduct","version":"v1.0","code":"EX-001"}
+```
+
+Members must match the declared version and code, belong to the same actor and
+folder, and have distinct media types. Similar names or matching codes alone
+never establish membership. This is an adapter mapping for sources without a
+native format-family relationship; it does not rewrite native identities,
+originals, fingerprints, revision history, or the registry.
+
+The viewer presents one expandable edition with a link and size for each visible
+format, preferring PDF first when available. Every link keeps its own current
+session, resource ACL, and fingerprint checks. Group membership never reveals an
+unauthorized format or grants access. Display counts count editions; server
+resource counts and navigation validation retain the individual authorized files.
+Existing bindings without this declaration retain their current presentation.
+
+Batch preparation validates these declarations alongside current originals and
+reports inconsistent groups instead of guessing. Publication still requires the
+existing reviewed matrix and approval; this change does not automatically ingest
+all documents or bypass either organizational or project intake.

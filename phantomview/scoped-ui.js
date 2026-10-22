@@ -76,6 +76,42 @@ class ScopedModel {
   originalPath(row) {
     return row.kind==='document'&&row.data.source==='reviewed-working-document'&&row.data.original&&scopedHex(row.id)?'/api/document-original/'+row.id:null;
   }
+  documentEntries(rows) {
+    const entries=[],groups=new Map();
+    for(const supplied of rows){
+      const row=this.byId.get(supplied.id);
+      if(!row)throw Error('Only visible records can be grouped');
+      const group=row.data.document_group;
+      if(!group){entries.push({row,formats:[row],group:null});continue;}
+      const label=(value,limit)=>typeof value==='string'&&value.trim()&&value.length<=limit&&!/[\x00-\x1f\x7f]/.test(value);
+      if(!group||typeof group!=='object'||Array.isArray(group)||!label(group.id,512)
+          ||!group.id.startsWith('urn:'+this.view.organization+':document:')||!label(group.title,240)||!label(group.version,40)
+          ||Object.keys(group).some(key=>!['id','title','version','code'].includes(key))
+          ||group.code!==undefined&&!label(group.code,80)||!this.originalPath(row)
+          ||row.data.original.version!==group.version||group.code!==undefined&&row.data.original.code!==group.code)
+        throw Error('Explicit current logical document identity required');
+      const key=JSON.stringify([group.id,group.version]),entry=groups.get(key);
+      if(entry){
+        if(entry.group.title!==group.title||entry.group.code!==group.code||entry.row.data.folder!==row.data.folder
+            ||entry.formats.some(file=>file.data.original.media_type===row.data.original.media_type))throw Error('Ambiguous logical document formats');
+        entry.formats.push(row);
+      }else{const item={row,formats:[row],group};groups.set(key,item);entries.push(item);}
+    }
+    for(const entry of entries)if(entry.group){entry.formats.sort((a,b)=>(a.data.original.media_type==='application/pdf'?-1:b.data.original.media_type==='application/pdf'?1:0)||a.id.localeCompare(b.id));entry.row=entry.formats[0];}
+    return entries;
+  }
+  displayRows(rows) {
+    const docs=this.documentEntries(rows.filter(row=>row.kind==='document')),visible=new Set(docs.map(entry=>entry.row.id));
+    return rows.filter(row=>row.kind!=='document'||visible.has(row.id));
+  }
+  displayCounts() {
+    const result=this.counts();if(result.document)result.document=this.documentEntries(this.resources.filter(row=>row.kind==='document')).length;return result;
+  }
+  documentGroupLabel(entry) {return [entry.group.title,entry.group.code,entry.group.version].filter(Boolean).join(' · ');}
+  documentFormatLabel(row) {
+    const media={'application/pdf':'PDF','text/html':'HTML','text/plain':'TXT','text/markdown':'MD','image/png':'PNG','image/jpeg':'JPEG'};
+    return (media[row.data.original.media_type]||'Original')+' '+this.documentLabel(row).slice(this.documentLabel(row).lastIndexOf('('));
+  }
   counts() {
     const counts = {};
     for (const row of this.resources) counts[row.kind] = (counts[row.kind] || 0) + 1;
@@ -90,7 +126,7 @@ class ScopedModel {
     if(new Set(model.resources.map(row=>row.id)).size!==model.resources.length)throw Error('Ambiguous search result');
     model.byId=new Map(model.resources.map(row=>[row.id,row]));return model;
   }
-  title(row) { return String(row.data.title || row.data.display_name || row.data.name || row.data.label || row.data.id || SCOPED_KINDS[row.kind]); }
+  title(row) { return String(row.kind==='document'&&row.data.document_group?.title || row.data.title || row.data.display_name || row.data.name || row.data.label || row.data.id || SCOPED_KINDS[row.kind]); }
   static isReviewedNote(row) {return row.kind==='knowledge'&&row.data.source==='reviewed-knowledge';}
   static detailPath(row) {
     scopedRecord(row);
@@ -566,13 +602,14 @@ async function startScopedWorkspace() {
       const documents=profile.documents.filter(row=>!files.some(file=>file.id===row.id));
       if(!documents.length){empty('No working documents have been published. IDENTITY and SOUL remain in their own labels.');return;}
       const tree=text('div','', 'persona-document-tree'),folders=new Map();pane.append(tree);
-      for(const row of documents){
-        const folder=row.data.folder;
+      for(const entry of view.documentEntries(documents)){
+        const row=entry.row,folder=row.data.folder;
         const parts=typeof folder==='string'&&folder.length<=512&&!/[\\\x00-\x1f]/.test(folder)&&!folder.startsWith('/')&&!folder.includes(':')
           ?folder.split('/').filter(Boolean):[];
         const valid=parts.length<=8&&!parts.some(part=>part==='.'||part==='..');
         const path=valid&&parts.length?parts:['Unfiled documents'];let parent=tree,key='';
         for(const part of path){key+='/'+part;if(!folders.has(key)){const branch=text('details','', 'persona-folder'),title=text('summary',part);branch.append(title);parent.append(branch);folders.set(key,branch);}parent=folders.get(key);}
+        if(entry.group){parent.append(documentEntry(entry,view));continue;}
         const originalPath=view.originalPath(row),file=text(originalPath?'a':'button',view.documentLabel(row),'profile-link profile-document');
         if(originalPath){file.href=originalPath;file.target='_blank';file.rel='noopener noreferrer';file.title=file.textContent;file.setAttribute('aria-label','Open original: '+view.documentLabel(row));}
         else{file.type='button';file.addEventListener('click',()=>openDocument(row));}parent.append(file);
@@ -609,6 +646,11 @@ async function startScopedWorkspace() {
     choose(contactButton,contact);
   }
 
+  function documentEntry(entry,view) {
+    const box=text('details','', 'persona-document-edition'),summary=text('summary',view.documentGroupLabel(entry));summary.title=summary.textContent;box.append(summary);
+    const formats=text('div','', 'document-format-links');formats.setAttribute('aria-label','Available authorized formats');
+    for(const row of entry.formats){const link=originalDocumentLink(row,view);link.textContent=view.documentFormatLabel(row);formats.append(link);}box.append(formats);return box;
+  }
   function originalDocumentLink(row,model) {
     const link=text('a',model.documentLabel(row),'profile-link profile-document');link.href=model.originalPath(row);link.target='_blank';link.rel='noopener noreferrer';link.title=link.textContent;link.setAttribute('aria-label','Open original: '+model.documentLabel(row));return link;
   }
@@ -628,7 +670,8 @@ async function startScopedWorkspace() {
       const content=ScopedModel.detailText(selected,current),fresh=new ScopedModel(await api('/api/state',undefined,controller?.signal));
       if(ticket!==epoch||detailTicket!==detailEpoch||!$('detail').open)return;
       if(fresh.view.view_revision!==view.view.view_revision||fresh.view.policy_revision!==view.view.policy_revision||fresh.view.scope_id!==view.view.scope_id)throw Error('Record information changed');
-      if(view.originalPath(current))$('detail-content').replaceChildren(originalDocumentLink(current,view));
+      if(view.originalPath(current)){const entry=view.documentEntries(view.resources.filter(row=>row.kind==='document')).find(item=>item.formats.some(file=>file.id===current.id));
+        if(entry?.group){const box=documentEntry(entry,view);box.open=true;$('detail-content').replaceChildren(box);}else $('detail-content').replaceChildren(originalDocumentLink(current,view));}
       else if(ScopedModel.isReviewedNote(selected)||selected.kind==='document')$('detail-content').replaceChildren(text('pre',content,'profile-document-body'));
       else renderProfile(view.profile(current),view,ticket,detailTicket);
       const title=ScopedModel.isReviewedNote(selected)?current.title:view.title(current);
@@ -760,7 +803,7 @@ async function startScopedWorkspace() {
     }
     for(const kind of [...new Set(model.resources.map(row=>row.kind))].filter(kind=>!['persona','human','role'].includes(kind))){
       const group=text('section','', 'record-group'),heading=text('h3',SCOPED_KINDS[kind]),cards=text('div','', 'cards');group.append(heading,cards);
-      for(const row of model.resources.filter(row=>row.kind===kind)){
+      for(const row of model.displayRows(model.resources.filter(row=>row.kind===kind))){
         const button=text('button',model.title(row),'card');button.type='button';button.addEventListener('click',()=>showDetails(row));cards.append(button);
       }
       records.append(group);
@@ -779,7 +822,7 @@ async function startScopedWorkspace() {
       button.setAttribute('aria-current',section===item.id?'page':'false');button.addEventListener('click',()=>selectSection(item.id));nav.append(button);
     }
     const stats=$('stats');stats.replaceChildren();
-    for(const[kind,count]of Object.entries(model.counts())){
+    for(const[kind,count]of Object.entries(model.displayCounts())){
       const target=model.sections().find(item=>item.kind===kind),tile=text('button','', 'stat');tile.type='button';
       tile.append(text('span',SCOPED_KINDS[kind]),text('strong',count));tile.disabled=!target;
       tile.setAttribute('aria-label',`Show ${SCOPED_KINDS[kind]} (${count})`);
@@ -791,7 +834,7 @@ async function startScopedWorkspace() {
     const overview=!search&&!selected;
     records.className=overview?'overview-records':selected?.view==='table'?'record-table':'cards';
     if(overview)renderOverviewRecords(records);
-    else for(const row of model.resources.filter(row=>!selected||row.kind===selected.kind)) {
+    else for(const row of model.displayRows(model.resources.filter(row=>!selected||row.kind===selected.kind))) {
       const card=text('button','', 'card');card.type='button';card.append(text('small',SCOPED_KINDS[row.kind]),text('h3',model.title(row)));
       const summary=row.data.description||row.data.severity||row.data.kind;
       if(typeof summary==='string')card.append(text('p',summary.slice(0,180)));card.addEventListener('click',()=>showDetails(row));records.append(card);

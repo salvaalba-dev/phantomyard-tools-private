@@ -53,7 +53,7 @@ def bindings(value):
         raise ValueError('At most sixteen explicit working document bindings are supported')
     seen = set()
     for row in value:
-        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display'}
+        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display', 'document_group'}
                 or any(not isinstance(row[key], str) or not row[key] for key in ('urn', 'actor', 'sha256', 'format'))
                 or 'original' in row and row['original'] is not True
                 or not row['urn'].startswith('urn:') or len(row['urn']) > 512
@@ -68,13 +68,18 @@ def bindings(value):
             display_metadata(row.get('display'))
         elif 'display' in row:
             raise ValueError('Text document labels come from the selected source')
+        if 'document_group' in row:
+            from document_groups import validated as validate_group
+            if row.get('original') is not True:
+                raise ValueError('Logical document formats require original-file delivery')
+            validate_group(row['document_group'])
         seen.add(row['urn'])
     return value
 
 
 def validated(value):
     if (not isinstance(value, dict) or not {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor'} <= set(value)
-            or set(value) - {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor', 'original'}
+            or set(value) - {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor', 'original', 'document_group'}
             or not isinstance(value['content'], str) or not value['content'].strip()
             or len(value['content'].encode()) > MAX_BYTES or '\x00' in value['content']
             or SECRET.search(value['content']) or not isinstance(value['format'], str)
@@ -96,6 +101,11 @@ def validated(value):
     from original_documents import BINARY_MEDIA
     if value['format'] in BINARY_MEDIA and ('original' not in value or value['original']['media_type'] != value['format']):
         raise ValueError('Binary publications must bind their reviewed original media type')
+    if 'document_group' in value:
+        from document_groups import validated as validate_group
+        if 'original' not in value:
+            raise ValueError('Logical document formats require a reviewed original')
+        validate_group(value['document_group'], value['original'])
     return dict(value)
 
 
@@ -242,5 +252,10 @@ def collect(manifest, source, selected, actors, permitted):
         if binding.get('original') is True:
             from original_documents import descriptor
             value['original'] = original if binary else descriptor(raw, node, binding['format'])
+        if 'document_group' in binding:
+            from document_groups import validated as validate_group
+            value['document_group'] = validate_group(binding['document_group'], value['original'], oid)
         result[binding['urn']] = validated(value)
+    from document_groups import check_members
+    check_members(result.values())
     return result

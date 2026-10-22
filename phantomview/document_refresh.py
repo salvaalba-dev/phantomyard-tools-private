@@ -28,7 +28,7 @@ def _matrix(value, organization):
     prefix = 'urn:' + organization + ':doc:'
     for row in value['documents']:
         if (not isinstance(row, dict) or not {'urn', 'actor', 'category', 'format'} <= set(row)
-                or set(row) - {'urn', 'actor', 'category', 'format', 'display'}
+                or set(row) - {'urn', 'actor', 'category', 'format', 'display', 'document_group'}
                 or not isinstance(row['urn'], str) or not row['urn'].startswith(prefix)
                 or len(row['urn']) <= len(prefix) or len(row['urn']) > 512
                 or row['urn'] in result
@@ -58,7 +58,7 @@ def prepare(manifest, source, matrix, actors, permitted, previous=None):
     prior = {row['urn']: row for row in bindings(previous)}
     nodes = current_nodes(manifest)  # Invalid lineage aborts the entire plan.
     documents = {row['urn']: row for row in nodes if row.get('kind') == 'doc'}
-    prepared, pending = [], []
+    prepared, pending, checked = [], [], []
     for urn, node in sorted(documents.items()):
         # Do not expose the identities of hidden or ineligible native records.
         if (not permitted(node) or node.get('secret') is True or node.get('confidential') is True
@@ -84,11 +84,14 @@ def prepare(manifest, source, matrix, actors, permitted, previous=None):
             # Errors can contain private paths or source content; report a fixed code.
             pending.append({'urn': urn, 'reason': 'source-validation-failed'})
             continue
+        checked.append(payload)
         prepared.append({'urn': urn, 'category': row['category'], 'binding': binding,
                          'action': 'unchanged' if prior.get(urn) == binding else 'refresh' if urn in prior else 'add',
                          'payload_sha256': fingerprint(payload)})
     for urn in sorted(set(selected) - set(documents)):
         pending.append({'urn': urn, 'reason': 'missing-native-document'})
+    from document_groups import check_members
+    check_members(checked)
     removed = sorted(set(prior) - set(selected))
     excluded = sorted(set(prior) - {row['urn'] for row in prepared})
     inputs = {'manifest': fingerprint(manifest), 'matrix': fingerprint(matrix),

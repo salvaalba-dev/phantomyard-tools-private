@@ -285,3 +285,24 @@ test('published document text uses the existing resource route and rejects anoth
   assert.throws(()=>ScopedModel.detailText(row,{...row,id:b}));
   assert.throws(()=>ScopedModel.detailText(row,{...row,kind:'persona'}));
 });
+
+test('document editions group only explicit visible members without changing raw authorization counts',()=>{
+  const group={id:'urn:example:document:conduct',title:'Code of conduct',version:'v1.0',code:'EX-001'};
+  const rows=['application/pdf','text/html'].map((media,i)=>({id:(i?'b':'a').repeat(64),kind:'document',data:{
+    title:'Code of conduct',source:'reviewed-working-document',folder:'direction/policies',document_group:group,
+    original:{title:'Code of conduct',code:'EX-001',version:'v1.0',media_type:media,size_bytes:1000}}}));
+  const make=resources=>new ScopedModel({schema_version:1,complete_corpus:false,organization:'example',scope_id:'example',
+    policy_revision:'1'.repeat(64),view_revision:'2'.repeat(64),resources,relations:[]});
+  const model=make(rows);assert.equal(model.counts().document,2);assert.equal(model.displayCounts().document,1);
+  assert.equal(model.documentEntries(rows)[0].formats.length,2);assert.equal(model.displayRows(rows).length,1);
+  const limited=make([rows[0]]);assert.deepEqual(limited.documentEntries([rows[0]])[0].formats.map(r=>r.id),[rows[0].id]);
+  assert.throws(()=>limited.documentEntries([rows[1]]));
+  const unrelated=structuredClone(rows);delete unrelated[1].data.document_group;
+  assert.equal(make(unrelated).displayCounts().document,2);
+  const editions=structuredClone(rows);editions[1].data.document_group={...editions[1].data.document_group,version:'v2.0'};editions[1].data.original.version='v2.0';
+  assert.equal(make(editions).displayCounts().document,2);
+  const conflict=structuredClone(rows);conflict[1].data.document_group={...conflict[1].data.document_group,title:'Different document'};
+  assert.throws(()=>make(conflict).displayCounts());
+  const duplicate=structuredClone(rows);duplicate[1].data.original.media_type='application/pdf';
+  assert.throws(()=>make(duplicate).displayCounts());
+});

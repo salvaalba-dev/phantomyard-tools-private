@@ -92,6 +92,8 @@ def profile_data(source, collection):
         from working_documents import validated
         document = validated(source['working_document'])
         result.update({key: document[key] for key in ('content', 'format', 'folder')})
+        if 'document_group' in document:
+            result['document_group'] = document['document_group']
         result['source'] = 'reviewed-working-document'
         if 'original' in document:
             result['original'] = document['original']

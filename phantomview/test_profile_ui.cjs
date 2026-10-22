@@ -244,3 +244,19 @@ test('missing document versions are omitted rather than invented',()=>{
   assert.equal(model.documentLabel(row),'Guide (1 kB)');
   row.kind='persona';assert.equal(model.originalPath(row),null);
 });
+
+test('one document edition offers its visible formats inside the compact persona card',async()=>{
+  const view=fixture(),group={id:'urn:example:document:conduct',title:'Code of conduct',code:'EX-001',version:'v1.0'};
+  const formats=['text/html','application/pdf'].map((media,i)=>({id:(i?'d':'b').repeat(64),kind:'document',data:{
+    title:'Source '+i,source:'reviewed-working-document',folder:'direction/policies',document_group:group,
+    original:{title:'Code of conduct',code:'EX-001',version:'v1.0',size_bytes:1000,media_type:media}}}));
+  view.resources=[view.resources[0],...formats];view.relations=formats.map((row,i)=>({id:String(i+4).repeat(64),kind:'relationship',data:{source:id,target:row.id,type:'document'}}));
+  const calls=[],f=setup(async path=>{calls.push(path);return path==='/api/state'?view:view.resources[0];});
+  await f.ui.showDetails(view.resources[0]);label(f,'Documents').events.click();
+  const nodes=flatten(f.$('detail-content')),editions=nodes.filter(n=>n.className==='persona-document-edition');
+  assert.equal(editions.length,1);assert.deepEqual(f.failures,[]);
+  const links=flatten(editions[0]).filter(n=>n.tag==='a');assert.equal(links.length,2);
+  assert.ok(links[0].textContent.startsWith('PDF'));assert.ok(links[1].textContent.startsWith('HTML'));
+  assert.equal(links[0].href,'/api/document-original/'+formats[1].id);
+  assert.ok(!calls.some(path=>path.startsWith('/api/document-original/')));
+});

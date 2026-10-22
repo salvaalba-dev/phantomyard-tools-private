@@ -88,3 +88,5 @@ button.stat{text-align:left}button.stat:hover:not(:disabled),button.stat:focus-v
 
 /* Keep original-file titles compact; the complete label remains accessible. */
 .profile-document[href]{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--green);text-decoration:none}.profile-document[href]:hover,.profile-document[href]:focus-visible{text-decoration:underline}
+
+.persona-document-edition{min-width:0;margin:5px 0}.persona-document-edition>summary{font-size:12px;color:var(--green);padding:6px 0;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.document-format-links{display:flex;flex-wrap:wrap;gap:6px 14px;padding:3px 0 8px 12px}.document-format-links .profile-document[href]{width:auto;padding:4px 0}.document-format-links .profile-document:first-child{font-weight:600}
