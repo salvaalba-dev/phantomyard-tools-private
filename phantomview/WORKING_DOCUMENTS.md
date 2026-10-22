@@ -55,7 +55,7 @@ not silently substituted when the source changes.
 The collector exports only bounded display metadata: the document name, optional
 code and version, media type, real byte count and source fingerprint. Known HTML
 metadata uses its unique H1 and unique `doc-code` block. Missing version metadata
-is omitted. The UI displays `Name Ã‚Â· Code Ã‚Â· Version (size)` on one line, using
+is omitted. The UI displays `Name Â· Code Â· Version (size)` on one line, using
 B, kB, MB or GB automatically with at most one decimal. Long labels retain the
 complete accessible name and hover title. Profile documents keep their reader.
 
