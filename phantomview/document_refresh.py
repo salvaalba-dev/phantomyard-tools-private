@@ -28,7 +28,7 @@ def _matrix(value, organization):
     prefix = 'urn:' + organization + ':doc:'
     for row in value['documents']:
         if (not isinstance(row, dict) or not {'urn', 'actor', 'category', 'format'} <= set(row)
-                or set(row) - {'urn', 'actor', 'category', 'format', 'display', 'document_group', 'related_actors'}
+                or set(row) - {'urn', 'actor', 'category', 'format', 'display', 'document_group', 'related_actors', 'original_only'}
                 or not isinstance(row['urn'], str) or not row['urn'].startswith(prefix)
                 or len(row['urn']) <= len(prefix) or len(row['urn']) > 512
                 or row['urn'] in result
@@ -43,7 +43,7 @@ def _matrix(value, organization):
     return result
 
 
-def prepare(manifest, source, matrix, actors, permitted, previous=None):
+def prepare(manifest, source, matrix, actors, permitted, previous=None, cache=None):
     """Resolve selected revisions and prepare a deterministic, inert batch.
 
     Matrix categories are assertions about the native source, never ACL grants.
@@ -79,7 +79,7 @@ def prepare(manifest, source, matrix, actors, permitted, previous=None):
         binding.update(sha256=content_hash, original=True)
         try:
             # All existing owner, path, size, hash, format and secret checks apply.
-            payload = collect(manifest, source, [binding], actors, permitted)[urn]
+            payload = collect(manifest, source, [binding], actors, permitted, cache=cache)[urn]
         except (ValueError, OSError, UnicodeError):
             # Errors can contain private paths or source content; report a fixed code.
             pending.append({'urn': urn, 'reason': 'source-validation-failed'})
@@ -125,7 +125,7 @@ def main(argv=None):
             or not isinstance(config, dict)):
         raise ValueError('A collector snapshot and configuration are required')
     plan = prepare(manifest, args.manifest, matrix, snapshot['actors'], search_policy,
-                   config.get('working_documents', []))
+                   config.get('working_documents', []), cache=config.get('working_document_cache'))
     print(json.dumps(plan, sort_keys=True, indent=2, allow_nan=False))
 
 

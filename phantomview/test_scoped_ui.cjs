@@ -303,6 +303,11 @@ test('document editions group only explicit visible members without changing raw
   assert.equal(make(editions).displayCounts().document,2);
   const conflict=structuredClone(rows);conflict[1].data.document_group={...conflict[1].data.document_group,title:'Different document'};
   assert.throws(()=>make(conflict).displayCounts());
+  const unversioned=structuredClone(rows);
+  for(const row of unversioned){delete row.data.document_group.version;delete row.data.original.version;}
+  assert.equal(make(unversioned).displayCounts().document,1);
+  const mismatched=structuredClone(unversioned);mismatched[0].data.original.version='v2';
+  assert.throws(()=>make(mismatched).displayCounts());
   const duplicate=structuredClone(rows);duplicate[1].data.original.media_type='application/pdf';
   assert.throws(()=>make(duplicate).displayCounts());
 });

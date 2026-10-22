@@ -95,6 +95,7 @@ def descriptor(raw, node, format, display=None):
     values = {key: meta[key] for key in ('code', 'version') if isinstance(meta, dict) and key in meta}
     if media in BINARY_MEDIA:
         binary_signature(raw, media)
+    if media in BINARY_MEDIA or display is not None:
         reviewed = display_metadata(display)
         title = reviewed['title']
         for key in ('code', 'version'):

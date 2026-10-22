@@ -106,7 +106,7 @@ def observe(manifest_path, matrix_path, snapshot_path, config_path, directory, o
             raise ValueError('Selected collector sources and organization must match')
         from phantomview import search_policy
         plan = prepare(manifest, inputs[0][0], matrix, snapshot['actors'], search_policy,
-                       config.get('working_documents', []))
+                       config.get('working_documents', []), cache=config.get('working_document_cache'))
         # Refuse a mixed observation if any structured input changed during the scan.
         if any(reader(path) != raw for path, raw, _, reader in inputs):
             raise ValueError('Document inputs changed during observation')

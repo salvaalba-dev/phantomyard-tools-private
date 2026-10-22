@@ -175,8 +175,10 @@ class Observatory:
             raise ValueError("Profile document collection must be explicitly enabled")
         if type(config.get("profile_metadata", False)) is not bool:
             raise ValueError("Profile metadata collection must be a boolean")
-        from working_documents import bindings
+        from working_documents import bindings, cache_directory
         bindings(config.get("working_documents", []))
+        if "working_document_cache" in config:
+            cache_directory(config["working_document_cache"])
         for key in ("org_files", "docs_manifests"):
             if not isinstance(config.get(key, []), list) or any(not isinstance(x, str) for x in config.get(key, [])):
                 raise ValueError(f"Invalid configuration: {key}")
@@ -423,7 +425,7 @@ class Observatory:
             nodes = current_nodes(manifest)
             parent_urns = {text(n.get("mac")): text(n.get("urn")) for n in nodes if n.get("mac")}
             from working_documents import collect as collect_working_documents
-            working = collect_working_documents(manifest, filename, config.get("working_documents", []), result["actors"], search_policy)
+            working = collect_working_documents(manifest, filename, config.get("working_documents", []), result["actors"], search_policy, config.get("working_document_cache"))
             for node in nodes:
                 if heads and node.get("urn") in heads and node.get("mac") != heads[node["urn"]]:
                     continue

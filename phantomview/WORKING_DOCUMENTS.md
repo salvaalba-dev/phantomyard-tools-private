@@ -55,7 +55,7 @@ not silently substituted when the source changes.
 The collector exports only bounded display metadata: the document name, optional
 code and version, media type, real byte count and source fingerprint. Known HTML
 metadata uses its unique H1 and unique `doc-code` block. Missing version metadata
-is omitted. The UI displays `Name Â· Code Â· Version (size)` on one line, using
+is omitted. The UI displays `Name Ã‚Â· Code Ã‚Â· Version (size)` on one line, using
 B, kB, MB or GB automatically with at most one decimal. Long labels retain the
 complete accessible name and hover title. Profile documents keep their reader.
 
@@ -204,3 +204,32 @@ relationship still need the existing projection review, classification and
 per-session authorization. Reader cards render only the currently visible
 associations and keep one resource and original-file endpoint. Existing single
 persona bindings produce their previous payload and link unchanged.
+
+
+## Verified Drive copies and original-only text
+
+An optional collector `working_document_cache` names a protected, absolute local
+directory of hash-named copies. It is used only for a selected native `gdrive`
+location with a valid file reference. The collector never contacts Drive, changes
+native locations, or ingests documents. An existing authorized download tool must
+prepare copies separately. Missing or changed copies fail validation; there is no
+network, path or stale-content fallback. The current native fingerprint, size,
+owner, category, eligibility and downstream publication review still apply.
+Cache directories and files reject symlinks, group/world writes and unexpected
+owners on POSIX. Originals remain bounded to 32 MiB and are rehashed on collection.
+
+A binding can explicitly set `original_only: true`, `original: true`, and reviewed
+`display` metadata. Text then contributes only its reviewed title, optional code
+and optional version to the projection. The complete original remains available
+through the existing authorized original-file endpoint; it is not truncated or
+indexed in full. UTF-8, NUL and credential-like text checks still apply to the
+complete source. Existing inline-text bindings retain their behavior.
+
+A format group may omit `version` only when all original descriptors also omit
+it. This means the formal version is not declared, not that a version is inferred
+from a filename or invented. An empty version is invalid. The explicit member
+fingerprints and normal publication review still bind the selected edition;
+registered version changes cannot be hidden by an unversioned group. A reviewed
+label can retain a draft status without changing native records or implying
+approval. Observation and batch planning accept the same optional cache and
+original-only binding; automatic observation still does not publish documents.

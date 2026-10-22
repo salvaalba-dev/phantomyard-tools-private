@@ -66,7 +66,7 @@ def bindings(value):
         raise ValueError('At most sixteen explicit working document bindings are supported')
     seen = set()
     for row in value:
-        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display', 'document_group', 'related_actors'}
+        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display', 'document_group', 'related_actors', 'original_only'}
                 or any(not isinstance(row[key], str) or not row[key] for key in ('urn', 'actor', 'sha256', 'format'))
                 or 'original' in row and row['original'] is not True
                 or not row['urn'].startswith('urn:') or len(row['urn']) > 512
@@ -76,7 +76,9 @@ def bindings(value):
             raise ValueError('A unique document, persona, reviewed fingerprint and text format are required')
         recipients(row)
         from original_documents import BINARY_MEDIA, display_metadata
-        if row['format'] in BINARY_MEDIA:
+        if 'original_only' in row and (row['original_only'] is not True or row.get('original') is not True):
+            raise ValueError('Metadata-only delivery requires an explicit reviewed original')
+        if row['format'] in BINARY_MEDIA or row.get('original_only') is True:
             if row.get('original') is not True:
                 raise ValueError('Binary documents require explicit original-file delivery')
             display_metadata(row.get('display'))
@@ -190,8 +192,21 @@ def current_nodes(manifest):
     return result
 
 
-def collect(manifest, source, selected, actors, permitted):
-    """Read selected local blobs only; ownership is a link, never an ACL grant."""
+def cache_directory(value):
+    """A local read-only cache is optional; it never downloads or changes native records."""
+    if not isinstance(value, (str, os.PathLike)):
+        raise ValueError('An explicit protected cache directory is required')
+    root = Path(value)
+    if (not root.is_absolute() or '..' in root.parts or not root.is_dir()
+            or any(parent.is_symlink() for parent in (root, *root.parents))
+            or os.name == 'posix' and (root.stat().st_mode & 0o022
+                or root.stat().st_uid not in {0, os.geteuid()})):
+        raise ValueError('The document cache must be protected')
+    return root
+
+
+def collect(manifest, source, selected, actors, permitted, cache=None):
+    """Read selected local blobs or explicitly configured verified Drive copies; ownership is a link, never an ACL grant."""
     selected = bindings(selected)
     if not selected:
         return {}
@@ -222,26 +237,41 @@ def collect(manifest, source, selected, actors, permitted):
                 or not isinstance(node.get('category'), str)):
             raise ValueError('Selected working document must have a declared owner and classification')
         locations = node.get('locations', [])
-        if (not isinstance(locations, list) or len(locations) != 1
-                or not isinstance(locations[0], dict) or locations[0].get('backend') != 'local'
-                or not isinstance(locations[0].get('path'), str)):
-            raise ValueError('A single explicit local document source is required')
-        path = Path(locations[0].get('path', ''))
-        if (not path.is_absolute() or '..' in path.parts or not path.is_relative_to(root)
-                or any(parent.is_symlink() for parent in (path, *path.parents))):
-            raise ValueError('Working documents must remain inside the selected local blob store')
+        if not isinstance(locations, list) or len(locations) != 1 or not isinstance(locations[0], dict):
+            raise ValueError('A single explicit document source is required')
+        location = locations[0]
+        cached = location.get('backend') == 'gdrive'
+        if cached:
+            if (cache is None or not isinstance(location.get('ref'), str)
+                    or not re.fullmatch(r'[A-Za-z0-9_-]{10,200}', location['ref'])
+                    or node.get('contentHash') != binding['sha256']):
+                raise ValueError('A verified cache and current native Drive reference are required')
+            cache_root = cache_directory(cache)
+            path = cache_root / binding['sha256']
+        elif location.get('backend') == 'local' and isinstance(location.get('path'), str):
+            path = Path(location['path'])
+            if not path.is_absolute() or '..' in path.parts or not path.is_relative_to(root):
+                raise ValueError('Working documents must remain inside the selected local blob store')
+        else:
+            raise ValueError('Unsupported document source')
+        if any(parent.is_symlink() for parent in (path, *path.parents)):
+            raise ValueError('Document source paths cannot contain symlinks')
         from original_documents import BINARY_MEDIA, MAX_ORIGINAL_BYTES
         binary = binding['format'] in BINARY_MEDIA
-        limit = (MAX_ORIGINAL_BYTES if binary else MAX_HTML_ORIGINAL_BYTES
+        metadata_only = binding.get('original_only') is True
+        limit = (MAX_ORIGINAL_BYTES if binary or metadata_only else MAX_HTML_ORIGINAL_BYTES
                  if binding['format'] == 'html-text' and binding.get('original') is True else MAX_BYTES)
         with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
                                | getattr(os, 'O_NONBLOCK', 0)), 'rb') as stream:
             before = os.fstat(stream.fileno())
-            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit:
+            if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > limit
+                    or cached and os.name == 'posix' and (before.st_mode & 0o022
+                        or before.st_uid not in {0, os.geteuid()})):
                 raise ValueError('A bounded complete regular document is required')
             raw = stream.read(limit + 1)
             after = os.fstat(stream.fileno())
-        if ((before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns)
+        if ((before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+                != (after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
                 or hashlib.sha256(raw).hexdigest() != binding['sha256']):
             raise ValueError('Document changed; review the current source before publication')
         parts, visited = [], set()
@@ -257,11 +287,13 @@ def collect(manifest, source, selected, actors, permitted):
             parts.insert(0, slug)
             parent_mac = parents[0].get('parentMac')
         original = None
-        if binary:
+        if binary or metadata_only:
             from original_documents import descriptor
+            if not binary and (b'\x00' in raw or SECRET.search(raw.decode('utf-8'))):
+                raise ValueError('Credential-like or invalid source content is excluded')
             original = descriptor(raw, node, binding['format'], binding['display'])
             content = ' '.join(original[key] for key in ('title', 'code', 'version') if key in original)
-            format = binding['format']
+            format = 'text/plain' if binding['format'] == 'html-text' else binding['format']
         else:
             source_text = raw.decode('utf-8')
             if SECRET.search(source_text):
@@ -274,7 +306,7 @@ def collect(manifest, source, selected, actors, permitted):
             value['related_actors'] = list(binding['related_actors'])
         if binding.get('original') is True:
             from original_documents import descriptor
-            value['original'] = original if binary else descriptor(raw, node, binding['format'])
+            value['original'] = original if binary or metadata_only else descriptor(raw, node, binding['format'])
         if 'document_group' in binding:
             from document_groups import validated as validate_group
             value['document_group'] = validate_group(binding['document_group'], value['original'], oid)

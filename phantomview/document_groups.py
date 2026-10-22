@@ -3,7 +3,7 @@ import re
 
 
 def validated(value, original=None, organization=None):
-    if (not isinstance(value, dict) or not {'id', 'title', 'version'} <= set(value)
+    if (not isinstance(value, dict) or not {'id', 'title'} <= set(value)
             or set(value) - {'id', 'title', 'version', 'code'}
             or not isinstance(value['id'], str) or len(value['id']) > 512
             or not re.fullmatch(r'urn:[a-z0-9][a-z0-9_-]{0,99}:document:[a-z0-9][a-z0-9_./-]{0,299}', value['id'])):
@@ -16,7 +16,7 @@ def validated(value, original=None, organization=None):
             raise ValueError('Invalid logical document label')
     if organization is not None and not value['id'].startswith('urn:' + organization + ':document:'):
         raise ValueError('Logical documents must remain within the selected organization')
-    if original is not None and (original.get('version') != value['version']
+    if original is not None and (original.get('version') != value.get('version')
                                  or 'code' in value and original.get('code') != value['code']):
         raise ValueError('Format metadata must match the declared logical document edition')
     return dict(value)
@@ -30,7 +30,7 @@ def check_members(documents):
         if group is None:
             continue
         original = document['original']
-        key = (group['id'], group['version'])
+        key = (group['id'], group.get('version'))
         from working_documents import recipients
         signature = (group, document['folder'], tuple(sorted(recipients(document))))
         if key not in groups:

@@ -85,7 +85,7 @@ class ScopedModel {
       if(!group){entries.push({row,formats:[row],group:null});continue;}
       const label=(value,limit)=>typeof value==='string'&&value.trim()&&value.length<=limit&&!/[\x00-\x1f\x7f]/.test(value);
       if(!group||typeof group!=='object'||Array.isArray(group)||!label(group.id,512)
-          ||!group.id.startsWith('urn:'+this.view.organization+':document:')||!label(group.title,240)||!label(group.version,40)
+          ||!group.id.startsWith('urn:'+this.view.organization+':document:')||!label(group.title,240)||group.version!==undefined&&!label(group.version,40)
           ||Object.keys(group).some(key=>!['id','title','version','code'].includes(key))
           ||group.code!==undefined&&!label(group.code,80)||!this.originalPath(row)
           ||row.data.original.version!==group.version||group.code!==undefined&&row.data.original.code!==group.code)
