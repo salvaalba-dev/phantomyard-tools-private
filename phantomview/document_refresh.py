@@ -28,7 +28,7 @@ def _matrix(value, organization):
     prefix = 'urn:' + organization + ':doc:'
     for row in value['documents']:
         if (not isinstance(row, dict) or not {'urn', 'actor', 'category', 'format'} <= set(row)
-                or set(row) - {'urn', 'actor', 'category', 'format', 'display', 'document_group'}
+                or set(row) - {'urn', 'actor', 'category', 'format', 'display', 'document_group', 'related_actors'}
                 or not isinstance(row['urn'], str) or not row['urn'].startswith(prefix)
                 or len(row['urn']) <= len(prefix) or len(row['urn']) > 512
                 or row['urn'] in result

@@ -31,7 +31,8 @@ def check_members(documents):
             continue
         original = document['original']
         key = (group['id'], group['version'])
-        signature = (group, document['folder'], document['actor'])
+        from working_documents import recipients
+        signature = (group, document['folder'], tuple(sorted(recipients(document))))
         if key not in groups:
             groups[key] = (signature, set())
         expected, formats = groups[key]

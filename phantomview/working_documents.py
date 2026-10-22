@@ -48,12 +48,25 @@ def text_content(content, format):
     return re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip(), 'text/plain'
 
 
+def recipients(value):
+    """Explicit document associations never imply viewer access grants."""
+    primary = value.get('actor')
+    extra = value.get('related_actors', [])
+    if (not isinstance(primary, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', primary)
+            or not isinstance(extra, list) or len(extra) > 7
+            or 'related_actors' in value and not extra
+            or any(not isinstance(actor, str) or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', actor) for actor in extra)
+            or len(set([primary, *extra])) != len(extra) + 1):
+        raise ValueError('Unique explicit document personas required')
+    return [primary, *extra]
+
+
 def bindings(value):
     if not isinstance(value, list) or len(value) > 16:
         raise ValueError('At most sixteen explicit working document bindings are supported')
     seen = set()
     for row in value:
-        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display', 'document_group'}
+        if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display', 'document_group', 'related_actors'}
                 or any(not isinstance(row[key], str) or not row[key] for key in ('urn', 'actor', 'sha256', 'format'))
                 or 'original' in row and row['original'] is not True
                 or not row['urn'].startswith('urn:') or len(row['urn']) > 512
@@ -61,6 +74,7 @@ def bindings(value):
                 or not re.fullmatch(r'[a-f0-9]{64}', row['sha256'])
                 or row['format'] not in {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg'} or row['urn'] in seen):
             raise ValueError('A unique document, persona, reviewed fingerprint and text format are required')
+        recipients(row)
         from original_documents import BINARY_MEDIA, display_metadata
         if row['format'] in BINARY_MEDIA:
             if row.get('original') is not True:
@@ -79,7 +93,7 @@ def bindings(value):
 
 def validated(value):
     if (not isinstance(value, dict) or not {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor'} <= set(value)
-            or set(value) - {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor', 'original', 'document_group'}
+            or set(value) - {'content', 'format', 'folder', 'sha256', 'source_sha256', 'actor', 'original', 'document_group', 'related_actors'}
             or not isinstance(value['content'], str) or not value['content'].strip()
             or len(value['content'].encode()) > MAX_BYTES or '\x00' in value['content']
             or SECRET.search(value['content']) or not isinstance(value['format'], str)
@@ -93,6 +107,7 @@ def validated(value):
             or hashlib.sha256(value['content'].encode()).hexdigest() != value['sha256']
             or len(json.dumps(value, ensure_ascii=True).encode()) > 32768):
         raise ValueError('Invalid reviewed working document text')
+    recipients(value)
     if 'original' in value:
         from original_documents import validate_descriptor
         original = validate_descriptor(value['original'])
@@ -188,14 +203,20 @@ def collect(manifest, source, selected, actors, permitted):
         matches = [node for node in nodes if node.get('urn') == binding['urn']]
         if not matches:
             continue  # The binding may belong to another selected manifest.
-        personas = [actor for actor in actors if actor.get('id') == binding['actor'] and actor.get('org') == oid]
-        if len(matches) != 1 or len(personas) != 1:
-            raise ValueError('Working document source or persona is ambiguous')
-        node, persona = matches[0], personas[0]
+        personas = []
+        for ident in recipients(binding):
+            matching = [actor for actor in actors if actor.get('id') == ident and actor.get('org') == oid]
+            if len(matching) != 1:
+                raise ValueError('Working document persona is ambiguous or outside the organization')
+            personas.append(matching[0])
+        if len(matches) != 1:
+            raise ValueError('Working document source is ambiguous')
+        node = matches[0]
         owners = node.get('owners')
         if (node.get('kind') != 'doc' or not isinstance(owners, list)
-                or any(not isinstance(owner, str) for owner in owners) or persona.get('role') not in owners
-                or persona.get('searchable') is not True or not permitted(node)
+                or any(not isinstance(owner, str) for owner in owners)
+                or any(persona.get('role') not in owners or persona.get('searchable') is not True for persona in personas)
+                or not permitted(node)
                 or node.get('secret') is True or node.get('confidential') is True
                 or node.get('visibility') in {'private', 'secret', 'restricted', 'confidential'}
                 or not isinstance(node.get('category'), str)):
@@ -249,6 +270,8 @@ def collect(manifest, source, selected, actors, permitted):
         value = {'content': content, 'format': format, 'folder': '/'.join(parts),
                  'source_sha256': binding['sha256'], 'sha256': hashlib.sha256(content.encode()).hexdigest(),
                  'actor': binding['actor']}
+        if 'related_actors' in binding:
+            value['related_actors'] = list(binding['related_actors'])
         if binding.get('original') is True:
             from original_documents import descriptor
             value['original'] = original if binary else descriptor(raw, node, binding['format'])

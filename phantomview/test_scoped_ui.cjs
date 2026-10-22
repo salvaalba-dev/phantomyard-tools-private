@@ -306,3 +306,21 @@ test('document editions group only explicit visible members without changing raw
   const duplicate=structuredClone(rows);duplicate[1].data.original.media_type='application/pdf';
   assert.throws(()=>make(duplicate).displayCounts());
 });
+
+test('two visible persona cards share one document only through explicit visible links',()=>{
+  const one={id:a,kind:'persona',data:{id:'coordinator',title:'Coordinator'}},
+    two={id:b,kind:'persona',data:{id:'project-lead',title:'Project lead'}},
+    file={id:c,kind:'document',data:{title:'Shared minutes',source:'reviewed-working-document'}};
+  const relation=(id,source)=>({id,kind:'relationship',data:{source,target:c,type:'documentation'}});
+  const view={schema_version:1,complete_corpus:false,organization:'example',scope_id:'example',
+    policy_revision:'1'.repeat(64),view_revision:'2'.repeat(64),resources:[one,two,file],
+    relations:[relation('3'.repeat(64),a),relation('4'.repeat(64),b)]};
+  const model=new ScopedModel(view);assert.equal(model.counts().document,1);
+  assert.deepEqual(model.profile(one).documents.map(row=>row.id),[c]);
+  assert.deepEqual(model.profile(two).documents.map(row=>row.id),[c]);
+  view.relations.pop();const limited=new ScopedModel(view);
+  assert.deepEqual(limited.profile(two).documents,[]);
+  view.resources=[one,file];const scoped=new ScopedModel(view);
+  assert.deepEqual(scoped.profile(one).documents.map(row=>row.id),[c]);
+  assert.throws(()=>scoped.profile(two));
+});

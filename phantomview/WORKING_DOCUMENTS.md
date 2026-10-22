@@ -55,7 +55,7 @@ not silently substituted when the source changes.
 The collector exports only bounded display metadata: the document name, optional
 code and version, media type, real byte count and source fingerprint. Known HTML
 metadata uses its unique H1 and unique `doc-code` block. Missing version metadata
-is omitted. The UI displays `Name · Code · Version (size)` on one line, using
+is omitted. The UI displays `Name Â· Code Â· Version (size)` on one line, using
 B, kB, MB or GB automatically with at most one decimal. Long labels retain the
 complete accessible name and hover title. Profile documents keep their reader.
 
@@ -185,3 +185,22 @@ Batch preparation validates these declarations alongside current originals and
 reports inconsistent groups instead of guessing. Publication still requires the
 existing reviewed matrix and approval; this change does not automatically ingest
 all documents or bypass either organizational or project intake.
+
+
+## Shared persona associations
+
+An explicit binding may retain its existing `actor` and add `related_actors`,
+for example `"actor": "coordinator", "related_actors": ["project-lead"]`.
+At most eight unique personas, including the primary actor, may be selected.
+Every selected persona must belong to the same organization, be eligible for
+collection, and hold a role listed in the native document's owners. Missing,
+ambiguous, hidden or unrelated personas reject the binding rather than creating
+partially verified associations. The same checks apply to batch preparation.
+
+Collection reads and represents the document once and emits one explicit link
+per selected persona. Grouped formats must share the same complete persona set.
+These are document-use associations, never ACL grants: the document and every
+relationship still need the existing projection review, classification and
+per-session authorization. Reader cards render only the currently visible
+associations and keep one resource and original-file endpoint. Existing single
+persona bindings produce their previous payload and link unchanged.

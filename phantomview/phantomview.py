@@ -435,8 +435,10 @@ class Observatory:
                 if node.get("urn") in working:
                     document = result["documents"][-1]
                     document["working_document"] = working[node["urn"]]
-                    result["edges"].append({"from": f"{oid}:actors:{working[node['urn']]['actor']}", "to": node["urn"],
-                        "type": "documentation", "label": "Working document", "org": oid})
+                    from working_documents import recipients
+                    for ident in recipients(working[node['urn']]):
+                        result["edges"].append({"from": f"{oid}:actors:{ident}", "to": node["urn"],
+                            "type": "documentation", "label": "Working document", "org": oid})
             result["sources"].append({"kind": "documents", "path": str(Path(filename).resolve()), "checked_at": now()})
         if config.get("auto_procedures", True):
             from procedures import discover
