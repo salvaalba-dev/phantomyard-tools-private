@@ -233,3 +233,14 @@ registered version changes cannot be hidden by an unversioned group. A reviewed
 label can retain a draft status without changing native records or implying
 approval. Observation and batch planning accept the same optional cache and
 original-only binding; automatic observation still does not publish documents.
+
+### Restored local stores
+
+A native local document may retain its previous absolute location after a store
+has moved. When that location is absent and has the exact
+`blobs/<hash-prefix>/<content-hash>` layout recorded by PhantomDocs, the reader
+may use the same hash-addressed blob inside the explicitly selected store.
+Present external paths, permission failures, symlinks, noncanonical locations
+and external backend references are never redirected. Existing owner, category,
+current-version, size, format and fingerprint checks still apply. The native
+manifest, version history and original bytes are not modified by this lookup.

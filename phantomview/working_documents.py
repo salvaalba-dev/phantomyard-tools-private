@@ -250,8 +250,23 @@ def collect(manifest, source, selected, actors, permitted, cache=None):
             path = cache_root / binding['sha256']
         elif location.get('backend') == 'local' and isinstance(location.get('path'), str):
             path = Path(location['path'])
-            if not path.is_absolute() or '..' in path.parts or not path.is_relative_to(root):
-                raise ValueError('Working documents must remain inside the selected local blob store')
+            if not path.is_absolute() or '..' in path.parts:
+                raise ValueError('Working documents require an absolute local blob path')
+            if not path.is_relative_to(root):
+                # Match native restored-store semantics only for an absent,
+                # canonical hash-addressed local location. Never read outside
+                # the selected store or hide a present source's corruption.
+                expected = ('blobs', binding['sha256'][:2], binding['sha256'])
+                if tuple(path.parts[-3:]) != expected or node.get('contentHash') != binding['sha256']:
+                    raise ValueError('Relocated document location must match its native content hash')
+                if any(part.is_symlink() for part in (path, *path.parents)):
+                    raise ValueError('Relocated document paths cannot contain symlinks')
+                try:
+                    path.lstat()
+                except FileNotFoundError:
+                    path = root / binding['sha256'][:2] / binding['sha256']
+                else:
+                    raise ValueError('A present external document location cannot be redirected')
         else:
             raise ValueError('Unsupported document source')
         if any(parent.is_symlink() for parent in (path, *path.parents)):
