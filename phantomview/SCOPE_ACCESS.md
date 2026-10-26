@@ -5,6 +5,8 @@ The native channel handoff and full application filtering remain prerequisites.
 
 PhantomOrg defines which information a verified human may read through a persona.
 Declared scopes also determine which view definition a future session can select.
+Category grants follow the [native PhantomOrg category hierarchy](CATEGORY_ACL.md).
+That inheritance never supplies an undeclared project or scope grant.
 Permission to read information is separate from permission to change resources or
 configure personal/shared views. Category zero confers no automatic write right.
 

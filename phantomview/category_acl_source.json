@@ -1,0 +1,15 @@
+{
+  "repository": "salvaalba-dev/phantomyard-tools",
+  "revision": "88236994bf42f88fe8355d13953cdcff0ba17b4c",
+  "path": "phantomdocs/src/phantomdocs/access.py",
+  "git_blob_sha": "6a809d94586300d6ed5c44e4c75e9721de77d7cc",
+  "sha256": "9d5d80a9af6a074a05d26e23cb6ef6127ae74bc8529229abef585632e84f3567",
+  "functions": [
+    "normalize_category",
+    "_exception_category_id",
+    "resolved_categories",
+    "_security_categories",
+    "_category_parents",
+    "can_read"
+  ]
+}
