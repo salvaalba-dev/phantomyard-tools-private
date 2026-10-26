@@ -17,8 +17,14 @@ nonempty list contains unique, exact category labels already granted to that
 counterpart. Unknown humans, unbound humans, additional categories, category zero
 and limits on the independent category-zero owner are rejected. Absence preserves
 existing inheritance. A limit cannot add projects, scopes or actions, and does
-not modify the persona's own categories. Category labels have no numeric ordering
-or prefix wildcard: `category-4` does not grant `category-4-river`.
+not modify the persona's own categories. Counterpart categories are first resolved
+through the declared PhantomOrg hierarchy, as in PhantomDocs. A declared parent
+grant covers its declared descendants; a child never grants its parent or siblings.
+The human limit remains an exact allowlist over that resolved set: listing only
+`category-4-river` does not also allow its parent or another project. Category
+inheritance does not grant a project, scope, action or native conversation.
+
+See [Category ACL compatibility](CATEGORY_ACL.md) for the pinned reader contract.
 
 The server applies the intersection before constructing the visible projection,
 including counts, menus, search, details and graph endpoints. Existing project,

@@ -1,11 +1,12 @@
 """Deny-by-default policy primitive for a future verified-channel integration.
 
 This module does not authenticate a sender and does not enable extended access.
-Categories are exact labels, never a numeric ordering or inherited project right.
+Category inheritance follows PhantomOrg declarations; project rights stay explicit.
 """
 import hashlib
 import json
 
+from category_acl import can_read as can_read_category
 from view_permissions import ACTIONS, FIELDS, validate_view_access
 
 
@@ -94,6 +95,9 @@ class Scope:
             raise ValueError("Invalid organization access policy")
         if "category-0" not in declared:
             raise ValueError("PhantomOrg must declare category-0")
+        if any(not isinstance(label, str) or not isinstance(definition, dict)
+               for label, definition in declared.items()):
+            raise ValueError("Invalid declared category definitions")
         bindings = {ident: ({"counterpart_persona": human["counterpart_persona"]}
                             if "counterpart_persona" in human else {}) for ident, human in humans.items()}
         personas = {}
@@ -104,13 +108,14 @@ class Scope:
             if any(not isinstance(items, list) for items in lists):
                 raise ValueError("Invalid category list")
             categories = [c for items in lists for c in items]
-            normalized = []
             for category in categories:
                 label = "category-" + str(category) if type(category) is int else category
                 if not isinstance(label, str) or label not in declared:
                     raise ValueError("Undeclared category")
-                normalized.append(label)
-            personas[ident] = {"categories": sorted(set(normalized)), "projects": projects.get(ident, [])}
+            # Resolve the existing native ACL before applying independent human,
+            # project and scope restrictions. Never infer rights from numbers.
+            readable = [label for label in declared if can_read_category(org, ident, label)]
+            personas[ident] = {"categories": sorted(readable), "projects": projects.get(ident, [])}
         policy = {"organization": org["organization"]["id"], "humans": bindings, "personas": personas}
         if 'human_category_limits' in view:
             policy['human_category_limits'] = view['human_category_limits']
