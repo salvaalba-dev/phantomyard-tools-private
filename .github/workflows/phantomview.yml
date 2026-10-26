@@ -17,6 +17,19 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -r phantomview/requirements.txt
+      - name: Check out the reviewed native category reader
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: salvaalba-dev/phantomyard-tools
+          ref: 88236994bf42f88fe8355d13953cdcff0ba17b4c
+          path: native-acl-source
+          persist-credentials: false
+      - name: Verify generated category ACL compatibility
+        run: python phantomview/sync_category_acl.py native-acl-source/phantomdocs/src/phantomdocs/access.py --check
+      - name: Test native source parity
+        env:
+          PHANTOMVIEW_NATIVE_ACL_SOURCE: native-acl-source/phantomdocs/src/phantomdocs/access.py
+        run: python -m unittest discover -s phantomview -p test_category_acl.py
       - name: Full suite with umask 022
         if: runner.os == 'Linux'
         shell: bash
