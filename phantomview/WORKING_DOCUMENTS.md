@@ -72,7 +72,11 @@ is accepted from a browser. No extra service or dependency is introduced.
 
 HTML and images open directly; PDF originals download with a readable filename
 for consistent handling by browsers without an inline PDF viewer. No original
-is converted or rewritten. Responses
+is converted or rewritten. Text originals that strictly decode as UTF-8 declare
+`charset=utf-8` in their response media type so browsers display accented and
+non-ASCII characters correctly. Other encodings retain the original media type;
+the reader does not guess, transcode or repair stored bytes. Binary media types,
+fingerprints, sizes and document versions remain unchanged. Responses
 are private and non-cacheable, disable MIME sniffing and referrers, and apply a
 sandbox policy without scripts, same-origin privileges, external assets, forms
 or embedding. HTML therefore retains its original print headers; the viewer no

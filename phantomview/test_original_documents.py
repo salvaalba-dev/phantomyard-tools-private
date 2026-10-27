@@ -114,6 +114,60 @@ class OriginalDeliveryTests(ProjectionFixture):
         self.assertEqual(headers['Content-Disposition'], 'attachment; filename="EX-20260101-001-v1.2-Code-of-conduct-PDF.pdf"')
         self.assertTrue(headers['Content-Security-Policy'].startswith('sandbox;'))
 
+    def test_utf8_text_delivery_declares_encoding_without_rewriting_original(self):
+        for format, media in [('html-text', 'text/html'), ('markdown', 'text/markdown'),
+                              ('text/plain', 'text/plain')]:
+            with self.subTest(media=media):
+                raw = '<h1>Meeting notes</h1>Fictional caf\u00e9 \u2014 r\u00e9sum\u00e9'.encode('utf-8')
+                node = {'contentHash': hashlib.sha256(raw).hexdigest(), 'size': len(raw),
+                        'meta': {'title': 'Meeting notes', 'version': 'v1.0'}}
+                value = descriptor(raw, node, format)
+                path = self.root / value['sha256']
+                path.write_bytes(raw)
+                path.chmod(0o600)
+                self.replace(self.ident, {'source': 'reviewed-working-document', 'original': value})
+                handler = Mock(headers=self.headers, wfile=BytesIO())
+                serve(handler, self.backend, self.store, self.ident)
+                headers = dict(call.args for call in handler.send_header.call_args_list)
+                self.assertEqual(headers['Content-Type'], media + '; charset=utf-8')
+                self.assertEqual(headers['Content-Length'], str(len(raw)))
+                self.assertEqual(handler.wfile.getvalue(), raw)
+                self.assertEqual(hashlib.sha256(handler.wfile.getvalue()).hexdigest(), value['sha256'])
+                self.assertEqual(path.read_bytes(), raw)
+                self.assertEqual(value['version'], 'v1.0')
+
+    def test_legacy_text_is_not_mislabeled_or_transcoded_as_utf8(self):
+        for format, media in [('markdown', 'text/markdown'), ('text/plain', 'text/plain')]:
+            with self.subTest(media=media):
+                raw = b'Fictional caf\xe9 notes'
+                node = {'contentHash': hashlib.sha256(raw).hexdigest(), 'size': len(raw),
+                        'meta': {'title': 'Legacy notes'}}
+                value = descriptor(raw, node, format)
+                path = self.root / value['sha256']
+                path.write_bytes(raw)
+                path.chmod(0o600)
+                self.replace(self.ident, {'source': 'reviewed-working-document', 'original': value})
+                handler = Mock(headers=self.headers, wfile=BytesIO())
+                serve(handler, self.backend, self.store, self.ident)
+                headers = dict(call.args for call in handler.send_header.call_args_list)
+                self.assertEqual(headers['Content-Type'], media)
+                self.assertEqual(handler.wfile.getvalue(), raw)
+
+    def test_utf16_text_keeps_its_original_encoding_and_bom(self):
+        raw = 'Fictional caf\u00e9 notes'.encode('utf-16')
+        node = {'contentHash': hashlib.sha256(raw).hexdigest(), 'size': len(raw),
+                'meta': {'title': 'Legacy notes'}}
+        value = descriptor(raw, node, 'text/plain')
+        path = self.root / value['sha256']
+        path.write_bytes(raw)
+        path.chmod(0o600)
+        self.replace(self.ident, {'source': 'reviewed-working-document', 'original': value})
+        handler = Mock(headers=self.headers, wfile=BytesIO())
+        serve(handler, self.backend, self.store, self.ident)
+        headers = dict(call.args for call in handler.send_header.call_args_list)
+        self.assertEqual(headers['Content-Type'], 'text/plain')
+        self.assertEqual(handler.wfile.getvalue(), raw)
+
     def test_denied_document_and_unknown_ids_do_not_open_the_store(self):
         store = Mock()
         for ident in (self.hidden, 'f' * 64):

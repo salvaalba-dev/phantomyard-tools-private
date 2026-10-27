@@ -173,8 +173,17 @@ def serve(handler, backend, store, ident):
     if (backend.detail(handler.headers, ident) != row
             or backend.gate.identified_scope(handler.headers)[0] != recipient):
         raise ValueError('Session or original-file authorization changed')
+    content_type = value['media_type']
+    if content_type.startswith('text/'):
+        try:
+            raw.decode('utf-8')
+        except UnicodeDecodeError:
+            # Preserve legacy encoding behavior rather than mislabeling its bytes.
+            pass
+        else:
+            content_type += '; charset=utf-8'
     handler.send_response(200)
-    handler.send_header('Content-Type', value['media_type'])
+    handler.send_header('Content-Type', content_type)
     handler.send_header('Content-Length', str(len(raw)))
     disposition = 'attachment' if value['media_type'] == 'application/pdf' else 'inline'
     handler.send_header('Content-Disposition', disposition + '; filename="' + value['filename'] + '"')
