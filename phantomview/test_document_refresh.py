@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from document_refresh import prepare
+from document_refresh import MAX_DOCUMENTS, _matrix, prepare
 
 
 class DocumentRefreshTests(unittest.TestCase):
@@ -36,6 +36,29 @@ class DocumentRefreshTests(unittest.TestCase):
 
     def plan(self, previous=None, permitted=lambda _: True):
         return prepare(self.manifest, self.root / 'manifest.yaml', self.matrix, [self.actor], permitted, previous)
+
+    def test_refresh_matrix_and_collector_share_the_capacity_boundary(self):
+        from working_documents import MAX_DOCUMENTS as binding_limit
+        self.assertEqual(MAX_DOCUMENTS, binding_limit)
+        rows = [self.row | {'urn': f'urn:example:doc:policies/item-{i}'}
+                for i in range(MAX_DOCUMENTS + 1)]
+        self.matrix['documents'] = rows[:-1]
+        self.assertEqual(len(_matrix(self.matrix, 'example')), MAX_DOCUMENTS)
+        self.matrix['documents'] = rows
+        with self.assertRaises(ValueError):
+            _matrix(self.matrix, 'example')
+
+    def test_expanded_refresh_prepares_all_explicit_sources_without_writing(self):
+        rows = [self.row | {'urn': f'urn:example:doc:policies/item-{i}'}
+                for i in range(MAX_DOCUMENTS)]
+        self.matrix['documents'] = rows
+        self.manifest['nodes'] = [self.folder, *[self.node | {'urn': row['urn']} for row in rows]]
+        before = copy.deepcopy((self.manifest, self.matrix))
+        result = self.plan()
+        self.assertEqual(len(result['prepared']), MAX_DOCUMENTS)
+        self.assertFalse(result['pending'])
+        self.assertFalse(result['mutations_performed'])
+        self.assertEqual((self.manifest, self.matrix), before)
 
     def test_initial_plan_is_deterministic_private_and_does_not_write(self):
         inputs = copy.deepcopy((self.manifest, self.matrix))

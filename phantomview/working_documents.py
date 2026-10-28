@@ -9,6 +9,7 @@ import stat
 
 from profile_documents import SECRET
 
+MAX_DOCUMENTS = 512
 MAX_BYTES = 128 * 1024
 MAX_HTML_ORIGINAL_BYTES = 1024 * 1024
 
@@ -62,8 +63,8 @@ def recipients(value):
 
 
 def bindings(value):
-    if not isinstance(value, list) or len(value) > 16:
-        raise ValueError('At most sixteen explicit working document bindings are supported')
+    if not isinstance(value, list) or len(value) > MAX_DOCUMENTS:
+        raise ValueError(f'At most {MAX_DOCUMENTS} explicit working document bindings are supported')
     seen = set()
     for row in value:
         if (not isinstance(row, dict) or not {'urn', 'actor', 'sha256', 'format'} <= set(row) or set(row) - {'urn', 'actor', 'sha256', 'format', 'original', 'display', 'document_group', 'related_actors', 'original_only'}
