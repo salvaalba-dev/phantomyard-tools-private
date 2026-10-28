@@ -251,3 +251,41 @@ Present external paths, permission failures, symlinks, noncanonical locations
 and external backend references are never redirected. Existing owner, category,
 current-version, size, format and fingerprint checks still apply. The native
 manifest, version history and original bytes are not modified by this lookup.
+
+## Protected MP4 recordings
+
+An explicitly selected `video/mp4` binding must set `original: true`,
+`original_only: true` and reviewed `display` metadata. The current native size,
+content hash, owner, category and normal projection review remain mandatory.
+The collector publishes only the reviewed label and fingerprint, never media
+bytes. Local sources and separately prepared verified Drive copies use the same
+existing source protections. There is no public Drive redirect, automatic
+download, new service or alternate identity policy.
+
+MP4 originals have a separate 8 GiB ceiling; other originals retain their 32 MiB
+ceiling. Collection checks the complete top-level container structure and hashes
+the entire source in 256 KiB blocks. This is an integrity and container check,
+not a codec decoder or malware scan. A valid file-type box and complete metadata
+and media boxes are required. No version is inferred from a recording filename.
+
+The existing authenticated original endpoint serves a whole recording or one
+HTTP byte range, including open-ended and suffix ranges. Partial responses use
+206, Content-Range and Accept-Ranges; malformed, duplicate, multiple and
+unsatisfiable ranges return 416 without opening the file. Authorization precedes
+file access and is checked again after hashing and before every bounded write.
+Expiry, logout, policy or projection changes and file mutation stop the stream.
+After headers have been sent, failure closes the connection instead of appending
+a second HTTP response. Responses are private and not cached by the browser.
+
+The reader caches at most 32 successful complete-file hash verdicts on POSIX,
+keyed by the reviewed digest, store path and full file identity, size, times,
+owner, group, mode and link count. Each request still opens and checks its exact
+protected file, and every chunk checks the open file's identity. An altered file
+must pass full verification again. Windows rehashes on each request because its
+file timestamp semantics do not provide the same change identity. The cache
+contains no media bytes, session grants or remote locations.
+
+This feature alone does not select or publish any recording. Operators must
+prepare exact verified private copies, review the existing native ACL and select
+the intended persona links through the normal publication procedure. Existing
+transcripts and summaries remain independently authorized document formats.
