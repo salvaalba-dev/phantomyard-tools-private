@@ -25,8 +25,17 @@ Both an exported index envelope and a plain snapshot with `actors` are accepted.
 
 If the native registry intentionally shares write access with its existing daemon
 group, an operator may explicitly add `--native-writer registry-user --native-group
-registry-group`. Only the native manifest uses that trust: its exact POSIX owner
-and group must match, world writes and links remain rejected, and bounded stable
+registry-group`. Repeat `--native-writer` for each explicitly trusted local account
+when existing ingestion and maintenance commands write as different users. For
+example, `--native-writer registry-user --native-writer ingestion-user
+--native-group registry-group` accepts either declared owner, with the same exact
+group. One to sixteen distinct account names are supported; every name must
+resolve on each read. An unknown account invalidates the observation even when
+another account matches. Group membership alone never authorizes an owner, and
+the observer never infers or adds writers from the current file owner.
+
+Only the native manifest uses that trust: its exact POSIX owner must be in the
+explicit list and its group must match, world writes and links remain rejected, and bounded stable
 reads and the unchanged structured parser still apply. Matrix, snapshot, config
 and report protections remain strict. This permits observation of a trusted native
 registry; it grants no publication authority or viewer access and changes no
@@ -53,7 +62,7 @@ native document identities and must remain private. It contains no document body
 or source path. An unreadable report destination is an operational failure; the
 previous file's timestamp must not be interpreted as a fresh observation.
 
-The existing sixteen selected binding limit still applies. Discovery can report
+The shared 512-format selected binding limit still applies. Discovery can report
 other eligible native documents as `not-in-matrix`, but automatic classification,
 remote Drive retrieval and publication remain separate work. Organization and
 project matrices must use separate source-bound invocations and report directories.
