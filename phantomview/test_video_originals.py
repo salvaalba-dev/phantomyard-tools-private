@@ -298,6 +298,12 @@ class VideoDeliveryTests(ProjectionFixture):
     def test_file_change_during_playback_stops_the_connection(self):
         self.check_interrupted(lambda: self.path.write_bytes(b'x' * len(self.raw)))
 
+    def test_malformed_policy_during_playback_closes_without_a_second_response(self):
+        self.check_interrupted(lambda: setattr(self.backend, 'detail', Mock(side_effect=TypeError('Changed policy'))))
+
+    def test_recursive_policy_during_playback_closes_without_a_second_response(self):
+        self.check_interrupted(lambda: setattr(self.backend, 'detail', Mock(side_effect=RecursionError('Changed policy'))))
+
 
 class VideoCollectionTests(unittest.TestCase):
     def test_current_native_video_collects_only_reviewed_metadata(self):
