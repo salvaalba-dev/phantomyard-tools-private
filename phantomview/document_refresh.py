@@ -8,7 +8,7 @@ import re
 
 from working_documents import MAX_DOCUMENTS, bindings, collect, current_nodes
 
-FORMATS = {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg'}
+FORMATS = {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4'}
 
 
 def fingerprint(value):

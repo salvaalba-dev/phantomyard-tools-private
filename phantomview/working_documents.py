@@ -73,9 +73,11 @@ def bindings(value):
                 or not row['urn'].startswith('urn:') or len(row['urn']) > 512
                 or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', row['actor'])
                 or not re.fullmatch(r'[a-f0-9]{64}', row['sha256'])
-                or row['format'] not in {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg'} or row['urn'] in seen):
+                or row['format'] not in {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4'} or row['urn'] in seen):
             raise ValueError('A unique document, persona, reviewed fingerprint and text format are required')
         recipients(row)
+        if row['format'] == 'video/mp4' and (row.get('original') is not True or row.get('original_only') is not True):
+            raise ValueError('Videos require explicit metadata-only original delivery')
         from original_documents import BINARY_MEDIA, display_metadata
         if 'original_only' in row and (row['original_only'] is not True or row.get('original') is not True):
             raise ValueError('Metadata-only delivery requires an explicit reviewed original')
@@ -100,7 +102,7 @@ def validated(value):
             or not isinstance(value['content'], str) or not value['content'].strip()
             or len(value['content'].encode()) > MAX_BYTES or '\x00' in value['content']
             or SECRET.search(value['content']) or not isinstance(value['format'], str)
-            or value['format'] not in {'markdown', 'text/plain', 'application/pdf', 'image/png', 'image/jpeg'}
+            or value['format'] not in {'markdown', 'text/plain', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4'}
             or not isinstance(value['folder'], str) or len(value['folder']) > 512
             or not value['folder'] or len(value['folder'].split('/')) > 8
             or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}', part)
@@ -117,7 +119,7 @@ def validated(value):
         if original['sha256'] != value['source_sha256']:
             raise ValueError('Original must match the reviewed source fingerprint')
     from original_documents import BINARY_MEDIA
-    if value['format'] in BINARY_MEDIA and ('original' not in value or value['original']['media_type'] != value['format']):
+    if value['format'] in BINARY_MEDIA | {'video/mp4'} and ('original' not in value or value['original']['media_type'] != value['format']):
         raise ValueError('Binary publications must bind their reviewed original media type')
     if 'document_group' in value:
         from document_groups import validated as validate_group
@@ -273,9 +275,13 @@ def collect(manifest, source, selected, actors, permitted, cache=None):
         if any(parent.is_symlink() for parent in (path, *path.parents)):
             raise ValueError('Document source paths cannot contain symlinks')
         from original_documents import BINARY_MEDIA, MAX_ORIGINAL_BYTES
+        from video_originals import MAX_VIDEO_BYTES, descriptor as video_descriptor
+        video = binding['format'] == 'video/mp4'
+        if video and node.get('contentHash') != binding['sha256']:
+            raise ValueError('Video binding must match its current native fingerprint')
         binary = binding['format'] in BINARY_MEDIA
         metadata_only = binding.get('original_only') is True
-        limit = (MAX_ORIGINAL_BYTES if binary or metadata_only else MAX_HTML_ORIGINAL_BYTES
+        limit = (MAX_VIDEO_BYTES if video else MAX_ORIGINAL_BYTES if binary or metadata_only else MAX_HTML_ORIGINAL_BYTES
                  if binding['format'] == 'html-text' and binding.get('original') is True else MAX_BYTES)
         with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
                                | getattr(os, 'O_NONBLOCK', 0)), 'rb') as stream:
@@ -284,11 +290,12 @@ def collect(manifest, source, selected, actors, permitted, cache=None):
                     or cached and os.name == 'posix' and (before.st_mode & 0o022
                         or before.st_uid not in {0, os.geteuid()})):
                 raise ValueError('A bounded complete regular document is required')
-            raw = stream.read(limit + 1)
+            original = video_descriptor(stream, node, binding['display']) if video else None
+            raw = b'' if video else stream.read(limit + 1)
             after = os.fstat(stream.fileno())
         if ((before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
                 != (after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns)
-                or hashlib.sha256(raw).hexdigest() != binding['sha256']):
+                or not video and hashlib.sha256(raw).hexdigest() != binding['sha256']):
             raise ValueError('Document changed; review the current source before publication')
         parts, visited = [], set()
         parent_mac = node.get('parentMac')
@@ -302,12 +309,12 @@ def collect(manifest, source, selected, actors, permitted, cache=None):
                 raise ValueError('Explicit folder labels are required')
             parts.insert(0, slug)
             parent_mac = parents[0].get('parentMac')
-        original = None
+        original = original if video else None
         if binary or metadata_only:
             from original_documents import descriptor
-            if not binary and (b'\x00' in raw or SECRET.search(raw.decode('utf-8'))):
+            if not video and not binary and (b'\x00' in raw or SECRET.search(raw.decode('utf-8'))):
                 raise ValueError('Credential-like or invalid source content is excluded')
-            original = descriptor(raw, node, binding['format'], binding['display'])
+            original = original if video else descriptor(raw, node, binding['format'], binding['display'])
             content = ' '.join(original[key] for key in ('title', 'code', 'version') if key in original)
             format = 'text/plain' if binding['format'] == 'html-text' else binding['format']
         else:

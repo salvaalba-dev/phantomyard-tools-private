@@ -109,7 +109,7 @@ class ScopedModel {
   }
   documentGroupLabel(entry) {return [entry.group.title,entry.group.code,entry.group.version].filter(Boolean).join(' · ');}
   documentFormatLabel(row) {
-    const media={'application/pdf':'PDF','text/html':'HTML','text/plain':'TXT','text/markdown':'MD','image/png':'PNG','image/jpeg':'JPEG'};
+    const media={'application/pdf':'PDF','text/html':'HTML','text/plain':'TXT','text/markdown':'MD','image/png':'PNG','image/jpeg':'JPEG','video/mp4':'MP4'};
     return (media[row.data.original.media_type]||'Original')+' '+this.documentLabel(row).slice(this.documentLabel(row).lastIndexOf('('));
   }
   counts() {

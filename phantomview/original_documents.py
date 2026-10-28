@@ -9,7 +9,7 @@ import unicodedata
 
 MAX_ORIGINAL_BYTES = 32 * 1024 * 1024
 MEDIA = {'text/html': 'html', 'text/plain': 'txt', 'text/markdown': 'md',
-         'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg'}
+         'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4'}
 BINARY_MEDIA = {'application/pdf', 'image/png', 'image/jpeg'}
 
 
@@ -68,10 +68,12 @@ class _Metadata(HTMLParser):
 
 
 def validate_descriptor(value):
+    from video_originals import MAX_VIDEO_BYTES
     required = {'title', 'sha256', 'size_bytes', 'media_type', 'filename'}
     if (not isinstance(value, dict) or not required <= set(value)
             or set(value) - required - {'code', 'version'}
-            or type(value['size_bytes']) is not int or not 0 < value['size_bytes'] <= MAX_ORIGINAL_BYTES
+            or type(value['size_bytes']) is not int or not 0 < value['size_bytes'] <= (
+                MAX_VIDEO_BYTES if value.get('media_type') == 'video/mp4' else MAX_ORIGINAL_BYTES)
             or value['media_type'] not in MEDIA
             or not isinstance(value['sha256'], str) or not re.fullmatch(r'[a-f0-9]{64}', value['sha256'])
             or not isinstance(value['filename'], str)
@@ -134,10 +136,14 @@ def descriptor(raw, node, format, display=None):
 class OriginalStore:
     """Only hash-named reviewed copies; no request-controlled filesystem paths."""
     def __init__(self, root):
+        from video_originals import VerifiedVideos
         self.root = Path(root)
+        self.videos = VerifiedVideos()
 
     def read(self, value):
         value = validate_descriptor(value)
+        if value['media_type'] == 'video/mp4':
+            raise ValueError('Video originals require bounded streaming delivery')
         if (not self.root.is_absolute() or not self.root.is_dir()
                 or any(p.is_symlink() for p in (self.root, *self.root.parents))
                 or os.name == 'posix' and self.root.stat().st_mode & 0o022):
@@ -169,6 +175,9 @@ def serve(handler, backend, store, ident):
         handler.send(404, {'error': 'Original unavailable'})
         return
     value = validate_descriptor(row['data'].get('original'))
+    if value['media_type'] == 'video/mp4':
+        from video_originals import serve_video
+        return serve_video(handler, backend, store, ident, row, recipient, value)
     raw = store.read(value)
     if (backend.detail(handler.headers, ident) != row
             or backend.gate.identified_scope(handler.headers)[0] != recipient):
