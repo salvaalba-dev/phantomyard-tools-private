@@ -192,6 +192,6 @@ def serve_video(handler, backend, store, ident, row, recipient, value):
                 remaining -= len(block)
             if fingerprint(stream) != before:
                 raise ValueError('Video changed during delivery')
-        except (ValueError, KeyError, PermissionError, OSError):
+        except (ValueError, TypeError, RecursionError, KeyError, PermissionError, OSError):
             # Headers are already committed: close, never append a second response.
             handler.close_connection = True
