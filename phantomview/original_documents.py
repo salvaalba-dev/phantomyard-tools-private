@@ -7,6 +7,9 @@ import re
 import stat
 import unicodedata
 
+# Preload media support before isolated readers permanently drop kernel UIDs.
+from video_originals import MAX_VIDEO_BYTES, VerifiedVideos, serve_video
+
 MAX_ORIGINAL_BYTES = 32 * 1024 * 1024
 MEDIA = {'text/html': 'html', 'text/plain': 'txt', 'text/markdown': 'md',
          'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4'}
@@ -68,7 +71,6 @@ class _Metadata(HTMLParser):
 
 
 def validate_descriptor(value):
-    from video_originals import MAX_VIDEO_BYTES
     required = {'title', 'sha256', 'size_bytes', 'media_type', 'filename'}
     if (not isinstance(value, dict) or not required <= set(value)
             or set(value) - required - {'code', 'version'}
@@ -136,7 +138,6 @@ def descriptor(raw, node, format, display=None):
 class OriginalStore:
     """Only hash-named reviewed copies; no request-controlled filesystem paths."""
     def __init__(self, root):
-        from video_originals import VerifiedVideos
         self.root = Path(root)
         self.videos = VerifiedVideos()
 
@@ -176,7 +177,6 @@ def serve(handler, backend, store, ident):
         return
     value = validate_descriptor(row['data'].get('original'))
     if value['media_type'] == 'video/mp4':
-        from video_originals import serve_video
         return serve_video(handler, backend, store, ident, row, recipient, value)
     raw = store.read(value)
     if (backend.detail(handler.headers, ident) != row
