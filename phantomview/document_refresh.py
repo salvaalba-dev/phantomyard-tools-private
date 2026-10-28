@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 import re
 
-from working_documents import bindings, collect, current_nodes
+from working_documents import MAX_DOCUMENTS, bindings, collect, current_nodes
 
 FORMATS = {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg'}
-MAX_DOCUMENTS = 16  # The existing collector binding limit also applies to batches.
 
 
 def fingerprint(value):

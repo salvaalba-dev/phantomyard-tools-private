@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from working_documents import MAX_BYTES, MAX_HTML_ORIGINAL_BYTES, bindings, collect, text_content, validated
+from working_documents import MAX_BYTES, MAX_DOCUMENTS, MAX_HTML_ORIGINAL_BYTES, bindings, collect, text_content, validated
 
 
 class WorkingDocumentTests(unittest.TestCase):
@@ -31,6 +31,32 @@ class WorkingDocumentTests(unittest.TestCase):
 
     def collect(self):
         return collect(self.manifest, self.root / 'manifest.yaml', [self.binding], [self.actor], lambda _: True)
+
+    def test_document_capacity_accepts_the_boundary_and_rejects_overflow(self):
+        rows = [self.binding | {'urn': f'urn:example:doc:policies/item-{i}'}
+                for i in range(MAX_DOCUMENTS + 1)]
+        self.assertEqual(MAX_DOCUMENTS, 512)
+        self.assertEqual(bindings(rows[:-1]), rows[:-1])
+        with self.assertRaises(ValueError):
+            bindings(rows)
+        rows[17]['sha256'] = 'invalid'
+        with self.assertRaises(ValueError):
+            bindings(rows[:18])
+
+    def test_expanded_collection_preserves_every_fingerprint_and_eligibility_check(self):
+        rows = [self.binding | {'urn': f'urn:example:doc:policies/item-{i}'}
+                for i in range(MAX_DOCUMENTS)]
+        nodes = [self.node | {'urn': row['urn']} for row in rows]
+        manifest = self.manifest | {'nodes': [*nodes, self.manifest['nodes'][1]]}
+        values = collect(manifest, self.root / 'manifest.yaml', rows, [self.actor], lambda _: True)
+        self.assertEqual(set(values), {row['urn'] for row in rows})
+        self.assertTrue(all(value['source_sha256'] == self.binding['sha256'] for value in values.values()))
+        with self.assertRaises(ValueError):
+            collect(manifest, self.root / 'manifest.yaml', rows, [self.actor],
+                    lambda node: node['urn'] != rows[17]['urn'])
+        rows[17]['sha256'] = '0' * 64
+        with self.assertRaises(ValueError):
+            collect(manifest, self.root / 'manifest.yaml', rows, [self.actor], lambda _: True)
 
     def test_unconfigured_documents_are_never_opened(self):
         self.path.unlink()

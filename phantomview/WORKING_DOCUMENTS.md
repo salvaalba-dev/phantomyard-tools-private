@@ -4,8 +4,11 @@ The existing persona card can display a folder tree and read authorized working
 documents beside its labels. IDENTITY and SOUL remain separate. No layout, web
 route, service or dependency is added by this source adapter.
 
-Collection is disabled by default. An operator may select up to sixteen exact
-PhantomDocs document URNs in the protected collector configuration:
+Collection is disabled by default. An operator may select up to 512 exact
+PhantomDocs document URNs in the protected collector configuration. Each format
+counts as one binding; refresh matrices use the same limit. Selection remains
+explicit, and per-file size, content validation and ACL checks still apply:
+
 
 ```json
 {"working_documents": [{
