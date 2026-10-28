@@ -15,19 +15,30 @@ from document_refresh import fingerprint, prepare
 from organization_authority import MAX_BYTES, _parse, _read, _stamp
 
 
+def native_writers(value):
+    """Normalize an explicit bounded owner allowlist; never infer owners from disk."""
+    names = (value,) if isinstance(value, str) else value
+    if (not isinstance(names, (list, tuple)) or not 1 <= len(names) <= 16
+            or any(not isinstance(name, str) or not name or name.strip() != name for name in names)
+            or len(set(names)) != len(names)):
+        raise ValueError('One to sixteen distinct explicit native writers required')
+    return tuple(names)
+
+
 def native_read(path, writer, group):
     """Observe an explicitly trusted native writer; this read never authorizes publication."""
     if os.name != 'posix':
         raise ValueError('Native writer trust requires POSIX identity checks')
     import grp
     import pwd
-    uid, gid = pwd.getpwnam(writer).pw_uid, grp.getgrnam(group).gr_gid
+    uids = {pwd.getpwnam(name).pw_uid for name in native_writers(writer)}
+    gid = grp.getgrnam(group).gr_gid
     for component in (path, *path.parents):
         if component.is_symlink():
             raise ValueError('Linked native manifest')
     before = path.lstat()
     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > MAX_BYTES
-            or before.st_uid != uid or before.st_gid != gid or before.st_mode & 0o002):
+            or before.st_uid not in uids or before.st_gid != gid or before.st_mode & 0o002):
         raise ValueError('Unexpected native manifest writer or permissions')
     with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), 'rb') as stream:
         if _stamp(os.fstat(stream.fileno())) != _stamp(before):
@@ -92,9 +103,11 @@ def observe(manifest_path, matrix_path, snapshot_path, config_path, directory, o
     report = {'schema_version': 1, 'organization': organization, 'checked_at': checked_at,
               'publication_performed': False, 'status': 'unavailable'}
     try:
-        if bool(native_writer) != bool(native_group):
+        if (native_writer is not None) != (native_group is not None):
             raise ValueError('Native writer and group must be explicitly paired')
-        manifest_reader = (lambda path: native_read(path, native_writer, native_group)) if native_writer else _read
+        if native_writer is not None:
+            native_writer = native_writers(native_writer)
+        manifest_reader = (lambda path: native_read(path, native_writer, native_group)) if native_writer is not None else _read
         inputs = [source(manifest_path, manifest_reader), *[source(path) for path in paths[1:]]]
         manifest, matrix, state, config = [item[2] for item in inputs]
         snapshot = state.get('snapshot', state) if isinstance(state, dict) else None
@@ -129,7 +142,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('manifest', 'matrix', 'snapshot', 'config', 'report-dir', 'organization'):
         parser.add_argument('--' + name, required=True)
-    parser.add_argument('--native-writer', help='Explicit trusted POSIX owner of the native manifest only')
+    parser.add_argument('--native-writer', action='append',
+                        help='Explicit trusted POSIX owner of the native manifest only; repeat for each owner')
     parser.add_argument('--native-group', help='Explicit trusted POSIX group of the native manifest only')
     args = parser.parse_args(argv)
     report = observe(args.manifest, args.matrix, args.snapshot, args.config, args.report_dir, args.organization,

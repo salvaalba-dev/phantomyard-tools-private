@@ -160,5 +160,106 @@ class DocumentWatchTests(unittest.TestCase):
             self.assertEqual(document_watch.observe(*args, native_writer=writer, native_group=group)['status'], 'unavailable')
 
 
+    def test_explicit_writer_list_is_bounded_and_preserves_single_writer_api(self):
+        self.assertEqual(document_watch.native_writers('registry-user'), ('registry-user',))
+        self.assertEqual(document_watch.native_writers(['registry-user', 'ingestion-user']),
+                         ('registry-user', 'ingestion-user'))
+        self.assertEqual(len(document_watch.native_writers([f'writer-{n}' for n in range(16)])), 16)
+        for value in (None, [], '', [''], [' registry-user'], ['registry-user '],
+                      ['registry-user', 'registry-user'], ['registry-user', 1],
+                      [f'writer-{n}' for n in range(17)], {'registry-user'}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                document_watch.native_writers(value)
+
+    def test_empty_or_unpaired_writer_configuration_never_falls_back_to_private_reads(self):
+        args = (self.manifest, self.matrix, self.snapshot, self.config, self.report, 'example')
+        for writer, group in (([], 'registry-group'), ('', 'registry-group'),
+                              (['registry-user'], None), (None, 'registry-group')):
+            with self.subTest(writer=writer, group=group):
+                with patch.object(document_watch, 'prepare') as prepare:
+                    result = document_watch.observe(*args, native_writer=writer, native_group=group)
+                self.assertEqual(result['status'], 'unavailable')
+                prepare.assert_not_called()
+
+    def test_repeated_cli_writers_are_forwarded_and_revalidated_for_both_manifest_reads(self):
+        args = ['--manifest', str(self.manifest), '--matrix', str(self.matrix),
+                '--snapshot', str(self.snapshot), '--config', str(self.config),
+                '--report-dir', str(self.report), '--organization', 'example',
+                '--native-writer', 'registry-user', '--native-writer', 'ingestion-user',
+                '--native-group', 'registry-group']
+        output = io.StringIO()
+        with patch.object(document_watch, 'native_read', return_value=self.manifest.read_bytes()) as read:
+            with patch('sys.stdout', output):
+                self.assertEqual(document_watch.main(args), 0)
+        self.assertEqual(read.call_count, 2)
+        for call in read.call_args_list:
+            self.assertEqual(call.args, (self.manifest, ('registry-user', 'ingestion-user'), 'registry-group'))
+        self.assertEqual(json.loads(output.getvalue())['status'], 'observed')
+
+    def test_native_writer_recheck_failure_discards_the_prepared_plan(self):
+        args = (self.manifest, self.matrix, self.snapshot, self.config, self.report, 'example')
+        with patch.object(document_watch, 'native_read',
+                          side_effect=[self.manifest.read_bytes(), ValueError('Owner changed')]):
+            result = document_watch.observe(*args, native_writer=['registry-user', 'ingestion-user'],
+                                            native_group='registry-group')
+        self.assertEqual(result['status'], 'unavailable')
+        self.assertNotIn('plan', result)
+
+    @unittest.skipUnless(os.name == 'posix', 'Explicit POSIX native writer identity')
+    def test_native_reader_accepts_each_declared_writer_but_not_other_group_members(self):
+        import grp
+        from types import SimpleNamespace
+        uid = self.manifest.stat().st_uid
+        group = grp.getgrgid(self.manifest.stat().st_gid).gr_name
+        self.manifest.chmod(0o664)
+        for matching in ('registry-user', 'ingestion-user'):
+            with self.subTest(matching=matching):
+                def account(name):
+                    return SimpleNamespace(pw_uid=uid if name == matching else uid + 1)
+                with patch('pwd.getpwnam', side_effect=account):
+                    self.assertEqual(document_watch.native_read(
+                        self.manifest, ['registry-user', 'ingestion-user'], group), self.manifest.read_bytes())
+        with patch('pwd.getpwnam', return_value=SimpleNamespace(pw_uid=uid + 1)):
+            with self.assertRaises(ValueError):
+                document_watch.native_read(self.manifest, ['registry-user', 'ingestion-user'], group)
+
+    @unittest.skipUnless(os.name == 'posix', 'Explicit POSIX native writer identity')
+    def test_unknown_writer_invalidates_allowlist_even_when_another_writer_matches(self):
+        import grp
+        from types import SimpleNamespace
+        group = grp.getgrgid(self.manifest.stat().st_gid).gr_name
+        def account(name):
+            if name == 'missing-user':
+                raise KeyError(name)
+            return SimpleNamespace(pw_uid=self.manifest.stat().st_uid)
+        with patch('pwd.getpwnam', side_effect=account), self.assertRaises(KeyError):
+            document_watch.native_read(self.manifest, ['registry-user', 'missing-user'], group)
+
+    @unittest.skipUnless(os.name == 'posix', 'Explicit POSIX native writer identity')
+    def test_multiple_writers_keep_group_world_write_and_link_checks(self):
+        import grp
+        import pwd
+        writer = pwd.getpwuid(self.manifest.stat().st_uid).pw_name
+        group = grp.getgrgid(self.manifest.stat().st_gid).gr_name
+        with patch('pwd.getpwnam', return_value=pwd.getpwnam(writer)):
+            for mode in (0o666, 0o602):
+                self.manifest.chmod(mode)
+                with self.assertRaises(ValueError):
+                    document_watch.native_read(self.manifest, [writer, 'ingestion-user'], group)
+            self.manifest.chmod(0o664)
+            with patch('grp.getgrnam') as selected:
+                selected.return_value.gr_gid = self.manifest.stat().st_gid + 1
+                with self.assertRaises(ValueError):
+                    document_watch.native_read(self.manifest, [writer, 'ingestion-user'], group)
+            linked = self.root / 'manifest-link.json'
+            linked.symlink_to(self.manifest)
+            with self.assertRaises(ValueError):
+                document_watch.native_read(linked, [writer, 'ingestion-user'], group)
+            linked.unlink()
+            os.link(self.manifest, linked)
+            with self.assertRaises(ValueError):
+                document_watch.native_read(self.manifest, [writer, 'ingestion-user'], group)
+
+
 if __name__ == '__main__':
     unittest.main()
