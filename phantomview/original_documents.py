@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import stat
 import unicodedata
+from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
 # Preload media support before isolated readers permanently drop kernel UIDs.
@@ -14,6 +15,8 @@ from video_originals import MAX_VIDEO_BYTES, VerifiedVideos, serve_video
 
 MAX_ORIGINAL_BYTES = 32 * 1024 * 1024
 EXCEL_MEDIA = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+MAX_EXCEL_TYPES_BYTES = 64 * 1024
+EXCEL_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content-types'
 MEDIA = {'text/html': 'html', 'text/plain': 'txt', 'text/markdown': 'md',
          'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4',
          EXCEL_MEDIA: 'xlsx'}
@@ -21,17 +24,41 @@ BINARY_MEDIA = {'application/pdf', 'image/png', 'image/jpeg', EXCEL_MEDIA}
 
 
 def excel_signature(raw):
-    """Check the package directory without extracting cells or evaluating formulas."""
+    """Check package names and bounded media declarations, never workbook cells."""
     try:
         with ZipFile(BytesIO(raw)) as package:
             entries = package.infolist()
             names = {entry.filename for entry in entries}
-            return (raw.startswith(b'PK\x03\x04') and len(entries) <= 4096
+            valid = (raw.startswith(b'PK\x03\x04') and len(entries) <= 4096
                     and len(names) == len(entries)
                     and {'[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml'} <= names
                     and not any(entry.flag_bits & 1 for entry in entries)
-                    and not any(name.lower().endswith('vbaproject.bin') for name in names))
-    except (BadZipFile, ValueError):
+                    and not any(name.lower().endswith('vbaproject.bin')
+                                or any(part in {'macrosheets', 'intlmacrosheets'}
+                                       for part in name.replace('\\', '/').lower().split('/'))
+                                for name in names))
+            if not valid or package.getinfo('[Content_Types].xml').file_size > MAX_EXCEL_TYPES_BYTES:
+                return False
+            with package.open('[Content_Types].xml') as stream:
+                types = stream.read(MAX_EXCEL_TYPES_BYTES + 1)
+            if len(types) > MAX_EXCEL_TYPES_BYTES:
+                return False
+            text = types.decode('utf-8-sig')
+            if re.search(r'<!\s*(?:DOCTYPE|ENTITY)\b', text, re.IGNORECASE):
+                return False
+            root = ElementTree.fromstring(text)
+            if root.tag != '{' + EXCEL_TYPES_NS + '}Types':
+                return False
+            workbooks = []
+            for item in root:
+                media = item.get('ContentType', '').lower()
+                if (item.tag not in {'{' + EXCEL_TYPES_NS + '}Default', '{' + EXCEL_TYPES_NS + '}Override'}
+                        or not media or 'macro' in media or 'vba' in media):
+                    return False
+                if item.get('PartName') == '/xl/workbook.xml':
+                    workbooks.append(media)
+            return workbooks == [EXCEL_MEDIA + '.main+xml']
+    except (BadZipFile, ValueError, UnicodeError, ElementTree.ParseError, NotImplementedError, RuntimeError):
         return False
 
 
