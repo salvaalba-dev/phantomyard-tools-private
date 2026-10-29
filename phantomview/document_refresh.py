@@ -7,8 +7,9 @@ from pathlib import Path
 import re
 
 from working_documents import MAX_DOCUMENTS, bindings, collect, current_nodes
+from original_documents import EXCEL_MEDIA
 
-FORMATS = {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4'}
+FORMATS = {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4', EXCEL_MEDIA}
 
 
 def fingerprint(value):

@@ -109,7 +109,7 @@ class ScopedModel {
   }
   documentGroupLabel(entry) {return [entry.group.title,entry.group.code,entry.group.version].filter(Boolean).join(' · ');}
   documentFormatLabel(row) {
-    const media={'application/pdf':'PDF','text/html':'HTML','text/plain':'TXT','text/markdown':'MD','image/png':'PNG','image/jpeg':'JPEG','video/mp4':'MP4'};
+    const media={'application/pdf':'PDF','text/html':'HTML','text/plain':'TXT','text/markdown':'MD','image/png':'PNG','image/jpeg':'JPEG','video/mp4':'MP4','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'XLSX'};
     return (media[row.data.original.media_type]||'Original')+' '+this.documentLabel(row).slice(this.documentLabel(row).lastIndexOf('('));
   }
   counts() {
@@ -610,9 +610,9 @@ async function startScopedWorkspace() {
         const path=valid&&parts.length?parts:['Unfiled documents'];let parent=tree,key='';
         for(const part of path){key+='/'+part;if(!folders.has(key)){const branch=text('details','', 'persona-folder'),title=text('summary',part);branch.append(title);parent.append(branch);folders.set(key,branch);}parent=folders.get(key);}
         if(entry.group){parent.append(documentEntry(entry,view));continue;}
-        const originalPath=view.originalPath(row),file=text(originalPath?'a':'button',view.documentLabel(row),'profile-link profile-document');
-        if(originalPath){file.href=originalPath;file.target='_blank';file.rel='noopener noreferrer';file.title=file.textContent;file.setAttribute('aria-label','Open original: '+view.documentLabel(row));}
-        else{file.type='button';file.addEventListener('click',()=>openDocument(row));}parent.append(file);
+        if(view.originalPath(row)){parent.append(originalDocumentLink(row,view));continue;}
+        const file=text('button',view.documentLabel(row),'profile-link profile-document');
+        file.type='button';file.addEventListener('click',()=>openDocument(row));parent.append(file);
       }
     });
     addLabel('Tools',()=>{
@@ -652,7 +652,13 @@ async function startScopedWorkspace() {
     for(const row of entry.formats){const link=originalDocumentLink(row,view);link.textContent=view.documentFormatLabel(row);formats.append(link);}box.append(formats);return box;
   }
   function originalDocumentLink(row,model) {
-    const link=text('a',model.documentLabel(row),'profile-link profile-document');link.href=model.originalPath(row);link.target='_blank';link.rel='noopener noreferrer';link.title=link.textContent;link.setAttribute('aria-label','Open original: '+model.documentLabel(row));return link;
+    const link=text('a',model.documentLabel(row),'profile-link profile-document');link.href=model.originalPath(row);link.target='_blank';link.rel='noopener noreferrer';link.title=link.textContent;link.setAttribute('aria-label','Open original: '+model.documentLabel(row));
+    if(row.data.original?.media_type==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){
+      const notice='No preview is available for Excel files. The original will be downloaded. Open it in a compatible spreadsheet application.';
+      link.title=link.textContent+' — '+notice;
+      link.addEventListener('click',()=>window.alert(notice));
+    }
+    return link;
   }
   async function showDetails(row) {
     const ticket=epoch, detailTicket=++detailEpoch;

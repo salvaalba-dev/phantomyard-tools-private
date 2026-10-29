@@ -8,6 +8,7 @@ import re
 import stat
 
 from profile_documents import SECRET
+from original_documents import EXCEL_MEDIA
 
 MAX_DOCUMENTS = 512
 MAX_BYTES = 128 * 1024
@@ -73,11 +74,13 @@ def bindings(value):
                 or not row['urn'].startswith('urn:') or len(row['urn']) > 512
                 or not re.fullmatch(r'[a-z0-9][a-z0-9_-]{0,63}', row['actor'])
                 or not re.fullmatch(r'[a-f0-9]{64}', row['sha256'])
-                or row['format'] not in {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4'} or row['urn'] in seen):
+                or row['format'] not in {'markdown', 'text/plain', 'html-text', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4', EXCEL_MEDIA} or row['urn'] in seen):
             raise ValueError('A unique document, persona, reviewed fingerprint and text format are required')
         recipients(row)
         if row['format'] == 'video/mp4' and (row.get('original') is not True or row.get('original_only') is not True):
             raise ValueError('Videos require explicit metadata-only original delivery')
+        if row['format'] == EXCEL_MEDIA and (row.get('original') is not True or row.get('original_only') is not True):
+            raise ValueError('Excel workbooks require explicit metadata-only original delivery')
         from original_documents import BINARY_MEDIA, display_metadata
         if 'original_only' in row and (row['original_only'] is not True or row.get('original') is not True):
             raise ValueError('Metadata-only delivery requires an explicit reviewed original')
@@ -102,7 +105,7 @@ def validated(value):
             or not isinstance(value['content'], str) or not value['content'].strip()
             or len(value['content'].encode()) > MAX_BYTES or '\x00' in value['content']
             or SECRET.search(value['content']) or not isinstance(value['format'], str)
-            or value['format'] not in {'markdown', 'text/plain', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4'}
+            or value['format'] not in {'markdown', 'text/plain', 'application/pdf', 'image/png', 'image/jpeg', 'video/mp4', EXCEL_MEDIA}
             or not isinstance(value['folder'], str) or len(value['folder']) > 512
             or not value['folder'] or len(value['folder'].split('/')) > 8
             or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}', part)
