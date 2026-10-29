@@ -1,19 +1,38 @@
 """Reviewed original-file metadata and a fixed, content-addressed private store."""
 import hashlib
 from html.parser import HTMLParser
+from io import BytesIO
 import os
 from pathlib import Path
 import re
 import stat
 import unicodedata
+from zipfile import BadZipFile, ZipFile
 
 # Preload media support before isolated readers permanently drop kernel UIDs.
 from video_originals import MAX_VIDEO_BYTES, VerifiedVideos, serve_video
 
 MAX_ORIGINAL_BYTES = 32 * 1024 * 1024
+EXCEL_MEDIA = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 MEDIA = {'text/html': 'html', 'text/plain': 'txt', 'text/markdown': 'md',
-         'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4'}
-BINARY_MEDIA = {'application/pdf', 'image/png', 'image/jpeg'}
+         'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'video/mp4': 'mp4',
+         EXCEL_MEDIA: 'xlsx'}
+BINARY_MEDIA = {'application/pdf', 'image/png', 'image/jpeg', EXCEL_MEDIA}
+
+
+def excel_signature(raw):
+    """Check the package directory without extracting cells or evaluating formulas."""
+    try:
+        with ZipFile(BytesIO(raw)) as package:
+            entries = package.infolist()
+            names = {entry.filename for entry in entries}
+            return (raw.startswith(b'PK\x03\x04') and len(entries) <= 4096
+                    and len(names) == len(entries)
+                    and {'[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml'} <= names
+                    and not any(entry.flag_bits & 1 for entry in entries)
+                    and not any(name.lower().endswith('vbaproject.bin') for name in names))
+    except (BadZipFile, ValueError):
+        return False
 
 
 def display_metadata(value):
@@ -30,7 +49,8 @@ def display_metadata(value):
 def binary_signature(raw, media):
     valid = (media == 'application/pdf' and raw.startswith(b'%PDF-') and b'%%EOF' in raw[-1024:]
              or media == 'image/png' and raw.startswith(b'\x89PNG\r\n\x1a\n') and raw[-8:-4] == b'IEND'
-             or media == 'image/jpeg' and raw.startswith(b'\xff\xd8\xff') and raw.endswith(b'\xff\xd9'))
+             or media == 'image/jpeg' and raw.startswith(b'\xff\xd8\xff') and raw.endswith(b'\xff\xd9')
+             or media == EXCEL_MEDIA and excel_signature(raw))
     if not valid:
         raise ValueError('Original signature or ending does not match its reviewed media type')
 
@@ -194,7 +214,7 @@ def serve(handler, backend, store, ident):
     handler.send_response(200)
     handler.send_header('Content-Type', content_type)
     handler.send_header('Content-Length', str(len(raw)))
-    disposition = 'attachment' if value['media_type'] == 'application/pdf' else 'inline'
+    disposition = 'attachment' if value['media_type'] in {'application/pdf', EXCEL_MEDIA} else 'inline'
     handler.send_header('Content-Disposition', disposition + '; filename="' + value['filename'] + '"')
     handler.send_header('Cache-Control', 'no-store, private')
     handler.send_header('X-Content-Type-Options', 'nosniff')

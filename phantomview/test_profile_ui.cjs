@@ -18,12 +18,12 @@ function fixture(){return {schema_version:1,complete_corpus:false,organization:'
 function setup(request){
   const source=fs.readFileSync(require.resolve('./scoped-ui.js'),'utf8'),begin=source.indexOf('  function renderProfile('),end=source.indexOf('  function renderOrganizationTree(');
   assert.ok(begin>0&&end>begin);
-  const elements=new Map(),failures=[],$=key=>{if(!elements.has(key))elements.set(key,new Element('div'));return elements.get(key);};
+  const elements=new Map(),failures=[],notices=[],$=key=>{if(!elements.has(key))elements.set(key,new Element('div'));return elements.get(key);};
   const text=(tag,value,cls)=>{const e=new Element(tag);e.textContent=value;e.className=cls;return e;};
-  const make=new Function('ScopedModel','text','$','api','failure',`let epoch=0,detailEpoch=0,profileReadEpoch=0,detailFocus=null;
+  const make=new Function('ScopedModel','text','$','api','failure','window',`let epoch=0,detailEpoch=0,profileReadEpoch=0,detailFocus=null;
     const controller={signal:null},chat={view:true};${source.slice(begin,end)}
     return {showDetails,close:()=>{detailEpoch++;profileReadEpoch++;$('detail').open=false;$('detail-content').replaceChildren();}};`);
-  const ui=make(ScopedModel,text,$,request,error=>failures.push(error.message));return {ui,$,failures};
+  const ui=make(ScopedModel,text,$,request,error=>failures.push(error.message),{alert:message=>notices.push(message)});return {ui,$,failures,notices};
 }
 function flatten(node){return [node,...node.children.flatMap(flatten)];}
 test('profile dialog renders plain text, preserves one dialog and reads documents in place',async()=>{
@@ -260,4 +260,28 @@ test('one document edition offers its visible formats inside the compact persona
   assert.ok(links[2].textContent.startsWith('MP4'));
   assert.equal(links[0].href,'/api/document-original/'+formats[1].id);
   assert.ok(!calls.some(path=>path.startsWith('/api/document-original/')));
+});
+
+test('Excel name links announce download-only delivery without adding a download button',async()=>{
+  for(const grouped of [false,true]){
+    const view=fixture(),row={id:noteId,kind:'document',data:{title:'Project application',
+      source:'reviewed-working-document',folder:'projects/example',
+      original:{title:'Project application',size_bytes:5000,
+        media_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}}};
+    if(grouped)row.data.document_group={id:'urn:example:document:application',title:'Project application'};
+    view.resources=[view.resources[0],row];
+    view.relations=[{id:'4'.repeat(64),kind:'relationship',data:{source:id,target:noteId,type:'document'}}];
+    const calls=[],f=setup(async path=>{calls.push(path);return path==='/api/state'?view:view.resources[0];});
+    await f.ui.showDetails(view.resources[0]);label(f,'Documents').events.click();
+    const nodes=flatten(f.$('detail-content')),links=nodes.filter(n=>n.tag==='a'&&n.href==='/api/document-original/'+noteId);
+    assert.equal(links.length,1);assert.deepEqual(f.notices,[]);
+    assert.equal(links[0].target,'_blank');assert.equal(links[0].rel,'noopener noreferrer');
+    assert.ok(links[0].textContent.startsWith(grouped?'XLSX':'Project application'));
+    links[0].events.click();assert.equal(f.notices.length,1);
+    assert.match(f.notices[0],/No preview is available for Excel files/);
+    assert.match(f.notices[0],/original will be downloaded/);
+    assert.ok(!nodes.some(n=>n.tag==='button'&&/download/i.test(n.textContent)));
+    assert.ok(!calls.some(path=>path.startsWith('/api/document-original/')));
+    assert.deepEqual(f.failures,[]);
+  }
 });

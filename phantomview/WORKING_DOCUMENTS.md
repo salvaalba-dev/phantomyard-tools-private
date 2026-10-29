@@ -289,3 +289,25 @@ This feature alone does not select or publish any recording. Operators must
 prepare exact verified private copies, review the existing native ACL and select
 the intended persona links through the normal publication procedure. Existing
 transcripts and summaries remain independently authorized document formats.
+
+## Download-only Excel originals
+
+Explicitly reviewed `.xlsx` originals use the media type
+`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` and require
+`original: true`, `original_only: true` and reviewed `display` metadata. The
+existing 32 MiB original-file limit, native current-version fingerprint, owners,
+PhantomOrg ACL and private-store checks apply. Only metadata is published or
+searched. No cells are extracted, formulas evaluated, workbook formats changed
+or previews generated. No additional dependency or service is required.
+
+The package directory must identify an unencrypted XLSX workbook, with unique
+member names and at most 4,096 entries. Macro-enabled packages, legacy `.xls`
+files and `.xlsm` files are not supported by this initial XLSX change. This is a
+bounded package identity check, not full workbook validation or a malware scan.
+
+Clicking the existing filename link displays an English notice that Excel has
+no preview and the original will be downloaded. After dismissal, the same
+authenticated original endpoint delivers the exact reviewed bytes as an
+attachment, with private no-store and nosniff headers. There is no additional
+download button or download audit feature. Other formats keep their behavior.
+This support alone does not ingest, select or publish any workbook.
