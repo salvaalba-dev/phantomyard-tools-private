@@ -301,7 +301,11 @@ searched. No cells are extracted, formulas evaluated, workbook formats changed
 or previews generated. No additional dependency or service is required.
 
 The package directory must identify an unencrypted XLSX workbook, with unique
-member names and at most 4,096 entries. Macro-enabled packages, legacy `.xls`
+member names and at most 4,096 entries. Both VBA payloads and Excel 4 macro-sheet
+paths are rejected. The UTF-8 `[Content_Types].xml` declaration is bounded to
+64 KiB, rejects DTD/entity declarations and macro/VBA media types, and must
+declare the ordinary XLSX workbook type. No worksheet contents are read.
+Macro-enabled packages, legacy `.xls`
 files and `.xlsm` files are not supported by this initial XLSX change. This is a
 bounded package identity check, not full workbook validation or a malware scan.
 

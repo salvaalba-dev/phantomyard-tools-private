@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 from zipfile import ZipFile
 
-from original_documents import EXCEL_MEDIA, descriptor, serve, validate_descriptor
+from original_documents import EXCEL_MEDIA, EXCEL_TYPES_NS, MAX_EXCEL_TYPES_BYTES, descriptor, serve, validate_descriptor
 import test_original_documents as originals
 import test_working_documents as working
 from working_documents import bindings, validated
@@ -17,7 +17,9 @@ def workbook(extra=None):
     output = BytesIO()
     with ZipFile(output, 'w') as package:
         for name, value in {
-            '[Content_Types].xml': '<Types/>', '_rels/.rels': '<Relationships/>',
+            '[Content_Types].xml': ('<Types xmlns="' + EXCEL_TYPES_NS + '">'
+                '<Override PartName="/xl/workbook.xml" ContentType="' + EXCEL_MEDIA + '.main+xml"/>'
+                '</Types>'), '_rels/.rels': '<Relationships/>',
             'xl/workbook.xml': '<workbook/>',
             'xl/worksheets/sheet1.xml': '<worksheet><f>1+2</f><v>3</v></worksheet>',
             **(extra or {}),
@@ -49,10 +51,46 @@ class ExcelMetadataTests(unittest.TestCase):
             with self.subTest(size=len(raw)), self.assertRaises(ValueError):
                 descriptor(raw, metadata(raw), EXCEL_MEDIA, {'title': 'Application'})
 
-    def test_directory_check_does_not_read_or_extract_members(self):
+    def test_package_check_reads_only_content_types_and_never_cells(self):
         raw = workbook()
-        with patch.object(ZipFile, 'read', side_effect=AssertionError('No cell reads')):
+        original_open = ZipFile.open
+        opened = []
+        def open_types(package, name, *args, **kwargs):
+            self.assertEqual(name, '[Content_Types].xml')
+            opened.append(name)
+            return original_open(package, name, *args, **kwargs)
+        with patch.object(ZipFile, 'open', open_types):
             descriptor(raw, metadata(raw), EXCEL_MEDIA, {'title': 'Application'})
+        self.assertEqual(opened, ['[Content_Types].xml'])
+
+    def test_excel_four_macro_sheets_are_rejected_even_without_vba(self):
+        for name in ('xl/macrosheets/sheet1.xml', 'xl/intlmacrosheets/sheet1.xml',
+                     'XL/MACROSHEETS/sheet1.xml', 'xl\\macrosheets\\sheet1.xml'):
+            raw = workbook({name: '<worksheet/>'})
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                descriptor(raw, metadata(raw), EXCEL_MEDIA, {'title': 'Application'})
+
+    def test_macro_content_types_are_rejected_without_a_named_macro_part(self):
+        for media in ('application/vnd.ms-excel.sheet.macroEnabled.main+xml',
+                      'application/vnd.ms-excel.macrosheet+xml',
+                      'application/vnd.ms-excel.intlmacrosheet+xml',
+                      'application/vnd.ms-office.vbaProject',
+                      'application/vnd.ms-excel.sheet.macroEnab&#108;ed.main+xml'):
+            types = ('<Types xmlns="' + EXCEL_TYPES_NS + '">'
+                     '<Override PartName="/xl/workbook.xml" ContentType="' + EXCEL_MEDIA + '.main+xml"/>'
+                     '<Override PartName="/xl/renamed.xml" ContentType="' + media + '"/></Types>')
+            raw = workbook({'[Content_Types].xml': types})
+            with self.subTest(media=media), self.assertRaises(ValueError):
+                descriptor(raw, metadata(raw), EXCEL_MEDIA, {'title': 'Application'})
+
+    def test_unreviewable_content_types_fail_closed(self):
+        for types in ('<Types/>', '<invalid', '<!DOCTYPE Types [<!ENTITY x "value">]><Types/>',
+                      '<Types>' + ' ' * MAX_EXCEL_TYPES_BYTES + '</Types>',
+                      b'\xff\xfe<\x00T\x00y\x00p\x00e\x00s\x00/\x00>\x00',
+                      '<Types xmlns="' + EXCEL_TYPES_NS + '"/>'):
+            raw = workbook({'[Content_Types].xml': types})
+            with self.subTest(size=len(types)), self.assertRaises(ValueError):
+                descriptor(raw, metadata(raw), EXCEL_MEDIA, {'title': 'Application'})
 
     def test_filename_media_mismatch_and_oversize_are_rejected(self):
         raw = workbook()
