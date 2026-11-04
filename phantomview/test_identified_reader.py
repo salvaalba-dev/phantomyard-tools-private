@@ -210,12 +210,15 @@ class PublishedReaderTests(unittest.TestCase):
                     self.session_ticks[0] += gate.seconds
                 self.assertEqual(self.request('GET', '/api/state', cookie=cookie)[0], 401)
 
-    def test_changed_snapshot_or_missing_projection_refuses_startup(self):
+    def test_changed_snapshot_keeps_unaffected_publication_available(self):
+        cookie = self.login()
         self.snapshot['actors'][0]['tools'].append('new-tool')
         self.publish_authority()
-        with self.assertRaises(ValueError):
-            reader.PublishedReader(**self.options)
-        self.assertEqual(self.request('GET', '/api/state', cookie=self.login())[0], 401)
+        reader.PublishedReader(**self.options)
+        status, view, _ = self.request('GET', '/api/state', cookie=cookie)
+        self.assertEqual(status, 200)
+        self.assertNotIn('new-tool', json.dumps(view))
+        self.assertIn('Example Foundation', json.dumps(view))
 
     def test_unknown_counterpart_origin_and_missing_approval_do_not_gain_access(self):
         for sender, persona in (('unknown', 'administrator'), ('103', 'administrator'),
