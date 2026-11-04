@@ -71,7 +71,7 @@ class ProjectionScanTests(unittest.TestCase):
             self.backend.state(self.auth.headers)
 
     def test_denied_session_never_opens_a_scan(self):
-        with patch.object(self.publisher, 'active', side_effect=AssertionError('Must not open sources')):
+        with patch.object(self.publisher, '_visible', side_effect=AssertionError('Must not open sources')):
             with self.assertRaises(ValueError):
                 self.backend.state({})
 
@@ -101,10 +101,27 @@ class ProjectionScanTests(unittest.TestCase):
             self.backend.state(self.auth.headers)
 
     def test_no_closed_scan_is_reused_after_a_later_source_change(self):
-        self.backend.state(self.auth.headers)
+        original = self.backend.state(self.auth.headers)
         self.fixture.source['actors'][0]['name'] = 'Changed between requests'
-        with self.assertRaises(ValueError):
-            self.backend.state(self.auth.headers)
+        updated = self.backend.state(self.auth.headers)
+        self.assertIn('persona', original['counts'])
+        self.assertNotIn('persona', updated['counts'])
+        self.assertIn('organization', updated['counts'])
+
+    def test_stale_persona_is_not_opened_by_the_backend(self):
+        persona = next(row['id'] for row in self.bundle['catalog']['resources']
+                       if row['kind'] == 'persona')
+        self.fixture.source['actors'][0]['knowledge'][0]['title'] = 'Changed source'
+        original = PrivateRecordStore.__call__
+
+        def load(store, ident):
+            self.assertNotEqual(ident, persona)
+            return original(store, ident)
+
+        with patch.object(PrivateRecordStore, '__call__', load):
+            state = self.backend.state(self.auth.headers)
+        self.assertNotIn('persona', state['counts'])
+        self.assertIn('organization', state['counts'])
 
 
 if __name__ == '__main__':

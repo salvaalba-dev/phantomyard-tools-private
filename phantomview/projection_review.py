@@ -161,7 +161,7 @@ class PublishedProjection:
             raise ValueError('Trusted live organization and selected snapshot loaders are required')
         self.org_loader, self.snapshot_loader = org_loader, snapshot_loader
 
-    def active(self):
+    def _current(self):
         root_path(self.root)
         pointer = read_json(self.root / 'active.json')
         if (not isinstance(pointer, dict) or set(pointer) != {'revision'}
@@ -173,17 +173,44 @@ class PublishedProjection:
             raise ValueError('Active projection revision mismatch')
         org = self.org_loader()
         draft = prepare_like(self.snapshot_loader(), HumanDirectory(org), bundle)
-        if revision(org) != bundle['organization_revision'] or revision(draft) != bundle['draft_revision']:
+        if revision(org) != bundle['organization_revision']:
+            raise ValueError('Sources or authority changed; review and publish a new projection')
+        return generation, bundle, draft
+
+    def active(self):
+        """Return the exact approved state for administrative review operations."""
+        generation, bundle, draft = self._current()
+        if revision(draft) != bundle['draft_revision']:
             raise ValueError('Sources or authority changed; review and publish a new projection')
         return generation, bundle
 
+    def _visible(self):
+        """Exclude stale approved resources and all dependent resources, fail closed."""
+        generation, bundle, draft = self._current()
+        current = {row['id']: row for row in draft['resources']}
+        sources = {row['id']: row['provenance'] for row in bundle['sources']}
+        approved = bundle['catalog']['resources']
+        keep = {row['id'] for row in approved
+                if row['id'] in current and sources[row['id']] == current[row['id']]['provenance']
+                and all(row.get(key) == current[row['id']].get(key)
+                        for key in ('kind', 'payload_sha256', 'requires', 'endpoints'))}
+        while True:
+            remaining = {row['id'] for row in approved if row['id'] in keep
+                         and all(key in keep for key in row.get('requires', []) + row.get('endpoints', []))}
+            if remaining == keep:
+                break
+            keep = remaining
+        catalog = dict(bundle['catalog'], resources=[row for row in approved if row['id'] in keep])
+        ProjectionCatalog(catalog)
+        return generation, bundle, catalog, revision(draft)
+
     def catalog(self):
-        return self.active()[1]['catalog']
+        return self._visible()[2]
 
     def record(self, ident):
-        generation, bundle = self.active()
-        manifest = {'organization': bundle['catalog']['organization'], 'resources': [
-            {'id': row['id'], 'available': True, 'searchable': True} for row in bundle['catalog']['resources']]}
+        generation, bundle, catalog, _ = self._visible()
+        manifest = {'organization': catalog['organization'], 'resources': [
+            {'id': row['id'], 'available': True, 'searchable': True} for row in catalog['resources']]}
         return PrivateRecordStore(generation, lambda: manifest, manifest['organization'])(ident)
 
     @contextmanager
@@ -191,15 +218,15 @@ class PublishedProjection:
         """Bind one request to a generation and revalidate live sources before release.
 
         No result survives the request. Resource bytes still receive the backend's
-        authorization, fingerprint and second-read checks. The closing active()
+        authorization, fingerprint and second-read checks. The closing validation
         rejects source, authority, approval or pointer changes during the scan.
         """
-        generation, bundle = self.active()
-        manifest = {'organization': bundle['catalog']['organization'], 'resources': [
-            {'id': row['id'], 'available': True, 'searchable': True} for row in bundle['catalog']['resources']]}
+        generation, bundle, catalog, source_revision = self._visible()
+        manifest = {'organization': catalog['organization'], 'resources': [
+            {'id': row['id'], 'available': True, 'searchable': True} for row in catalog['resources']]}
         store = PrivateRecordStore(generation, lambda: manifest, manifest['organization'])
-        yield lambda: bundle['catalog'], store
-        if self.active() != (generation, bundle):
+        yield lambda: catalog, store
+        if self._visible() != (generation, bundle, catalog, source_revision):
             raise ValueError('Publication changed during the selected resource scan')
 
     def publish(self, bundle, draft, *, expected_revision, authorize=None):
