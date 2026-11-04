@@ -168,7 +168,7 @@ class ProjectionReviewTests(unittest.TestCase):
             self.assertEqual(lock.read_text(), 'another writer')
             self.assertEqual(publisher.catalog(), first['catalog'])
 
-    def test_source_removal_or_authority_change_invalidates_active_loaders(self):
+    def test_source_removal_or_exclusion_hides_stale_resources_and_dependents(self):
         for change in ('remove', 'exclude', 'authority'):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
                 self.setUp()
@@ -181,10 +181,57 @@ class ProjectionReviewTests(unittest.TestCase):
                     self.source['actors'][0]['searchable'] = False
                 else:
                     self.org['organization']['name'] = 'New name'
-                with self.assertRaises(ValueError):
-                    publisher.catalog()
-                with self.assertRaises(ValueError):
-                    publisher.record(bundle['catalog']['resources'][0]['id'])
+                if change == 'authority':
+                    with self.assertRaises(ValueError):
+                        publisher.catalog()
+                    with self.assertRaises(ValueError):
+                        publisher.record(bundle['catalog']['resources'][0]['id'])
+                else:
+                    catalog = publisher.catalog()
+                    kinds = {row['kind'] for row in catalog['resources']}
+                    self.assertIn('organization', kinds)
+                    self.assertNotIn('persona', kinds)
+                    self.assertNotIn('finding', kinds)
+                    self.assertNotIn('procedure', kinds)
+                    self.assertNotIn('relationship', kinds)
+                    persona = next(row['id'] for row in bundle['catalog']['resources']
+                                   if row['kind'] == 'persona')
+                    self.assertIsNone(publisher.record(persona))
+                    with self.assertRaises(ValueError):
+                        publisher.active()
+
+    def test_unapproved_additions_never_become_visible(self):
+        with tempfile.TemporaryDirectory() as root:
+            publisher = self.publisher(root)
+            bundle = self.approval()
+            publisher.publish(bundle, self.draft, expected_revision=None)
+            self.source['documents'].append({'org': 'example', 'urn': 'urn:example:new',
+                                             'slug': 'Unapproved', 'kind': 'report'})
+            self.assertEqual(publisher.catalog(), bundle['catalog'])
+            with self.assertRaises(ValueError):
+                publisher.active()
+
+    def test_hidden_source_metadata_change_hides_persona_and_dependents(self):
+        with tempfile.TemporaryDirectory() as root:
+            publisher = self.publisher(root)
+            bundle = self.approval()
+            publisher.publish(bundle, self.draft, expected_revision=None)
+            self.source['actors'][0]['knowledge'][0]['title'] = 'Changed unseen source'
+            catalog = publisher.catalog()
+            self.assertIn('organization', {row['kind'] for row in catalog['resources']})
+            self.assertNotIn('persona', {row['kind'] for row in catalog['resources']})
+            self.assertNotIn('relationship', {row['kind'] for row in catalog['resources']})
+            self.assertNotIn('finding', {row['kind'] for row in catalog['resources']})
+
+    def test_scan_rejects_source_change_before_release(self):
+        with tempfile.TemporaryDirectory() as root:
+            publisher = self.publisher(root)
+            bundle = self.approval()
+            publisher.publish(bundle, self.draft, expected_revision=None)
+            with self.assertRaisesRegex(ValueError, 'Publication changed'):
+                with publisher.scan() as (catalog, _record):
+                    self.assertEqual(catalog(), bundle['catalog'])
+                    self.source['actors'][0]['tools'].append('drive')
 
     def test_failed_atomic_switch_keeps_old_catalog_and_immutable_generations(self):
         with tempfile.TemporaryDirectory() as root:
@@ -240,8 +287,8 @@ class PublishedBackendTests(ProjectionFixture):
             for hidden in ('persona', 'finding', 'procedure'):
                 self.assertNotIn(hidden, view['counts'])
             source['actors'] = []
-            with self.assertRaises(ValueError):
-                backend.search(self.headers, 'Foundation')
+            result = backend.search(self.headers, 'Foundation')
+            self.assertEqual([row['kind'] for row in result['results']], ['organization'])
 
 
 if __name__ == '__main__':
