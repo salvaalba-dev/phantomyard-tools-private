@@ -1,6 +1,6 @@
 # PhantomView
 
-Private development of a visual, read-only observatory for Phantomyard organizations,
+Public development of a visual, read-only observatory for Phantomyard organizations,
 personas, tools, procedures, knowledge and installation dependencies.
 
 See [the application documentation](phantomview/README.md) for installation, access,
