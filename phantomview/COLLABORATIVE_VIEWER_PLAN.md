@@ -1,5 +1,9 @@
 # Collaborative PhantomView execution plan
 
+For the dated source baseline, repository map and immediate work queue, see the
+[consolidated project status](../docs/PROJECT_STATUS.md). This document remains
+the product and trust contract; its milestone notes are historical evidence.
+
 Status: active plan, 2026-10-17. This document supersedes the earlier execution
 plan, viewer architecture and native-ACL activation proposals where they conflict.
 It records the agreed direction; it does not claim a deployed identified assistant.

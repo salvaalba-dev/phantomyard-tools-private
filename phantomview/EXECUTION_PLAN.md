@@ -5,9 +5,10 @@ This file preserves earlier research and implementation history. Its requirement
 for view-bound native inference, isolated replacement workers or new native ACL
 plumbing are not prerequisites of the standard collaborative viewer.
 
-The [standard viewer/module architecture](VIEWER_ARCHITECTURE.md) is the current
-direction and takes precedence over earlier ordinary-worker replacement and
-initial manual-personalization proposals below. Initial navigation is standard
+The [standard viewer/module architecture](VIEWER_ARCHITECTURE.md) provides supporting
+design detail, subject to the collaborative viewer plan where they conflict.
+Both supersede the earlier ordinary-worker replacement and initial
+manual-personalization proposals below. Initial navigation is standard
 from PhantomOrg; optional modules extend it. The assistant delegates to an
 existing persona rather than requiring a new identity, service or memory store.
 

@@ -1,5 +1,10 @@
 # PhantomView
 
+Start with the [consolidated project status](../docs/PROJECT_STATUS.md) for
+repository ownership, reviewed source capabilities and unresolved integration work.
+The implementation notes below describe individual stages; their installation
+claims are historical and do not establish the current state of any live host.
+
 The optional [protected reader launcher](READER_LAUNCH.md) supplies a fixed JSON
 host configuration, a read-only preflight command and graceful shutdown for the
 identified assembly. Its AU cutover and rollback procedure is prepared, not applied.

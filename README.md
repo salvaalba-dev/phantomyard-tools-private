@@ -6,6 +6,9 @@ personas, tools, procedures, knowledge and installation dependencies.
 See [the application documentation](phantomview/README.md) for installation, access,
 collection boundaries and the English/Spanish installation interface.
 
+Start with the [consolidated project status](docs/PROJECT_STATUS.md) for ecosystem
+relationships, repository ownership, source evidence and the next bounded task.
+
 Repository documentation, identifiers, comments and commit messages use English.
 Spanish is maintained as a user-interface translation and as organization-owned
 source material; collected private data and credentials are not committed.
