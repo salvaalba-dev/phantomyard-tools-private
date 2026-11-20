@@ -121,12 +121,16 @@ class PolicyLinuxTests(unittest.TestCase):
             f.reader.read()
 
     def test_reader_can_verify_current_revision_without_source_access(self):
+        self._assert_unprivileged_reader(0o755)
+
+    def test_reader_with_traversal_only_parent_needs_no_listing_permission(self):
+        self._assert_unprivileged_reader(0o711)
+
+    def _assert_unprivileged_reader(self, parent_mode):
         f = self.fixture
-        # The strict guard re-opens every policy-lock parent with O_DIRECTORY,
-        # which needs read on that parent: execute-only 0o711 returns EACCES for
-        # the unprivileged child. Listing the fixture root grants no policy
-        # access, because the source and both copies stay root-owned 0o600/0o640.
-        f.root.chmod(0o755)
+        # Exercise both the readable synthetic parent and traversal-only access;
+        # the original source and copies remain inaccessible in either case.
+        f.root.chmod(parent_mode)
         for directory in (f.private, f.index.parent):
             os.chown(directory, 0, 65534)
             directory.chmod(0o750)
