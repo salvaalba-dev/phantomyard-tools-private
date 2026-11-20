@@ -31,10 +31,11 @@ FIELDS = PATHS | {'schema_version', 'organization', 'actor', 'identities', 'orig
 def validate(value):
     """Validate a fixed operator document, never a browser-supplied request."""
     if (not isinstance(value, dict) or not FIELDS <= set(value)
-            or set(value) - (FIELDS | {'additional_issuers', 'reviewed_knowledge'})):
+            or set(value) - (FIELDS | {'additional_issuers', 'reviewed_knowledge', 'policy_lock'})):
         raise ValueError('Use exactly the fields in reader-launch.example.json')
-    if type(value['schema_version']) is not int or value['schema_version'] != 1:
-        raise ValueError('Reader launch schema_version must be 1')
+    if (type(value['schema_version']) is not int or value['schema_version'] not in (1, 2)
+            or (value['schema_version'] == 2) != ('policy_lock' in value)):
+        raise ValueError('Schema 2 requires an explicit common policy lock')
     for field in ('organization', 'actor'):
         if not isinstance(value[field], str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', value[field]):
             raise ValueError('Explicit organization and persona identifiers required')
@@ -64,7 +65,8 @@ def validate(value):
         raise ValueError('Configure one canonical HTTPS origin without a path or credentials') from None
     selected = PATHS | ({'conversation_socket'} if value['conversation_socket'] is not None else set())
     knowledge = coordinates(value['reviewed_knowledge']) if 'reviewed_knowledge' in value else None
-    paths = [value[field] for field in selected] + (list(knowledge.values()) if knowledge else [])
+    paths = ([value[field] for field in selected] + (list(knowledge.values()) if knowledge else [])
+             + ([value['policy_lock']] if 'policy_lock' in value else []))
     for path in paths:
         if (not isinstance(path, str) or not path.isascii() or not path.startswith('/') or path == '/'
                 or path.startswith('//') or PurePosixPath(path).as_posix() != path
@@ -87,7 +89,8 @@ def validate(value):
         routes = validate_routes({key: value[key] for key in ISSUER_FIELDS}, value['additional_issuers'],
                                  reader_uid=value['reader_uid'],
                                  occupied=[value[key] for key in PATHS - {'socket_path'}]
-                                          + (list(knowledge.values()) if knowledge else []))
+                                          + (list(knowledge.values()) if knowledge else [])
+                                          + ([value['policy_lock']] if 'policy_lock' in value else []))
         result['additional_issuers'] = routes[1:]
     return result
 
@@ -121,7 +124,8 @@ def preflight(config):
         raise ValueError('Reader must already belong to the reviewed handoff group')
     signed_access()
     authority = PublishedAuthority(config['authority_directory'], config['index_path'],
-        config['organization'], config['source_path'], max_age=config['authority_max_age'])
+        config['organization'], config['source_path'], max_age=config['authority_max_age'],
+        **({'policy_lock': config['policy_lock']} if 'policy_lock' in config else {}))
     directory = authority()
     projection = PublishedProjection(config['projection_root'], authority.read, authority.snapshot)
     catalog = projection.catalog()

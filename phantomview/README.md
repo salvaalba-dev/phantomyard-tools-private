@@ -1,5 +1,9 @@
 # PhantomView
 
+The local [committed-policy reader candidate](COMMITTED_POLICY_READER.md) adds
+request-time revision binding and shared-lock delivery with matching PhantomDocs
+publication support. It is not installed or activated by the source change.
+
 Start with the [consolidated project status](../docs/PROJECT_STATUS.md) for
 repository ownership, reviewed source capabilities and unresolved integration work.
 The implementation notes below describe individual stages; their installation

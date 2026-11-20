@@ -98,10 +98,10 @@ class OrganizationAuthority:
             raise ValueError('Explicit absolute source and organization required')
         self.organization = organization
 
-    def read(self):
+    def read(self, *, reader=None):
         """Return a fresh validated document; never fall back to an older copy."""
         try:
-            org = _parse(_read(self.path), self.format)
+            org = _parse((_read if reader is None else reader)(self.path), self.format)
             if not isinstance(org, dict) or org.get('organization', {}).get('id') != self.organization:
                 raise ValueError('Organization source mismatch')
             if HumanDirectory(org).scope.policy.get('view_access') is None:

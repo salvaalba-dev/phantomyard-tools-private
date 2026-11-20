@@ -4,6 +4,7 @@ No CLI, environment variable or import starts this listener. Native channel
 isolation, reviewed resources and backend authorization remain deployment gates.
 """
 from pathlib import Path
+from contextlib import nullcontext
 import socket
 import stat
 import threading
@@ -13,13 +14,14 @@ from trusted_handoff import PeerPolicy, bind_listener, serve_connection
 
 
 class ReaderHandoff:
-    def __init__(self, path, group_id, peer_policy, gate, *, actor=None):
+    def __init__(self, path, group_id, peer_policy, gate, *, actor=None, authority=None):
         if not isinstance(gate, IdentifiedGate) or not isinstance(peer_policy, PeerPolicy):
             raise ValueError('An identified reader gate and kernel peer policy are required')
         self.path, self.group_id, self.peer_policy, self.gate = Path(path), group_id, peer_policy, gate
         if actor is not None:
             gate.issuer_links(actor)
         self.actor = actor
+        self.authority = authority if authority is not None else gate.directory_loader
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._listener, self._connection, self._thread, self._identity = None, None, None, None
@@ -61,7 +63,16 @@ class ReaderHandoff:
                 try:
                     # One connection at a time bounds signing work and in-flight
                     # identity state; rejected peers never reach request reads.
-                    serve_connection(connection, self.gate, self.peer_policy, actor=self.actor)
+                    authority = self.authority
+                    guard = (authority.delivery() if getattr(authority, 'policy_lock', None)
+                             else nullcontext())
+                    try:
+                        with guard:
+                            serve_connection(connection, self.gate, self.peer_policy, actor=self.actor)
+                    except (OSError, ValueError, ImportError):
+                        # A refused authority must not poison the listener or
+                        # issue an old-policy link; close only this connection.
+                        connection.close()
                 finally:
                     with self._lock:
                         self._connection = None
