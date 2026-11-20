@@ -8,6 +8,8 @@ from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
 import os
+from pathlib import Path
+import shutil
 import tempfile
 import threading
 import subprocess
@@ -135,9 +137,20 @@ try: Path(source).read_bytes()
 except PermissionError: pass
 else: raise AssertionError('reader gained source access')
 '''
-        result = subprocess.run([sys.executable, '-B', '-c', code, str(f.private), str(f.index),
+        # CI runner homes can be private. Copy only test code/dependencies to a
+        # fresh synthetic runtime instead of changing any runner directory ACL.
+        import phantomdocs
+        import yaml
+        runtime = f.root / 'runtime'
+        runtime.mkdir(mode=0o755)
+        for module in Path(__file__).parent.glob('*.py'):
+            shutil.copyfile(module, runtime / module.name)
+        for package in (phantomdocs, yaml):
+            shutil.copytree(Path(package.__file__).parent, runtime / package.__name__,
+                            ignore=shutil.ignore_patterns('__pycache__'))
+        result = subprocess.run([sys._base_executable, '-B', '-c', code, str(f.private), str(f.index),
             str(f.source), str(self.lock)], user=65534, group=65534, extra_groups=[],
-            env={'PYTHONPATH': os.environ['PYTHONPATH'], 'PYTHONDONTWRITEBYTECODE': '1'},
+            cwd=runtime, env={'PYTHONPATH': str(runtime), 'PYTHONDONTWRITEBYTECODE': '1'},
             capture_output=True, check=False, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
 
