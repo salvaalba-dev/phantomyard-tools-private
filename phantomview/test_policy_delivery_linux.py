@@ -122,7 +122,11 @@ class PolicyLinuxTests(unittest.TestCase):
 
     def test_reader_can_verify_current_revision_without_source_access(self):
         f = self.fixture
-        f.root.chmod(0o711)
+        # The strict guard re-opens every policy-lock parent with O_DIRECTORY,
+        # which needs read on that parent: execute-only 0o711 returns EACCES for
+        # the unprivileged child. Listing the fixture root grants no policy
+        # access, because the source and both copies stay root-owned 0o600/0o640.
+        f.root.chmod(0o755)
         for directory in (f.private, f.index.parent):
             os.chown(directory, 0, 65534)
             directory.chmod(0o750)
