@@ -31,14 +31,15 @@ jobs:
           ref: ${{ env.POLICY_REVISION }}
           path: policy-source
           persist-credentials: false
+      # The unprivileged test child must traverse this fresh runtime; RUNNER_TEMP is private.
       - name: Install matching disposable test runtime
         run: |
-          python -m venv "$RUNNER_TEMP/policy-reader-env"
-          "$RUNNER_TEMP/policy-reader-env/bin/python" -m pip install -r phantomview/requirements.txt './policy-source/phantomdocs[dev]' './policy-source/phantomorg'
-          "$RUNNER_TEMP/policy-reader-env/bin/python" -c 'from phantomdocs.workflow_policy_commit import committed_guard'
+          python -m venv "$GITHUB_WORKSPACE/.policy-reader-env"
+          "$GITHUB_WORKSPACE/.policy-reader-env/bin/python" -m pip install -r phantomview/requirements.txt './policy-source/phantomdocs[dev]' './policy-source/phantomorg'
+          "$GITHUB_WORKSPACE/.policy-reader-env/bin/python" -c 'from phantomdocs.workflow_policy_commit import committed_guard'
       - name: Exercise actual source publication and reader revocation as root
         run: |
-          sudo env PHANTOMVIEW_POLICY_LINUX=1 PYTHONDONTWRITEBYTECODE=1 "PYTHONPATH=$GITHUB_WORKSPACE/phantomview:$GITHUB_WORKSPACE/policy-source/phantomdocs/src" "$RUNNER_TEMP/policy-reader-env/bin/python" -m unittest discover -s phantomview -p test_policy_delivery_linux.py -v
+          sudo env PHANTOMVIEW_POLICY_LINUX=1 PYTHONDONTWRITEBYTECODE=1 "PYTHONPATH=$GITHUB_WORKSPACE/phantomview:$GITHUB_WORKSPACE/policy-source/phantomdocs/src" "$GITHUB_WORKSPACE/.policy-reader-env/bin/python" -m unittest discover -s phantomview -p test_policy_delivery_linux.py -v
       - name: Verify exact mixed and dynamic reader composition
         run: |
-          env "PHANTOMVIEW_COMMIT_REFERENCE=$GITHUB_WORKSPACE/phantomview" "$RUNNER_TEMP/policy-reader-env/bin/python" -m pytest policy-source/phantomdocs/tests/test_policy_reader_composition.py -q
+          env "PHANTOMVIEW_COMMIT_REFERENCE=$GITHUB_WORKSPACE/phantomview" "$GITHUB_WORKSPACE/.policy-reader-env/bin/python" -m pytest policy-source/phantomdocs/tests/test_policy_reader_composition.py -q
