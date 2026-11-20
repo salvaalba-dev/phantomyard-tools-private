@@ -103,7 +103,7 @@ recovery, collector races, actual flock ordering and an unprivileged reader with
 no source access. It stubs service control and uses no installed policy or users'
 documents. `PHANTOMVIEW_POLICY_LINUX=1` asserts Linux root rather than skipping
 privileged cases silently. PR CI pins tools commit
-`36af3de1d4f48136d44f321aa5761ec5d9367d67` from
+`3436037c65cb9ef427f716605264688f23ed9719` from
 [tools PR #69](https://github.com/salvaalba-dev/phantomyard-tools/pull/69).
 Manual CI also accepts an immutable reviewed 40-character tools commit. Updating
 this dependency requires reviewing the new revision and rerunning integration.

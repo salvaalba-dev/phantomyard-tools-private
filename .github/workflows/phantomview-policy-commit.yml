@@ -15,7 +15,7 @@ jobs:
   privileged-integration:
     runs-on: ubuntu-latest
     env:
-      POLICY_REVISION: ${{ inputs.policy_revision || '36af3de1d4f48136d44f321aa5761ec5d9367d67' }}
+      POLICY_REVISION: ${{ inputs.policy_revision || '3436037c65cb9ef427f716605264688f23ed9719' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
