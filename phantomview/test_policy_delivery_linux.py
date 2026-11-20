@@ -14,6 +14,7 @@ import tempfile
 import threading
 import subprocess
 import sys
+import sysconfig
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -130,6 +131,7 @@ class PolicyLinuxTests(unittest.TestCase):
 import sys
 from pathlib import Path
 from authority_publication import PublishedAuthority
+from phantomdocs.workflow_policy_commit import committed_guard
 private,index,source,lock=sys.argv[1:]
 a=PublishedAuthority(private,index,'example',source,max_age=30,clock=lambda:100,policy_lock=lock)
 assert a.read()['organization']['id']=='example'
@@ -140,17 +142,20 @@ else: raise AssertionError('reader gained source access')
         # CI runner homes can be private. Copy only test code/dependencies to a
         # fresh synthetic runtime instead of changing any runner directory ACL.
         import phantomdocs
-        import yaml
         runtime = f.root / 'runtime'
         runtime.mkdir(mode=0o755)
         for module in Path(__file__).parent.glob('*.py'):
             shutil.copyfile(module, runtime / module.name)
-        for package in (phantomdocs, yaml):
-            shutil.copytree(Path(package.__file__).parent, runtime / package.__name__,
-                            ignore=shutil.ignore_patterns('__pycache__'))
+        shutil.copytree(Path(phantomdocs.__file__).parent, runtime / 'phantomdocs',
+                        ignore=shutil.ignore_patterns('__pycache__'))
+        # Preserve the installed dependency closure (jsonschema, signing, YAML)
+        # without letting the child traverse the runner's private venv.
+        shutil.copytree(sysconfig.get_path('purelib'), runtime / 'site-packages',
+                        ignore=shutil.ignore_patterns('__pycache__'))
         result = subprocess.run([sys._base_executable, '-B', '-c', code, str(f.private), str(f.index),
             str(f.source), str(self.lock)], user=65534, group=65534, extra_groups=[],
-            cwd=runtime, env={'PYTHONPATH': str(runtime), 'PYTHONDONTWRITEBYTECODE': '1'},
+            cwd=runtime, env={'PYTHONPATH': os.pathsep.join((str(runtime), str(runtime / 'site-packages'))),
+                              'PYTHONDONTWRITEBYTECODE': '1'},
             capture_output=True, check=False, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
 
