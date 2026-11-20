@@ -2,6 +2,7 @@
 from http.server import ThreadingHTTPServer
 import re
 import threading
+import socket
 
 from authority_publication import PublishedAuthority
 from identified_access import IdentifiedGate
@@ -40,7 +41,52 @@ class RecipientGate(IdentifiedGate):
 
 
 class RecipientHandler(Handler):
+    def send(self, *args, **kwargs):
+        self._policy_response_started = True
+        return super().send(*args, **kwargs)
+
+    def _policy_request(self, operation):
+        from urllib.parse import urlparse
+        authority = getattr(self.server, 'policy_authority', None)
+        if (authority is None or authority.policy_lock is None
+                or not urlparse(self.path).path.startswith('/api/')):
+            return operation()
+        self._policy_response_started = False
+        expired = threading.Event()
+        def expire():
+            expired.set()
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        timer = threading.Timer(15, expire)
+        timer.daemon = True
+        try:
+            with authority.delivery():
+                # Bound socket input/output for this delivery, including a slow
+                # POST body. Header parsing happens before this method/lock.
+                timer.start()
+                return operation()
+        except (OSError, ValueError, TypeError, ImportError):
+            self.close_connection = True
+            if not self._policy_response_started and not expired.is_set():
+                try:
+                    self.send(503, {'error': 'Current organization policy is unavailable'})
+                except OSError:
+                    pass
+        finally:
+            timer.cancel()
+
+    def do_GET(self):
+        return self._policy_request(super().do_GET)
+
+    def do_DELETE(self):
+        return self._policy_request(super().do_DELETE)
+
     def do_POST(self):
+        return self._policy_request(self._identified_post)
+
+    def _identified_post(self):
         # Only the protected native handoff may attach verified recipient context.
         # Browser issuance cannot supply it, even with a valid bot signature.
         from urllib.parse import urlparse
@@ -142,6 +188,7 @@ class PublishedReader:
     def _make_server(self):
         server = ThreadingHTTPServer(('127.0.0.1', self.port), RecipientHandler)
         server.gate, server.scoped_backend = self.gate, self.backend
+        server.policy_authority = self.authority
         server.access_errors = (ValueError, self.gate.access.core.Invalid)
         server.scoped_consultations = self.consultations
         server.original_documents = OriginalStore(self.projection.root / 'originals')
@@ -161,6 +208,8 @@ class PublishedReader:
             self.preflight()
             for route, policy in zip(self.routes, policies):
                 options = {'actor': route['actor']} if len(self.routes) > 1 else {}
+                if self.authority.policy_lock is not None:
+                    options['authority'] = self.authority
                 handoffs.append(ReaderHandoff(route['socket_path'], route['socket_group'], policy, self.gate, **options))
             handoff = handoffs[0]
             server = self._make_server()

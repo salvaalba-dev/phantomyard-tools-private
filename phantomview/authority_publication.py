@@ -1,5 +1,7 @@
 """Opt-in private authority publication inside the existing collector lifecycle."""
 import hashlib
+import copy
+from contextlib import contextmanager
 import json
 import math
 import os
@@ -8,6 +10,7 @@ import re
 import stat
 import tempfile
 import time
+import threading
 
 import yaml
 
@@ -16,6 +19,24 @@ from organization_authority import MAX_BYTES, OrganizationAuthority, _parse, _re
 
 
 META = '_phantomview_publication'
+
+
+@contextmanager
+def _committed_guard(lock, source):
+    try:
+        from phantomdocs.workflow_policy_commit import committed_guard
+    except ImportError:
+        raise ValueError('Install matching committed-policy support') from None
+    try:
+        with committed_guard(lock, source) as value:
+            yield value
+    except ImportError:
+        raise ValueError('Committed-policy support requires the matching Linux runtime') from None
+
+
+def _protected_read(path):
+    from phantomdocs.workflow_admission_config import _read_protected
+    return _read_protected(str(path))
 
 
 def revision(value):
@@ -44,7 +65,7 @@ def private_directory(path):
 
 class AuthorityPublication:
     """Producer-owned directory, fixed private file; never a static asset directory."""
-    def __init__(self, directory, organization, *, clock=time.time):
+    def __init__(self, directory, organization, *, clock=time.time, policy_lock=None):
         if not isinstance(organization, str) or not organization:
             raise ValueError('Explicit publication organization required')
         self.directory = _absolute(directory)
@@ -53,6 +74,7 @@ class AuthorityPublication:
             raise ValueError('Authority publication must be outside the application directory')
         self.path = self.directory / 'organization.json'
         self.organization, self.clock = organization, clock
+        self.policy_lock = str(_absolute(policy_lock)) if policy_lock is not None else None
 
     def _replace(self, document):
         parent = private_directory(self.directory)
@@ -87,6 +109,20 @@ class AuthorityPublication:
         self._replace({'status': 'unavailable', 'organization': self.organization})
 
     def publish(self, observer, state):
+        if self.policy_lock is None:
+            return self._publish(observer, state)
+        selected = observer.config.get('org_files', [])
+        if len(selected) != 1:
+            raise ValueError('One committed source is required')
+        if os.name != 'posix' or os.geteuid() != 0:
+            raise ValueError('Committed publication requires the existing root producer')
+        with _committed_guard(self.policy_lock, str(_absolute(selected[0]))) as committed:
+            from phantomdocs.workflow_protected_paths import protected_parent
+            with protected_parent(str(self.path)):
+                pass
+            return self._publish(observer, state, committed=committed)
+
+    def _publish(self, observer, state, *, committed=None):
         """Bind a fresh source reread to the exact input captured during collect()."""
         selected = observer.config.get('org_files', [])
         if any(_absolute(source).resolve() == self.path.resolve() for source in selected):
@@ -104,7 +140,8 @@ class AuthorityPublication:
             rows = snapshot.get('organizations', [])
             if len(rows) != 1 or rows[0].get('id') != self.organization or rows[0].get('source') != observed_source:
                 raise ValueError('Publication organization/source mismatch')
-            org = OrganizationAuthority(source, self.organization).read()
+            org = OrganizationAuthority(source, self.organization).read(
+                **({'reader': _protected_read} if committed is not None else {}))
             if META in org or org != observer.organization_inputs.get(observed_source):
                 raise ValueError('Source changed after collection')
             timestamp = self.clock()
@@ -115,6 +152,13 @@ class AuthorityPublication:
                               'snapshot_source': observed_source,
                               'organization_revision': revision(org), 'snapshot_digest': snapshot['digest'],
                               'published_at': timestamp}
+            if committed is not None:
+                # Reopening is safe under the common shared lock only when all
+                # live source writers obey the publication contract.
+                actual = hashlib.sha256(_protected_read(Path(source))).hexdigest()
+                if actual != committed['sha256']:
+                    raise ValueError('Source does not match committed revision')
+                document[META]['source_sha256'] = actual
             self._replace(document)
         except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError, yaml.YAMLError):
             # If invalidation itself fails, propagate failure; the reader's lease
@@ -125,20 +169,29 @@ class AuthorityPublication:
 
 class PublishedAuthority:
     """Fresh private publication + current index; no direct source access required."""
-    def __init__(self, directory, index, organization, source, *, max_age, clock=time.time):
+    def __init__(self, directory, index, organization, source, *, max_age, clock=time.time,
+                 policy_lock=None):
         self.path = _absolute(directory) / 'organization.json'
         self.index, self.source = _absolute(index), str(_absolute(source))
         if type(max_age) is not int or not 1 <= max_age <= 3600:
             raise ValueError('Explicit authority lease between 1 and 3600 seconds required')
         self.organization, self.max_age, self.clock = organization, max_age, clock
+        self.policy_lock = str(_absolute(policy_lock)) if policy_lock is not None else None
+        self._delivery = threading.local()
 
-    def _current(self):
+    def _load(self, committed=None):
         try:
-            org = OrganizationAuthority(self.path, self.organization).read()
+            org = OrganizationAuthority(self.path, self.organization).read(
+                **({'reader': _protected_read} if committed is not None else {}))
             metadata = org.pop(META)
-            if (not isinstance(metadata, dict) or set(metadata) != {
+            fields = {
                     'schema_version', 'source', 'organization', 'organization_revision',
-                    'snapshot_digest', 'snapshot_source', 'published_at'} or type(metadata['schema_version']) is not int
+                    'snapshot_digest', 'snapshot_source', 'published_at'}
+            if committed is not None:
+                fields.add('source_sha256')
+            if (not isinstance(metadata, dict) or set(metadata) != fields
+                    or (committed is not None and metadata.get('source_sha256') != committed['sha256'])
+                    or type(metadata['schema_version']) is not int
                     or metadata['schema_version'] != 1 or metadata['source'] != self.source
                     or metadata['organization'] != self.organization
                     or not isinstance(metadata['snapshot_digest'], str)
@@ -149,7 +202,7 @@ class PublishedAuthority:
             age = self.clock() - published
             if type(published) not in (int, float) or not math.isfinite(age) or not 0 <= age < self.max_age:
                 raise ValueError('Authority publication expired or future-dated')
-            index = _parse(_read(self.index), '.json')
+            index = _parse((_protected_read if committed is not None else _read)(self.index), '.json')
             snapshot = index.get('snapshot', {})
             selected = index.get('config', {}).get('org_files')
             if (index.get('error') or not isinstance(selected, list) or len(selected) != 1
@@ -161,6 +214,25 @@ class PublishedAuthority:
             return org, snapshot
         except (OSError, ValueError, TypeError, AttributeError, KeyError, RecursionError, yaml.YAMLError):
             raise ValueError('Current private organization publication is unavailable') from None
+
+    @contextmanager
+    def delivery(self):
+        """Pin one verified publication/index under SH through protected output."""
+        if self.policy_lock is None or getattr(self._delivery, 'current', None) is not None:
+            yield self
+            return
+        with _committed_guard(self.policy_lock, self.source) as committed:
+            self._delivery.current = self._load(committed)
+            try:
+                yield self
+            finally:
+                del self._delivery.current
+
+    def _current(self):
+        if self.policy_lock is None:
+            return self._load()
+        with self.delivery():
+            return copy.deepcopy(self._delivery.current)
 
     def read(self):
         return self._current()[0]

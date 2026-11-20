@@ -984,6 +984,7 @@ def main():
     sync = sub.add_parser("sync")
     sync.add_argument("--export", help="Export the read-only index without granting source access")
     sync.add_argument("--authority-dir", help="Existing producer-owned private authority directory")
+    sync.add_argument("--policy-lock", help="Common lock containing a committed source receipt")
     sync.add_argument("--authority-org", help="Exact organization ID for the private publication")
     for command in (setup, sync):
         command.add_argument("--review-root", help="Existing private operator directory for automatic review drafts")
@@ -1042,12 +1043,14 @@ def main():
         if state["error"]:
             raise SystemExit(1)
     elif args.command == "sync":
-        if bool(args.authority_dir) != bool(args.authority_org) or args.authority_dir and not args.export:
+        if (bool(args.authority_dir) != bool(args.authority_org) or args.authority_dir and not args.export
+                or args.policy_lock and not args.authority_dir):
             parser.error('Private authority requires --export, --authority-dir and --authority-org')
         authority = None
         if args.authority_dir:
             from authority_publication import AuthorityPublication
-            authority = AuthorityPublication(args.authority_dir, args.authority_org)
+            authority = AuthorityPublication(args.authority_dir, args.authority_org,
+                **({'policy_lock': args.policy_lock} if args.policy_lock else {}))
         state = obs.refresh()
         if args.export:
             obs.export(args.export, state, authority=authority)

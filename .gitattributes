@@ -1,2 +1,5 @@
 # Preserve the exact bytes covered by the private source proposal manifest.
 phantomview/phantomorg-counterpart.patch text eol=lf
+# These source files are inputs to exact-digest reader composition.
+phantomview/reader_launch.py text eol=lf
+phantomview/identified_reader.py text eol=lf

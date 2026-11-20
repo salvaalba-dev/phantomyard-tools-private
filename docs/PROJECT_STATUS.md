@@ -90,6 +90,13 @@ serialize writers that do not acquire it. Acceptance covers concurrent writes,
 interruption, stale/invalid/unreadable input, recovery and revocation through the
 actual consumers, preserving permissions and existing runtime behavior.
 
+Local follow-up prepared on 2026-11-20: the
+[committed-policy reader contract](../phantomview/COMMITTED_POLICY_READER.md)
+coordinates matching tools/viewer candidates. It binds private authority to the
+committed source revision and holds a shared lock through delivery, without source
+read grants. Publication/review, privileged Linux integration and installation
+acceptance remain separate gates. This does not advance the queue to matrix work.
+
 **Then: completed processing to matrix publication.** Owner:
 `salvaalba-dev/phantomyard-tools`. Bind authenticated completion to exact native
 versions, scope, publisher, previous matrix and protected destination. Reconcile
