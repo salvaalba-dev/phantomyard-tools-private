@@ -1,8 +1,9 @@
 # PhantomView: consolidated project status
 
-Reviewed: 2026-11-18. Start here when resuming work. This is the source and
-continuity overview; no live-host inspection or deployment was performed for
-this documentation change.
+Updated: 2026-11-21. Original source review: 2026-11-18. Start here when
+resuming work. This overview separates GitHub source checks from the dated
+production verification reported below; its author did not inspect or change
+the live host during this documentation update.
 
 ## Direction and document precedence
 
@@ -78,41 +79,101 @@ Matrix publication, ingestion handover, organization-scope delivery, recipient
 coverage and activation candidates were identified locally. The reviewed source
 baseline does not establish them as fully integrated or production-ready.
 Earlier synthetic tests do not demonstrate either complete operational matrix
-automation. No fresh production status is asserted here.
+automation. The reported reader migration below does not establish automatic
+matrix generation or publication.
+
+## Reported production verification, 2026-11-21
+
+Source: Maki's VPS verification, relayed by the operator at 23:07 Europe/Madrid
+(22:07 UTC) on 2026-11-21. The following are attributed operational observations,
+not an independent host check by the documentation author. GitHub separately
+confirms that [viewer PR #12](https://github.com/salvaalba-dev/phantomyard-tools-private/pull/12)
+is merged.
+
+- **Projection generation 26 is published.** The active pointer selects sequence
+  26, reported live since 21:39 UTC. Approval/publication of this generation is
+  complete; do not ask for it again based on the earlier pending report.
+- **The PR #12 reader migration is applied in production.** Maki reports the
+  dedicated reader identity, isolated matrix socket, working audit writes
+  (310 events at inspection), no failed units, and verified denial of the former
+  reader identity and an unrelated identity.
+- **Authenticated matrix delivery works.** Requests with valid Alma, Paco and
+  Pepa sessions returned HTTP 200. A standalone unauthenticated curl returning
+  403/404 does not establish a delivery failure; the endpoint requires a session.
+
+This supersedes the earlier generation-approval and reader-cutover blockers.
+It establishes the reported deployed state, not continuous availability or
+coverage of every operational contract. The report does not explicitly verify
+the native handoff protocol, every policy refresh/reconciliation transition, or
+recovery after a full host power loss; do not mark those independently verified
+without their own dated evidence.
+
+[Viewer PR #11](https://github.com/salvaalba-dev/phantomyard-tools-private/pull/11)
+is superseded by #12 and is retained as closed historical design work. Do not
+implement its dedicated-helper prototype as an additional production step.
 
 ## Ordered work queue
 
-**Next task: organization-policy publication and consumption.** Owner:
-`salvaalba-dev/phantomyard-tools`; change the viewer only if its consumer contract
-changes. Define the authoritative generated policy, protected publication/access
-boundary and freshness behavior. Account for every writer: a consumer lock cannot
-serialize writers that do not acquire it. Acceptance covers concurrent writes,
-interruption, stale/invalid/unreadable input, recovery and revocation through the
-actual consumers, preserving permissions and existing runtime behavior.
+### 1. Prepare the protected matrix host overlay for production
 
-Local follow-up prepared on 2026-11-20: the
-[committed-policy reader contract](../phantomview/COMMITTED_POLICY_READER.md)
-coordinates matching tools/viewer candidates. It binds private authority to the
-committed source revision and holds a shared lock through delivery, without source
-read grants. Publication/review, privileged Linux integration and installation
-acceptance remain separate gates. This does not advance the queue to matrix work.
+Owner: `salvaalba-dev/phantomyard-tools`.
+[PR #73](https://github.com/salvaalba-dev/phantomyard-tools/pull/73) is open and
+in draft at this update. Its rehearsal is separate from the already deployed
+viewer PR #12. It keeps the existing matrix release and uses a pinned overlay
+for the bounded request host from merged
+[PR #72](https://github.com/salvaalba-dev/phantomyard-tools/pull/72).
 
-**Then: completed processing to matrix publication.** Owner:
-`salvaalba-dev/phantomyard-tools`. Bind authenticated completion to exact native
-versions, scope, publisher, previous matrix and protected destination. Reconcile
-operational tables and counts, preserve identifiers/history, reserve upload
-identity durably and recover without duplicate registration or publication.
-Acceptance requires a supported real processing path, idempotent retry,
-interruption recovery and rejection of incomplete or cross-scope inputs.
+Remaining steps:
 
-**Then: recipient-safe matrix delivery and activation.** Owner:
-`salvaalba-dev/phantomyard-tools` for broker/authorization; a separate viewer PR
-only for an affected adapter or presentation. Verify every fact in the exact
-matrix bytes against current recipient authority, including information absent
-from the native manifest. Agent access or a category match alone proves neither
-recipient access nor full coverage. Acceptance covers authorized delivery,
-cross-scope denial, incomplete coverage, revocation during delivery and safe
-retention of previous versions. Production activation is a separate reviewed step.
+1. Prepare the candidate files at the intended protected target and capture the
+   actual target filesystem/dependency inventory. Review hashes, ownership,
+   modes, POSIX ACLs, metadata and link targets, including native extensions and
+   linked package data. Fixture CI is not a production manifest.
+2. Measure verification duration on that target and check it against the
+   55-second request and 65-second service budgets. Verify isolated Python
+   startup, systemd drop-in precedence and refusal of dependency or metadata drift.
+3. Complete review and relevant rehearsal, retain a tested rollback, and merge
+   with explicit authorization. Install/activate only in an authorized window.
+4. Verify actual matrix requests, lock-contention cleanup and continued access
+   controls after service/socket recreation. Record the deployed revision and
+   private acceptance evidence.
+
+Do not describe #73 as deployed or production-ready until these gates are met.
+No host changes or provider notifications are authorized by this status page.
+
+### 2. Automate both operational matrices
+
+Owner: `salvaalba-dev/phantomyard-tools`, with a viewer change only for an affected
+adapter or presentation. **Both automations remain incomplete:** Pepa's AU
+organization matrix and Alma's ALMAPONIA project matrix. Publishing projection
+generation 26 and deploying the reader do not generate or publish either matrix.
+
+Before activation:
+
+1. Establish the authoritative organization-policy publication/consumer lifecycle.
+   The [committed-policy reader contract](../phantomview/COMMITTED_POLICY_READER.md)
+   coordinates tools/viewer candidates, binds authority to a committed revision
+   and holds a shared lock through delivery. Confirm its actual review,
+   publication, privileged integration and installation status. A reader migration
+   alone does not prove it deployed. Account for writers that do not share a lock.
+2. Connect each supported real ingestion/completion path to authenticated native
+   version evidence, the correct organization/project scope, publisher, previous
+   matrix and protected destination. Keep Alma's ALMAPONIA identifier allocation
+   and existing identifiers; do not duplicate registrations.
+3. Generate faithful operational tables and counts, reconcile existing manual
+   content, and preserve prior versions/history. An appended generated section
+   or a successful document index alone is insufficient.
+4. Publish with durable upload identity, idempotent retries and interruption
+   recovery, then update the viewer binding atomically.
+5. Verify every fact in the exact matrix bytes against current recipient
+   authority, including facts absent from the native manifest. Agent access or
+   a category match alone establishes neither recipient access nor full coverage.
+   Test authorized delivery, cross-scope and incomplete-coverage denial,
+   revocation during delivery and safe retention of prior versions.
+
+Acceptance requires a verified end-to-end run for **each** scope, retry without
+duplicates and recovery from interruption. Review production activation
+separately; do not expand permissions or modify PhantomBot to infer completion.
 
 ## Resume without reconstructing every chat
 
