@@ -141,9 +141,18 @@ groups. A foreign UID with those groups still cannot open the matrix socket.
 Giving it the fixture's matrix-only group tests broker rejection separately.
 The separate tmpfiles test proves that the old owner blocks Unix socket bind,
 the migrated rules permit it on an existing and newly recreated directory, and
-restoring the old rule restores the previous ownership. Authority refresh,
-projection republication, audit writes, the native handoff protocol and the
-matrix socket unit lifecycle are separate release checks.
+restoring the old rule restores the previous ownership.
+
+The Linux systemd rehearsal also runs the pinned supervisor's transaction,
+validator and guarded launcher against a synthetic baseline and a disposable
+reader unit. It verifies the generated config's group and mode, the reader
+process credentials, the handoff directory owner, and an unchanged second
+reconciliation. A disposable matrix socket tests restricted fallback creation
+when its parent is missing. With normal provisioning, it tests reader access
+and rejects the previous reader at both filesystem and broker boundaries
+before and after deleting and recreating the socket and its parent.
+Authority refresh, projection republication, audit writes and the native
+handoff protocol remain separate release checks.
 
 1. Inventory the current unit, supervisor arguments, child credentials, native
    descriptors, publishers, and effective owner/mode/ACL on every target and
