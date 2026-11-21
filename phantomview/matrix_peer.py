@@ -7,7 +7,6 @@ import subprocess
 import sys
 
 _CONNECT = """
-import os
 import socket
 import sys
 
@@ -39,7 +38,7 @@ def connect(path, uid, gid):
         with reader, writer:
             reader.settimeout(5)
             result = subprocess.run(
-                [sys.executable, "-I", "-S", "-B", "-c", _CONNECT, path],
+                ["/usr/bin/python3", "-I", "-S", "-B", "-c", _CONNECT, path],
                 user=uid,
                 group=gid,
                 extra_groups=[],

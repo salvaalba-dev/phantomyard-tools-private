@@ -78,6 +78,7 @@ class MatrixPeerIntegration(unittest.TestCase):
         ) as temp:
             root = Path(temp)
             config = root / "routes.json"
+            config.touch(mode=0o600)
             endpoint = root / "matrix.sock"
             route = {
                 "socket": str(endpoint),
