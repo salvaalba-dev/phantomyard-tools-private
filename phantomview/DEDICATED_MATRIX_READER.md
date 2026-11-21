@@ -111,7 +111,11 @@ matrix socket unit lifecycle are separate release checks.
    broker and reader results separately. Resume the timer and confirm the
    next reconciliation preserves the UID, groups, and ownership.
 4. If a check fails, keep ingress drained and periodic reconciliation paused.
-   Restore authoritative inputs, unit and socket settings, native pairing,
-   groups, both tmpfiles rulesets, and scoped ownership/modes/ACLs. Preserve
-   audit entries added since the snapshot. Regenerate and validate the previous
-   configuration before resuming the timer and reopening ingress.
+   Check the transaction journal before restoring inputs. A matching pending
+   transaction requires the supervisor's forward recovery. If it is stale or
+   cannot be recovered, keep the reader stopped for reviewed recovery.
+   Once the journal is settled and current authority permits the previous
+   configuration, restore authoritative inputs, unit and socket settings,
+   native pairing, groups, both tmpfiles rulesets, and scoped metadata as a
+   controlled change. Preserve new audit entries and validate the result before
+   resuming the timer and reopening ingress.
