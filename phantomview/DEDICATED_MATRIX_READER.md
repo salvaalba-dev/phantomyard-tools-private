@@ -61,6 +61,8 @@ Review all three directory provisioning layers together:
    A directory rule has the form `d path mode user group age`. Update only
    the user field for the managed handoff directories. Keep each route's
    existing group and mode, and preserve its separate ACL rules.
+   When an issuer UID has the same number as the route's GID, preserve both:
+   the `d` rule's group column and the issuer UID in each `u:` or `d:u:` ACL.
 3. The service drop-in's `RuntimeDirectory=` paths, service group and guarded
    launcher arguments. Inspect both `Group=` and `SupplementaryGroups=`
    in the merged unit as well as the launcher's explicit supplementary-group
@@ -131,6 +133,8 @@ matrix socket unit lifecycle are separate release checks.
    from effective unit commands, the module search path and the HTTP child
    command line. Use those revisions for inspection and rehearsal. Verify the
    reader release manifest and configuration pairing before preparing the cutover.
+   The manifest lists runtime files. This documentation, test and workflow
+   change leaves those files unchanged and requires no manifest regeneration.
 2. Rehearse opening the actual live-format reader configuration under the
    planned identity before and after replacement, plus a fresh publication,
    audit write, issuer handoff, optional conversation,
