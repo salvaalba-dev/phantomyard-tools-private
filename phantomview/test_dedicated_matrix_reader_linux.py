@@ -18,6 +18,7 @@ READER = """
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
+import sys
 from types import SimpleNamespace
 import scoped_http
 
@@ -50,13 +51,29 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        assert scoped_http.dispatch(self, "GET")
+        if self.path == "/":
+            self.send(200, [os.getuid(), os.getgid(), os.getgroups()])
+        else:
+            assert scoped_http.dispatch(self, "GET")
 
-with HTTPServer(("127.0.0.1", 0), Handler) as server:
-    server.timeout = 10
-    server.scoped_backend = SimpleNamespace(gate=SimpleNamespace(identified_scope=identified))
-    print(json.dumps([server.server_port, os.getuid(), os.getgid(), os.getgroups()]), flush=True)
-    server.handle_request()
+
+def load(path):
+    with open(path, encoding="utf-8") as source:
+        config = json.load(source)
+    assert config["reader_uid"] == os.getuid()
+    return config
+
+
+if __name__ == "__main__":
+    config = load(sys.argv[2]) if len(sys.argv) > 1 else {"port": 0}
+    with HTTPServer(("127.0.0.1", config["port"]), Handler) as server:
+        server.timeout = 10
+        server.scoped_backend = SimpleNamespace(gate=SimpleNamespace(identified_scope=identified))
+        if config["port"]:
+            server.serve_forever()
+        else:
+            print(json.dumps([server.server_port, os.getuid(), os.getgid(), os.getgroups()]), flush=True)
+            server.handle_request()
 """
 
 

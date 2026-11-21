@@ -18,6 +18,12 @@ jobs:
           ref: aebe482c6ab583d98d976608879871984a4b2b80
           path: matrix-broker-source
           persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: salvaalba-dev/phantomyard-tools
+          ref: 16edf6798a1b7debb77555919c7e41e61c7a3448
+          path: supervisor-source
+          persist-credentials: false
       - name: Rehearse legacy HTTP and broker with a nonroot reader
         run: |
           sudo apt-get update -qq
@@ -28,3 +34,15 @@ jobs:
           sudo "$trial/venv/bin/python" -m pip install ./matrix-broker-source/phantomdocs
           sudo env PHANTOMVIEW_DEDICATED_READER_LINUX=1 PYTHONDONTWRITEBYTECODE=1 \
             "$trial/venv/bin/python" -m unittest discover -s phantomview -p test_dedicated_matrix_reader_linux.py -v
+          for gid in 1001 1059 1890; do
+            if ! getent group "$gid"; then
+              sudo groupadd --gid "$gid" "pv-trial-$gid"
+            fi
+          done
+          sudo groupadd --gid 1891 pv-trial-matrix
+          sudo groupadd --gid 970 pv-trial-reader
+          sudo useradd --system --uid 970 --gid 970 --groups 1001 \
+            --no-create-home --shell /usr/sbin/nologin pv-trial-reader
+          sudo env PHANTOMVIEW_DEDICATED_SYSTEMD=1 PYTHONDONTWRITEBYTECODE=1 \
+            "PYTHONPATH=$GITHUB_WORKSPACE/supervisor-source/phantomdocs/src" \
+            "$trial/venv/bin/python" -m unittest discover -s phantomview -p test_dedicated_reader_systemd.py -v
