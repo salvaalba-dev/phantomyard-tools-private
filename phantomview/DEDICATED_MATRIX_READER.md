@@ -14,7 +14,7 @@ give it a group outside the reader's primary and supplementary groups.
 | Authority and selected index | Read the published organization and exact index, with search on each ancestor. Preserve producer ownership and write access. Authority replaces its file at mode `0640` with the parent group. Check the actual index writer and verify access after a refresh and atomic replacement. Keep protected route config root-owned and reader-readable. |
 | Policy source and lock | Preserve the active authority schema and lease/commit checks. In lease mode the source path is a binding, so it requires no direct reader grant. For committed mode, test the existing source-parent and lock guards with the exact reader credentials. |
 | Projection | Give the reader search and read access to the pointer, approval, and approved generation payloads. Inventory the deployed publisher's modes. Where the deployed tree already uses setgid directories and group-readable files, compare the full reach of retaining that group with using a separate publication-read group. If using a new group, arrange publisher-owned replacements, effective ACL masks and explicit output modes. Verify a new generation before cutover. Preserve writer ownership and deny reader writes. |
-| Audit | With the reader quiesced, take a consistent SQLite backup and transfer only the audit state. Use a private reader-owned parent (`0700`) and database (`0600`). Verify a real audit write and account for SQLite journal/WAL/SHM files during backup and ownership migration. |
+| Audit | With the reader quiesced, take a consistent SQLite backup and transfer only the audit state. Use a private reader-owned parent (`0700`) and database (`0600`). Verify that the reader can search every ancestor and write a real audit event. Account for SQLite journal/WAL/SHM files during backup and ownership migration. |
 | Handoff and conversation | Keep readers and daemons as separate accounts. The launcher requires each handoff `socket_group` in the child's groups, and the supervisor manages the fixed handoff parents and issuer ACLs. Pair every native `readerUid` with the launch config, retain issuer IDs, origin and route paths, and validate optional conversation sockets and peer checks. |
 | Matrix | Grant search (`--x`) on the protected socket directory and write (`-w-`) on the specific matrix socket to the dedicated UID. The socket creator must restore the effective ACL on each recreation. Set the broker's exact `client_uid` to the reader UID and keep the verified server UID. |
 
@@ -31,8 +31,14 @@ Provision the dedicated system UID/GID before changing the baseline.
 Validation resolves the UID through the host account database and tests the
 candidate under the resolved account with the configured supplementary
 groups. Check search on the publication tree's common parent as well as
-each readable subtree. Compare account-derived groups with the reconciler
-settings and the guarded service command.
+each readable subtree. Both the validator and the guarded launcher set the
+child's primary GID from the account record. The validator combines the
+account's group list with the reconciler settings, and the launcher combines
+it with its explicit supplementary-group arguments. Compare those two
+inputs and verify the actual HTTP process credentials. The systemd
+`Group=` and `SupplementaryGroups=` directives govern the supervisor
+service context. The HTTP child and schema validation process each receive
+their credentials explicitly.
 
 Schema validation opens a temporary file owned by root and the new account's
 primary group. The reconciler's replacement of the live reader JSON
@@ -56,6 +62,13 @@ Review all three directory provisioning layers together:
    launcher arguments. Inspect both `Group=` and `SupplementaryGroups=`
    in the merged unit as well as the launcher's explicit supplementary-group
    arguments. Confirm path coverage and preserve issuer ACL handling.
+
+Inspect all effective drop-ins in lexical order. A new override of a scalar
+setting must sort after the existing assignment. Supplementary group
+assignments can accumulate across drop-ins. Review the whole list before
+using any reset. After reloading the service manager during cutover, verify
+the effective `Group`, `SupplementaryGroups`, `ExecStart`, `ExecStartPre`
+and `RuntimeDirectory` values, then verify the actual child separately.
 
 Keep the per-route group, mode `0750`, paths and applicable ACL rules for the
 reader-owned parents. A group member without directory write access cannot
