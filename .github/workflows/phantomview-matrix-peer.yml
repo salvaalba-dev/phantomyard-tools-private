@@ -1,0 +1,29 @@
+name: PhantomView matrix peer integration
+on:
+  pull_request:
+    paths: ['phantomview/**', '.github/workflows/phantomview-matrix-peer.yml']
+permissions:
+  contents: read
+jobs:
+  matrix-peer-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: salvaalba-dev/phantomyard-tools
+          ref: aebe482c6ab583d98d976608879871984a4b2b80
+          path: matrix-broker-source
+          persist-credentials: false
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y acl python3-venv
+          python3 -m venv "$RUNNER_TEMP/matrix-env"
+          "$RUNNER_TEMP/matrix-env/bin/python" -m pip install ./matrix-broker-source/phantomdocs
+      - name: Test the HTTP reader and kernel credentials on disposable sockets
+        run: |
+          sudo env PHANTOMVIEW_MATRIX_LINUX=1 PYTHONDONTWRITEBYTECODE=1 \
+            "$RUNNER_TEMP/matrix-env/bin/python" -m unittest discover -s phantomview -p test_matrix_peer_linux.py -v
