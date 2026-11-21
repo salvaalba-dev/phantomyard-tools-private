@@ -79,8 +79,10 @@ The guarded launcher accepts the handoff directory when its owner is root or
 the configured reader and its mode passes the write-permission check. It
 then sets the owner to the reader UID, assigns the route group and mode
 `0750`, and reapplies issuer ACLs before starting the reader. A directory
-still owned by the old reader makes startup fail. Check the sequence on a
-clean stop and start as well as after boot.
+still owned by the old reader when the guard opens it makes startup fail.
+systemd can restore the service owner between pre-start and main execution,
+so a successful start alone does not establish that both tmpfiles sources
+are correct. Check the sequence on a clean stop and start as well as after boot.
 
 Inspect all effective drop-ins in lexical order. A new override of a scalar
 setting must sort after the existing assignment. An empty
@@ -148,9 +150,11 @@ restoring the old rule restores the previous ownership.
 
 The Linux systemd rehearsal also runs the pinned supervisor's transaction,
 validator and guarded launcher against a synthetic baseline and a disposable
-reader unit. An obsolete handoff owner blocks the cutover and leaves a
-pending transaction. Retrying with a root-owned directory lets the launcher
-assign the new UID and complete forward recovery. The trial verifies the
+reader unit. The trial temporarily omits systemd runtime directory management
+so the obsolete handoff owner reaches the guard. Startup fails and the
+transaction remains pending. Retrying with a root-owned directory lets the
+launcher assign the new UID and complete forward recovery. The normal
+runtime directory settings and correct rule are restored for restart. The trial verifies the
 generated config's group and mode, the reader process credentials, the
 handoff directory owner, and an unchanged final reconciliation. A disposable matrix socket tests restricted fallback creation
 when its parent is missing. With normal provisioning, it tests reader access

@@ -225,15 +225,15 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
                 str(handoff),
             ]
             try:
-                viewer.write_text(
+                viewer_unit = (
                     "[Service]\nType=simple\nUser=root\nGroup=1001\n"
-                    f"RuntimeDirectory={root.name}/handoff\nRuntimeDirectoryPreserve=no\n"
                     f"ExecStartPre=/usr/bin/systemd-tmpfiles --create {runtime}\n"
                     f"Environment=PYTHONPATH={os.environ['PYTHONPATH']}\n"
                     f"Environment=PHANTOMVIEW_MATRIX_ROUTES={routes}\n"
-                    f"ExecStart={' '.join(launcher)}\nTimeoutStopSec=5\n",
-                    encoding="ascii",
+                    f"ExecStart={' '.join(launcher)}\nTimeoutStopSec=5\n"
                 )
+                # Let the stale owner reach the guard before restoring RuntimeDirectory.
+                viewer.write_text(viewer_unit, encoding="ascii")
                 listener.write_text(
                     "[Socket]\nAccept=yes\nRemoveOnStop=yes\nSocketUser=root\n"
                     f"ListenStream={endpoint}\nSocketGroup=1891\nSocketMode=0660\n"
@@ -272,6 +272,7 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
                     reconcile_once(host, build)
                 self.assertEqual(host.pending(), (build(None), host.authority()[1]))
                 self.assertFalse(http_ready(port))
+                self.assertEqual(handoff.stat().st_uid, 1001)
                 # The guard may take ownership of a root-owned runtime directory.
                 runtime.write_text(f"d {handoff} 0750 0 1059 -\n", encoding="ascii")
                 self.assertEqual(reconcile_once(host, build), "recovered")
@@ -286,6 +287,12 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
                 self.assertEqual(
                     (handoff.stat().st_uid, handoff.stat().st_gid), (970, 1059)
                 )
+                viewer.write_text(
+                    viewer_unit
+                    + f"RuntimeDirectory={root.name}/handoff\nRuntimeDirectoryPreserve=no\n",
+                    encoding="ascii",
+                )
+                systemctl("daemon-reload")
                 runtime.write_text(f"d {handoff} 0750 970 1059 -\n", encoding="ascii")
                 systemctl("restart", viewer.name)
                 self.assertTrue(host.healthy())
