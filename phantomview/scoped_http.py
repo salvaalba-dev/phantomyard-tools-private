@@ -1,5 +1,6 @@
 """Closed API dispatch for the opt-in scoped resource backend."""
 import json
+import os
 from urllib.parse import urlparse
 
 AUTH_POST = {'/api/access-link', '/api/redeem', '/api/logout'}
@@ -40,6 +41,10 @@ def dispatch(handler, method):
         return reject(handler, method, 403, 'Reader origin rejected')
     if parsed.query or parsed.fragment:
         return reject(handler, method, 400, 'Query and fragment credentials are not accepted')
+    if (method == 'GET' and parsed.path.startswith('/api/matrix/')
+            and os.environ.get('PHANTOMVIEW_MATRIX_PEER_ROUTES')):
+        from matrix_http import dispatch as dispatch_matrix
+        return dispatch_matrix(handler, backend, parsed.path)
     if method == 'GET' and parsed.path == '/api/access-info':
         handler.send(200, {'delegated': True, 'scoped': True})
         return True
