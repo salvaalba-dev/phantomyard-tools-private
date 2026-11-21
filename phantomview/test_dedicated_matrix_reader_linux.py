@@ -127,7 +127,7 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
                     **kwargs,
                 )
 
-            def http(uid, groups, authenticated=True):
+            def request_matrix(uid, groups, authenticated=True):
                 with command(
                     uid,
                     groups,
@@ -196,8 +196,10 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
                 self.assertEqual(access(reader_uid, []), "[True, False]")
                 self.assertEqual(access(foreign_uid, []), "[False, False]")
                 self.assertEqual(access(foreign_uid, [shared_ipc]), "[True, True]")
-                self.assertEqual(http(reader_uid, [], authenticated=False)[0], 404)
-                self.assertEqual(http(foreign_uid, [])[0], 404)
+                self.assertEqual(
+                    request_matrix(reader_uid, [], authenticated=False)[0], 404
+                )
+                self.assertEqual(request_matrix(foreign_uid, [])[0], 404)
                 peers, authorized = [], []
 
                 @contextlib.contextmanager
@@ -235,7 +237,7 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
                     ):
                         worker = threading.Thread(target=serve, daemon=True)
                         worker.start()
-                        self.assertEqual(http(uid, groups), expected)
+                        self.assertEqual(request_matrix(uid, groups), expected)
                         worker.join(6)
                         self.assertFalse(worker.is_alive())
                 self.assertEqual(
