@@ -58,15 +58,20 @@ Review all three directory provisioning layers together:
    `ExecStartPre`. Prepare and review the installed file explicitly with the
    target `reader_uid`. The periodic reconciler only writes its reader
    configuration and transaction state; prepare runtime rules separately.
+   A directory rule has the form `d path mode user group age`. Update only
+   the user field for the managed handoff directories. Keep each route's
+   existing group and mode, and preserve its separate ACL rules.
 3. The service drop-in's `RuntimeDirectory=` paths, service group and guarded
    launcher arguments. Inspect both `Group=` and `SupplementaryGroups=`
    in the merged unit as well as the launcher's explicit supplementary-group
    arguments. Confirm path coverage and preserve issuer ACL handling.
 
 Inspect all effective drop-ins in lexical order. A new override of a scalar
-setting must sort after the existing assignment. Supplementary group
-assignments can accumulate across drop-ins. Review the whole list before
-using any reset. After reloading the service manager during cutover, verify
+setting must sort after the existing assignment. An empty
+`SupplementaryGroups=` clears prior assignments in the unit; an assignment
+with values adds groups. Account-database memberships are independent.
+Carry forward every required service group if a reset is needed. After
+reloading the service manager during cutover, verify
 the effective `Group`, `SupplementaryGroups`, `ExecStart`, `ExecStartPre`
 and `RuntimeDirectory` values, then verify the actual child separately.
 
@@ -122,8 +127,10 @@ matrix socket unit lifecycle are separate release checks.
 1. Inventory the current unit, supervisor arguments, child credentials, native
    descriptors, publishers, and effective owner/mode/ACL on every target and
    ancestor. Save the exact previous configuration and permission state,
-   including default ACLs. Verify the reader release manifest and configuration
-   pairing before preparing the cutover.
+   including default ACLs. Identify the actual supervisor and reader releases
+   from effective unit commands, the module search path and the HTTP child
+   command line. Use those revisions for inspection and rehearsal. Verify the
+   reader release manifest and configuration pairing before preparing the cutover.
 2. Rehearse opening the actual live-format reader configuration under the
    planned identity before and after replacement, plus a fresh publication,
    audit write, issuer handoff, optional conversation,
