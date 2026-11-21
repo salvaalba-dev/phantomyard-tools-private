@@ -1,6 +1,7 @@
 """Rehearse the existing matrix route with a dedicated Linux reader."""
 
 import contextlib
+import errno
 import http.client
 import json
 import os
@@ -66,6 +67,63 @@ with HTTPServer(("127.0.0.1", 0), Handler) as server:
     "requires disposable Linux root ACL fixture",
 )
 class DedicatedMatrixReaderTests(unittest.TestCase):
+    def test_tmpfiles_restores_handoff_bind_after_recreation(self):
+        old_uid, reader_uid, reader_gid, handoff_group = 65533, 65534, 65532, 65531
+        with tempfile.TemporaryDirectory(prefix="pv-handoff-", dir="/var/lib") as tmp:
+            root = Path(tmp)
+            root.chmod(0o755)
+            handoff = root / "handoff"
+            endpoint = handoff / "issue.sock"
+            config = root / "handoff.conf"
+            bind_socket = """\
+import errno
+import socket
+import sys
+
+with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+    try:
+        listener.bind(sys.argv[1])
+    except PermissionError:
+        sys.exit(errno.EACCES)
+    listener.listen()
+"""
+
+            for phase, owner, expected in (
+                ("old rule", old_uid, errno.EACCES),
+                ("cutover", reader_uid, 0),
+                ("fresh runtime", reader_uid, 0),
+                ("rollback", old_uid, errno.EACCES),
+            ):
+                with self.subTest(phase=phase):
+                    if phase == "fresh runtime":
+                        handoff.rmdir()
+                    config.write_text(
+                        f"d {handoff} 0750 {owner} {handoff_group} -\n",
+                        encoding="ascii",
+                    )
+                    subprocess.run(
+                        ["/usr/bin/systemd-tmpfiles", "--create", str(config)],
+                        check=True,
+                        timeout=5,
+                    )
+                    metadata = handoff.stat()
+                    self.assertEqual(
+                        (metadata.st_uid, metadata.st_gid, metadata.st_mode & 0o7777),
+                        (owner, handoff_group, 0o750),
+                    )
+                    result = subprocess.run(
+                        [sys.executable, "-I", "-B", "-c", bind_socket, str(endpoint)],
+                        user=reader_uid,
+                        group=reader_gid,
+                        extra_groups=[handoff_group],
+                        check=False,
+                        timeout=5,
+                    )
+                    self.assertEqual(result.returncode, expected)
+                    if expected == 0:
+                        self.assertEqual(endpoint.lstat().st_uid, reader_uid)
+                        endpoint.unlink()
+
     def test_legacy_route_uses_reader_uid_and_matrix_only_acl(self):
         from queue import Queue
         from unittest.mock import patch
