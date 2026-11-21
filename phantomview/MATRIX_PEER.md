@@ -1,5 +1,11 @@
 # Dedicated matrix broker identity
 
+This connector draft is superseded by assigning a dedicated nonroot UID to the
+existing HTTP reader through its `reader_uid` launch setting. The guarded
+supervisor can run as root while the HTTP process runs as its unprivileged
+child. Inspect the listening process and its supplementary groups to establish
+its identity. The root-viewer connector below is retained for review history.
+
 This is an opt-in route for a single identified persona and one broker socket.
 The scoped HTTP handler checks the origin, identified session and current
 project authorization. A short-lived helper opens the Unix socket under the
@@ -7,8 +13,8 @@ configured dedicated UID/GID with no supplementary groups. It returns only
 the connected descriptor. The viewer checks that it is a Unix stream
 connected to the exact configured path and verifies the broker's root peer
 credentials and retains responsibility for rechecking the session, sending
-the HTTP response, and acknowledging delivery. The HTTP viewer itself still
-runs under its existing root service identity.
+the HTTP response, and acknowledging delivery. This prototype assumes a root
+HTTP process and is unsuitable for the existing unprivileged reader.
 
 For an Alma-only deployment, provision a dedicated system identity with no
 login shell, unrelated processes, supplementary groups, writable home or writable executable
@@ -19,7 +25,9 @@ existing reader agent identity. This route requires a root broker
 
 Use the protected root-owned `PHANTOMVIEW_MATRIX_PEER_ROUTES` configuration
 shown below, substituting the locally approved actor, scope and numeric IDs.
-Set it only in the scoped viewer. Build a new reader release from the reviewed
+Copy the socket path literally from the unit's `ListenStream` value. The
+prototype compares pathname strings, so aliases such as `/var/run` for
+`/run` do not match. Set it only in the scoped viewer. Build a new reader release from the reviewed
 viewer commit. Compose the native route with the viewer UI and other required
 patches. Omit the legacy `PHANTOMVIEW_MATRIX_ROUTES` setting and the call to
 `phantomdocs.view_matrix_http_patch.patch_http()`. Its source pin is
