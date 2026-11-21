@@ -18,22 +18,38 @@ give it a group outside the reader's primary and supplementary groups.
 | Handoff and conversation | Keep readers and daemons as separate accounts. The launcher requires each handoff `socket_group` in the child's groups, and the supervisor manages the fixed handoff parents and issuer ACLs. Pair every native `readerUid` with the launch config, retain issuer IDs, origin and route paths, and validate optional conversation sockets and peer checks. |
 | Matrix | Grant search (`--x`) on the protected socket directory and write (`-w-`) on the specific matrix socket to the dedicated UID. The socket creator must restore the effective ACL on each recreation. Set the broker's exact `client_uid` to the reader UID and keep the verified server UID. |
 
+## Reconciled reader configuration
+
+Trace the effective reader command to its active JSON and the reconciler's
+settings to the protected baseline that supplies `reader_uid`. Record the
+inventory, authority and agent inputs consumed by the builder, and identify
+any retired JSON. Change the baseline and regenerate the active JSON through
+the reconciler. The periodic reconciler can replace edits to generated
+output and can stop the reader when validation fails.
+
+Provision the dedicated system UID/GID before changing the baseline.
+Validation resolves the UID through the host account database and tests the
+candidate under the resolved account with the configured supplementary
+groups. Check search on the publication tree's common parent as well as
+each readable subtree. Compare account-derived groups with the reconciler
+settings and the guarded service command.
+
 ## Persistent handoff ownership
 
-Follow the effective service command to the active reader JSON and record
-the unit's supplementary-group arguments separately. Identify any retired
-reader JSON so it stays outside the cutover. Choose an unused system UID/GID
-under the host's account allocation policy.
+Review all three directory provisioning layers together:
 
-Find every effective `tmpfiles.d` rule that provisions a reader-owned handoff
-parent. Change the owner field to the dedicated account and keep the per-route
-group, mode `0750`, paths, and applicable ACL rules. Preserve both handoff
-groups where needed. A group member without directory write access cannot
-bind the socket. Verify the full effective ruleset for overlapping entries
-and apply the reviewed selected rules to the exact runtime paths during the
-quiesced cutover. A live ownership change alone will be lost when the old
-rules recreate the paths. Recreate the directories from their persistent
-rules in rehearsal and verify ownership, issuer ACLs and bind as the reader.
+1. Effective boot-time rules under `tmpfiles.d` for the reader-owned paths.
+2. The separate runtime rules file passed to `systemd-tmpfiles --create` in
+   `ExecStartPre`. Render and review it against the target `reader_uid`.
+3. The service drop-in's `RuntimeDirectory=` paths, service group and guarded
+   launcher arguments. Confirm coverage and preserve issuer ACL handling.
+
+Keep the per-route group, mode `0750`, paths and applicable ACL rules for the
+reader-owned parents. A group member without directory write access cannot
+bind the socket. Check overlapping rules, and validate directory owner,
+issuer ACLs and socket bind as the reader after restart and from freshly
+provisioned runtime paths. Keep the isolated matrix directory outside the
+reader-owned handoff paths.
 
 ## Socket separation
 
@@ -86,15 +102,16 @@ matrix socket unit lifecycle are separate release checks.
    a fresh publication, audit write, issuer handoff, optional conversation,
    and socket recreation. Check that an unrelated UID fails at the appropriate
    filesystem or peer authorization boundary.
-3. During an approved window, drain HTTP and pause the affected handoff
-   consumers. Change reader, handoff tmpfiles rules, socket, broker and paired
-   native settings together.
-   Restart with validated credentials, then test fresh authorized matrix and
-   handoff requests before reopening ingress. An HTTP 404 can hide a peer or
-   file permission mismatch, so verify broker and reader results separately.
-4. If a check fails, quiesce again and restore the previous reader and broker
-   configuration, socket listener, native pairing, groups, and persistent
-   tmpfiles owner rules. Verify exact ownership, modes and ACLs after applying
-   the restored rules to the scoped paths.
-   Preserve audit entries added since the snapshot and verify the restored route
-   before reopening ingress.
+3. During an approved window, drain HTTP, pause affected handoff consumers and
+   pause periodic reconciliation. Wait for any running reconciliation to
+   finish before changing inputs. Stage the baseline, reviewed units and both
+   tmpfiles rulesets, paired native settings and broker/socket changes.
+   Validate the candidate and perform a controlled reconciliation. Test fresh
+   authorized matrix and handoff requests before reopening ingress. Verify
+   broker and reader results separately. Resume the timer and confirm the
+   next reconciliation preserves the UID, groups, and ownership.
+4. If a check fails, keep ingress drained and periodic reconciliation paused.
+   Restore authoritative inputs, unit and socket settings, native pairing,
+   groups, both tmpfiles rulesets, and scoped ownership/modes/ACLs. Preserve
+   audit entries added since the snapshot. Regenerate and validate the previous
+   configuration before resuming the timer and reopening ingress.
