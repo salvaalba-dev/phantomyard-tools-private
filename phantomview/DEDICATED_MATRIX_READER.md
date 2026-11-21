@@ -54,6 +54,7 @@ the writers, or prove that the writers restore any required ACL on new inodes.
 Review all three directory provisioning layers together:
 
 1. Effective boot-time rules under `tmpfiles.d` for the reader-owned paths.
+   Check whether their user and group fields use account names or numeric IDs.
 2. The separate runtime rules file passed to `systemd-tmpfiles --create` in
    `ExecStartPre`. Prepare and review the installed file explicitly with the
    target `reader_uid`. The periodic reconciler only writes its reader
@@ -63,10 +64,20 @@ Review all three directory provisioning layers together:
    existing group and mode, and preserve its separate ACL rules.
    When an issuer UID has the same number as the route's GID, preserve both:
    the `d` rule's group column and the issuer UID in each `u:` or `d:u:` ACL.
+   Review both rulesets separately. A named owner in a boot rule and a numeric
+   owner in a start-pre rule can refer to the same account.
 3. The service drop-in's `RuntimeDirectory=` paths, service group and guarded
    launcher arguments. Inspect both `Group=` and `SupplementaryGroups=`
    in the merged unit as well as the launcher's explicit supplementary-group
    arguments. Confirm path coverage and preserve issuer ACL handling.
+
+With `RuntimeDirectoryPreserve=no`, stopping the service removes its runtime
+directories. At the next start systemd provisions the listed paths under the
+unit's `User=` and `Group=` before running `ExecStartPre`. The start-pre
+tmpfiles rules then assign the dedicated reader UID and the per-route groups.
+The guarded launcher verifies ownership and reapplies issuer ACLs before
+launching the reader. Check the sequence on a clean stop and start as well as
+after boot.
 
 Inspect all effective drop-ins in lexical order. A new override of a scalar
 setting must sort after the existing assignment. An empty
@@ -104,10 +115,18 @@ ListenStream=/run/example-reader-matrix/matrix.sock
 SocketUser=root
 SocketGroup=example-matrix-ipc
 SocketMode=0660
+DirectoryMode=0750
 ExecStartPost=/usr/bin/setfacl -m u:12345:-w- /run/example-reader-matrix/matrix.sock
 ```
 
-The ACL hook must succeed each time the socket is created. Pair the new
+The ACL hook must succeed each time the socket is created. `DirectoryMode=`
+limits access to a parent directory created by the socket unit when it is
+missing. The provisioning rule still sets the expected directory owner,
+group and reader search ACL. Check the expected metadata and reader
+connectivity even if the socket unit reports active. Rehearse socket startup
+with the directory missing and confirm a foreign UID cannot traverse it,
+then rehearse normal provisioning and check that the reader can connect.
+Pair the new
 `ListenStream` literally in the protected HTTP route and update the broker
 peer UID in the same cutover. Check the effective listener list and confirm
 the previous matrix socket no longer accepts connections. Review the reader's
