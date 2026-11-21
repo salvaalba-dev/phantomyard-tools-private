@@ -34,15 +34,28 @@ groups. Check search on the publication tree's common parent as well as
 each readable subtree. Compare account-derived groups with the reconciler
 settings and the guarded service command.
 
+Schema validation opens a temporary file owned by root and the new account's
+primary group. The reconciler's replacement of the live reader JSON
+preserves the existing file's group and mode and does not copy its inode ACL.
+Require a separate successful open and load of the live JSON under the exact
+reader credentials, including search on its parent, then repeat after
+reconciliation. Verify read access to index and authority output after each
+writer's atomic replacement too. Use ownership and group access preserved by
+the writers, or prove that the writers restore any required ACL on new inodes.
+
 ## Persistent handoff ownership
 
 Review all three directory provisioning layers together:
 
 1. Effective boot-time rules under `tmpfiles.d` for the reader-owned paths.
 2. The separate runtime rules file passed to `systemd-tmpfiles --create` in
-   `ExecStartPre`. Render and review it against the target `reader_uid`.
+   `ExecStartPre`. Prepare and review the installed file explicitly with the
+   target `reader_uid`. The periodic reconciler only writes its reader
+   configuration and transaction state; prepare runtime rules separately.
 3. The service drop-in's `RuntimeDirectory=` paths, service group and guarded
-   launcher arguments. Confirm coverage and preserve issuer ACL handling.
+   launcher arguments. Inspect both `Group=` and `SupplementaryGroups=`
+   in the merged unit as well as the launcher's explicit supplementary-group
+   arguments. Confirm path coverage and preserve issuer ACL handling.
 
 Keep the per-route group, mode `0750`, paths and applicable ACL rules for the
 reader-owned parents. A group member without directory write access cannot
@@ -98,8 +111,9 @@ matrix socket unit lifecycle are separate release checks.
    ancestor. Save the exact previous configuration and permission state,
    including default ACLs. Verify the reader release manifest and configuration
    pairing before preparing the cutover.
-2. Rehearse read access and replacement under the planned identity, including
-   a fresh publication, audit write, issuer handoff, optional conversation,
+2. Rehearse opening the actual live-format reader configuration under the
+   planned identity before and after replacement, plus a fresh publication,
+   audit write, issuer handoff, optional conversation,
    and socket recreation. Check that an unrelated UID fails at the appropriate
    filesystem or peer authorization boundary.
 3. During an approved window, drain HTTP, pause affected handoff consumers and
