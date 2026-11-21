@@ -75,9 +75,12 @@ With `RuntimeDirectoryPreserve=no`, stopping the service removes its runtime
 directories. At the next start systemd provisions the listed paths under the
 unit's `User=` and `Group=` before running `ExecStartPre`. The start-pre
 tmpfiles rules then assign the dedicated reader UID and the per-route groups.
-The guarded launcher verifies ownership and reapplies issuer ACLs before
-launching the reader. Check the sequence on a clean stop and start as well as
-after boot.
+The guarded launcher accepts the handoff directory when its owner is root or
+the configured reader and its mode passes the write-permission check. It
+then sets the owner to the reader UID, assigns the route group and mode
+`0750`, and reapplies issuer ACLs before starting the reader. A directory
+still owned by the old reader makes startup fail. Check the sequence on a
+clean stop and start as well as after boot.
 
 Inspect all effective drop-ins in lexical order. A new override of a scalar
 setting must sort after the existing assignment. An empty
@@ -145,12 +148,16 @@ restoring the old rule restores the previous ownership.
 
 The Linux systemd rehearsal also runs the pinned supervisor's transaction,
 validator and guarded launcher against a synthetic baseline and a disposable
-reader unit. It verifies the generated config's group and mode, the reader
-process credentials, the handoff directory owner, and an unchanged second
-reconciliation. A disposable matrix socket tests restricted fallback creation
+reader unit. An obsolete handoff owner blocks the cutover and leaves a
+pending transaction. Retrying with a root-owned directory lets the launcher
+assign the new UID and complete forward recovery. The trial verifies the
+generated config's group and mode, the reader process credentials, the
+handoff directory owner, and an unchanged final reconciliation. A disposable matrix socket tests restricted fallback creation
 when its parent is missing. With normal provisioning, it tests reader access
 and rejects the previous reader at both filesystem and broker boundaries
-before and after deleting and recreating the socket and its parent.
+before and after deleting and recreating the socket and its parent. The
+broker unit runs with an isolated Python interpreter and checks the SHA-256
+of the module it imports against the separately pinned checkout.
 Authority refresh, projection republication, audit writes and the native
 handoff protocol remain separate release checks.
 

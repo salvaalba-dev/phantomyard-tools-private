@@ -43,6 +43,8 @@ jobs:
           sudo groupadd --gid 970 pv-trial-reader
           sudo useradd --system --uid 970 --gid 970 --groups 1001 \
             --no-create-home --shell /usr/sbin/nologin pv-trial-reader
+          broker_sha256=$(sha256sum matrix-broker-source/phantomdocs/src/phantomdocs/view_matrix_broker.py | cut -d ' ' -f 1)
           sudo env PHANTOMVIEW_DEDICATED_SYSTEMD=1 PYTHONDONTWRITEBYTECODE=1 \
+            "PHANTOMVIEW_MATRIX_BROKER_SHA256=$broker_sha256" \
             "PYTHONPATH=$GITHUB_WORKSPACE/supervisor-source/phantomdocs/src" \
             "$trial/venv/bin/python" -m unittest discover -s phantomview -p test_dedicated_reader_systemd.py -v

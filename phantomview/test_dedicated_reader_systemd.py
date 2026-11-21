@@ -14,11 +14,18 @@ from pathlib import Path
 from test_dedicated_matrix_reader_linux import READER
 
 BROKER = """\
+import hashlib
 import socket
+import sys
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import patch
 
 from phantomdocs import view_matrix_broker
+
+source = Path(view_matrix_broker.__file__).resolve()
+assert source.is_relative_to(Path(sys.prefix).resolve()), source
+assert hashlib.sha256(source.read_bytes()).hexdigest() == sys.argv[1], source
 
 @contextmanager
 def authority(actor):
@@ -58,6 +65,7 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
 
         from phantomdocs.view_agent_guarded_launch import http_ready
         from phantomdocs.view_agent_host import read_json, validate_reader
+        from phantomdocs.view_agent_recovery import RecoveryRequired
         from phantomdocs.view_agent_supervisor import reconcile_once
         from phantomdocs.view_agent_systemd import SystemdRouteHost
 
@@ -183,7 +191,7 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
             (root / "scoped_http.py").write_bytes(patched)
             reader.write_text(READER, encoding="utf-8")
             broker_script.write_text(BROKER, encoding="utf-8")
-            runtime.write_text(f"d {handoff} 0750 970 1059 -\n", encoding="ascii")
+            runtime.write_text(f"d {handoff} 0750 1001 1059 -\n", encoding="ascii")
             settings = {
                 "config": str(config),
                 "python": sys.executable,
@@ -235,7 +243,8 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
                 )
                 broker.write_text(
                     "[Service]\nType=oneshot\nStandardInput=socket\nStandardOutput=journal\n"
-                    f"ExecStart={sys.executable} -E -B {broker_script}\nTimeoutStartSec=15\n",
+                    f"ExecStart={sys.executable} -I -B {broker_script} "
+                    f"{os.environ['PHANTOMVIEW_MATRIX_BROKER_SHA256']}\nTimeoutStartSec=15\n",
                     encoding="ascii",
                 )
                 systemctl("daemon-reload")
@@ -249,6 +258,7 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
                     unit=viewer.name,
                     validate=lambda data: validate_reader(data, settings),
                     health=lambda: http_ready(port),
+                    readiness_seconds=4,
                 )
 
                 def build(_authority):
@@ -258,7 +268,13 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
                 baseline.write_text(
                     json.dumps(initial | {"reader_uid": 970}), encoding="utf-8"
                 )
-                self.assertEqual(reconcile_once(host, build), "updated")
+                with self.assertRaises(RecoveryRequired):
+                    reconcile_once(host, build)
+                self.assertEqual(host.pending(), (build(None), host.authority()[1]))
+                self.assertFalse(http_ready(port))
+                # The guard may take ownership of a root-owned runtime directory.
+                runtime.write_text(f"d {handoff} 0750 0 1059 -\n", encoding="ascii")
+                self.assertEqual(reconcile_once(host, build), "recovered")
                 self.assertFalse(pending.exists())
                 self.assertTrue(
                     host.configuration_is_committed(build(None), host.authority()[1])
@@ -267,6 +283,12 @@ class DedicatedReaderSystemdTests(unittest.TestCase):
                     (config.stat().st_gid, config.stat().st_mode & 0o777), (1001, 0o640)
                 )
                 self.assertEqual(get("/"), (200, [970, 970, [970, 1001, 1059, 1890]]))
+                self.assertEqual(
+                    (handoff.stat().st_uid, handoff.stat().st_gid), (970, 1059)
+                )
+                runtime.write_text(f"d {handoff} 0750 970 1059 -\n", encoding="ascii")
+                systemctl("restart", viewer.name)
+                self.assertTrue(host.healthy())
                 self.assertEqual(
                     (handoff.stat().st_uid, handoff.stat().st_gid), (970, 1059)
                 )
