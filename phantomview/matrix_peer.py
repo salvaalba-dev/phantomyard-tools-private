@@ -7,8 +7,14 @@ import subprocess
 import sys
 
 _CONNECT = """
+import os
 import socket
 import sys
+
+if (os.getresuid() != (int(sys.argv[2]),) * 3
+        or os.getresgid() != (int(sys.argv[3]),) * 3
+        or os.getgroups()):
+    raise SystemExit("unexpected connector credentials")
 
 with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as broker:
     broker.settimeout(5)
@@ -38,7 +44,17 @@ def connect(path, uid, gid):
         with reader, writer:
             reader.settimeout(5)
             result = subprocess.run(
-                ["/usr/bin/python3", "-I", "-S", "-B", "-c", _CONNECT, path],
+                [
+                    "/usr/bin/python3",
+                    "-I",
+                    "-S",
+                    "-B",
+                    "-c",
+                    _CONNECT,
+                    path,
+                    str(uid),
+                    str(gid),
+                ],
                 user=uid,
                 group=gid,
                 extra_groups=[],

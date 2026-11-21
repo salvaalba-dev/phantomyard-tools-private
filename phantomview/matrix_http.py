@@ -80,6 +80,13 @@ def dispatch(handler, backend, path):
         with connect(
             route["socket"], route["client_uid"], route["client_gid"]
         ) as connection:
+            if (
+                connection.family != socket.AF_UNIX
+                or connection.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE)
+                != socket.SOCK_STREAM
+                or connection.getpeername() != route["socket"]
+            ):
+                raise ValueError("unexpected matrix endpoint")
             connection.settimeout(TIMEOUT)
             pid, uid, _ = struct.unpack(
                 "3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)

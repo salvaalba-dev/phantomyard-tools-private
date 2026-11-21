@@ -5,6 +5,7 @@ import http.client
 import json
 import os
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,7 @@ class MatrixPeerIntegration(unittest.TestCase):
         from phantomdocs import view_matrix_broker as broker
 
         authorized_uid, other_uid = 65534, 65533
+        connector_gid = 65532
         recipient = SimpleNamespace(persona="example-agent", human=None)
         directory = SimpleNamespace(
             org={
@@ -83,7 +85,7 @@ class MatrixPeerIntegration(unittest.TestCase):
             route = {
                 "socket": str(endpoint),
                 "server_uid": 0,
-                "client_gid": 65534,
+                "client_gid": connector_gid,
                 "domain": "projects",
                 "project_type": "example",
                 "scope_id": "example",
@@ -108,6 +110,7 @@ class MatrixPeerIntegration(unittest.TestCase):
                 worker = threading.Thread(target=web.serve_forever, daemon=True)
                 worker.start()
                 requests = []
+                peers = []
 
                 @contextlib.contextmanager
                 def authority(actor):
@@ -139,17 +142,28 @@ class MatrixPeerIntegration(unittest.TestCase):
                         conn.close()
 
                 def serve_one(fn):
+                    def serve():
+                        connection, _ = listener.accept()
+                        _, uid, gid = struct.unpack(
+                            "3i",
+                            connection.getsockopt(
+                                socket.SOL_SOCKET, socket.SO_PEERCRED, 12
+                            ),
+                        )
+                        peers.append((uid, gid))
+                        broker.serve(
+                            connection,
+                            client_uid=authorized_uid,
+                            actor="example-agent",
+                            binding={},
+                            authority=authority,
+                        )
+
                     with patch.object(
                         broker, "read_matrix", return_value="synthetic v25"
                     ):
                         thread = threading.Thread(
-                            target=lambda: broker.serve(
-                                listener.accept()[0],
-                                client_uid=authorized_uid,
-                                actor="example-agent",
-                                binding={},
-                                authority=authority,
-                            ),
+                            target=serve,
                             daemon=True,
                         )
                         thread.start()
@@ -172,12 +186,31 @@ class MatrixPeerIntegration(unittest.TestCase):
                         ),
                     )
                     self.assertEqual(requests, ["example-agent"])
+                    self.assertEqual(peers, [(authorized_uid, connector_gid)])
+                    with (
+                        socket.socket(socket.AF_UNIX) as wrong,
+                        socket.socket(socket.AF_UNIX) as client,
+                    ):
+                        wrong_address = str(root / "other.sock")
+                        wrong.bind(wrong_address)
+                        wrong.listen()
+                        client.connect(wrong_address)
+                        other_end, _ = wrong.accept()
+                        with other_end:
+                            other_end.settimeout(2)
+                            with patch(
+                                "matrix_http.connect",
+                                return_value=contextlib.closing(client),
+                            ):
+                                self.assertEqual(request(authorized_uid)[0], 404)
+                            self.assertEqual(other_end.recv(1), b"")
                     # A deliberately permissive second fixture proves the broker
                     # independently rejects the wrong UID after connect succeeds.
                     acl(f"u:{other_uid}:--x", root)
                     acl(f"u:{other_uid}:-w-", endpoint)
                     self.assertEqual(serve_one(lambda: request(other_uid))[0], 404)
                     self.assertEqual(requests, ["example-agent"])
+                    self.assertEqual(peers[-1], (other_uid, connector_gid))
                 finally:
                     web.shutdown()
                     worker.join(5)
