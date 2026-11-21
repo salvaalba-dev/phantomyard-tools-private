@@ -74,7 +74,13 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
         from phantomdocs.view_matrix_http_patch import patch_http
 
         reader_uid, reader_gid, foreign_uid = 65534, 65532, 65533
-        shared_ipc = 65531
+        shared_ipc, issuer_ipc, matrix_group, neighbor_group = (
+            65531,
+            65530,
+            65529,
+            65528,
+        )
+        handoff_groups = sorted([shared_ipc, issuer_ipc])
 
         def acl(rule, target):
             subprocess.run(["setfacl", "-m", rule, target], check=True)
@@ -87,11 +93,20 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
             source = Path(__file__).with_name("scoped_http.py").read_bytes()
             (root / "scoped_http.py").write_bytes(patch_http(source))
             (root / "reader.py").write_text(READER)
-            ipc = root / "ipc"
-            ipc.mkdir()
-            os.chown(ipc, 0, shared_ipc)
-            ipc.chmod(0o750)
-            alma, neighbor = ipc / "matrix.sock", ipc / "neighbor.sock"
+            handoff_dir = root / "handoff"
+            matrix_dir = root / "matrix"
+            neighbor_dir = root / "neighbor"
+            for directory, group in (
+                (handoff_dir, shared_ipc),
+                (matrix_dir, matrix_group),
+                (neighbor_dir, neighbor_group),
+            ):
+                directory.mkdir()
+                os.chown(directory, 0, group)
+                directory.chmod(0o750)
+            handoff = handoff_dir / "issue.sock"
+            alma = matrix_dir / "matrix.sock"
+            neighbor = neighbor_dir / "matrix.sock"
             config = root / "routes.json"
             config.write_text(
                 json.dumps(
@@ -111,7 +126,6 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
             )
             config.chmod(0o600)
             acl(f"u:{reader_uid}:r--,u:{foreign_uid}:r--", config)
-            acl(f"u:{reader_uid}:--x", ipc)
 
             def command(uid, groups, *args, **kwargs):
                 return subprocess.Popen(
@@ -175,6 +189,7 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
                     "import os,sys; print([os.access(x, os.W_OK) for x in sys.argv[1:]])",
                     str(alma),
                     str(neighbor),
+                    str(handoff),
                     stdout=subprocess.PIPE,
                     text=True,
                 ) as child:
@@ -185,21 +200,37 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
             with (
                 socket.socket(socket.AF_UNIX) as listener,
                 socket.socket(socket.AF_UNIX) as other,
+                socket.socket(socket.AF_UNIX) as issuer,
             ):
-                for stream, path in ((listener, alma), (other, neighbor)):
+                for stream, path, group in (
+                    (listener, alma, matrix_group),
+                    (other, neighbor, neighbor_group),
+                    (issuer, handoff, shared_ipc),
+                ):
                     stream.bind(str(path))
-                    os.chown(path, 0, shared_ipc)
+                    os.chown(path, 0, group)
                     path.chmod(0o660)
                     stream.listen()
                 listener.settimeout(5)
-                acl(f"u:{reader_uid}:-w-", alma)
-                self.assertEqual(access(reader_uid, []), "[True, False]")
-                self.assertEqual(access(foreign_uid, []), "[False, False]")
-                self.assertEqual(access(foreign_uid, [shared_ipc]), "[True, True]")
                 self.assertEqual(
-                    request_matrix(reader_uid, [], authenticated=False)[0], 404
+                    access(reader_uid, handoff_groups), "[False, False, True]"
                 )
-                self.assertEqual(request_matrix(foreign_uid, [])[0], 404)
+                acl(f"u:{reader_uid}:--x", matrix_dir)
+                self.assertEqual(
+                    access(reader_uid, handoff_groups), "[False, False, True]"
+                )
+                acl(f"u:{reader_uid}:-w-", alma)
+                self.assertEqual(
+                    access(reader_uid, handoff_groups), "[True, False, True]"
+                )
+                self.assertEqual(
+                    access(foreign_uid, handoff_groups), "[False, False, True]"
+                )
+                self.assertEqual(
+                    request_matrix(reader_uid, handoff_groups, authenticated=False)[0],
+                    404,
+                )
+                self.assertEqual(request_matrix(foreign_uid, handoff_groups)[0], 404)
                 peers, authorized = [], []
 
                 @contextlib.contextmanager
@@ -226,12 +257,12 @@ class DedicatedMatrixReaderTests(unittest.TestCase):
                     for uid, groups, expected in (
                         (
                             reader_uid,
-                            [],
+                            handoff_groups,
                             (200, {"version": "v25", "content": "synthetic v25"}),
                         ),
                         (
                             foreign_uid,
-                            [shared_ipc],
+                            sorted([*handoff_groups, matrix_group]),
                             (404, {"error": "Matrix unavailable"}),
                         ),
                     ):
