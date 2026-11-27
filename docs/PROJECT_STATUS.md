@@ -1,6 +1,6 @@
 # PhantomView: consolidated project status
 
-Updated: 2026-11-26. Original broad source review: 2026-11-18. Start here when
+Updated: 2026-11-28. Original broad source review: 2026-11-18. Start here when
 resuming work. This overview separates GitHub source checks from the dated
 production verification reported below; its author did not inspect or change
 the live host during this documentation update.
@@ -114,53 +114,17 @@ implement its dedicated-helper prototype as an additional production step.
 
 ## Ordered work queue
 
-### 1. Prepare the protected matrix host overlay for production
+### 1. Protected matrix host overlay deployed for Alma
 
-Owner: `salvaalba-dev/phantomyard-tools`.
-[PR #73](https://github.com/salvaalba-dev/phantomyard-tools/pull/73) merged on
-2026-11-26 at 17:27:37 UTC as
-[`b424ddf`](https://github.com/salvaalba-dev/phantomyard-tools/commit/b424ddf2f7b04b66b2f0dab18ccfb60777b7d72c).
-**Source preparation is complete; production preparation is not accepted.**
-The merge is separate from deployment and from the already completed viewer
-PR #12 reader cutover. Do not request another merge of #73.
-It retains the existing matrix release and uses the bounded host from merged
-[PR #72](https://github.com/salvaalba-dev/phantomyard-tools/pull/72) as a pinned overlay.
+[PR #73](https://github.com/salvaalba-dev/phantomyard-tools/pull/73)
+merged as b424ddf and was deployed to Alma's matrix service on 2026-11-28
+(Europe/Madrid). An authenticated PhantomView request returned the same v25
+matrix before and after the deployment. The read and the successful service
+exit were within the 55-second and 65-second limits. The matrix socket was
+active after the change and no rollback was needed.
 
-The source includes the bounded read-ahead/hash-buffer improvement, payload
-source/pin regression checks, unprivileged inventory coverage, and the strict
-55/65 timing correction. At test revision
-[`3e62422`](https://github.com/salvaalba-dev/phantomyard-tools/commit/3e62422ed336edb96953793f3d3b80735b886a49),
-seven job checks across four workflows passed. Its
-[disposable systemd rehearsal](https://github.com/salvaalba-dev/phantomyard-tools/actions/runs/45857111846)
-reported 65 passing tests and 55.561 seconds for forced rehash plus contention,
-with 9.439 seconds remaining to 65. These are dated CI fixture results, not
-production acceptance. Private disposable evidence remains outside this public
-repository; the later merged commit updates documentation only.
-
-Continue from the [PR #73 production preparation handoff](PR73_PRODUCTION_HANDOFF.md).
-Only the remaining target gates belong to the next task:
-
-1. Reconcile current merged bytes and retained private evidence. Prepare an
-   accepted final-path target inventory/provenance review, including native
-   extensions, hashes, ownership, modes, ACLs, ancestors and link targets.
-   Stage files only after explicit authorization; CI is not a target manifest.
-2. Establish target verification and complete startup-to-cleanup timing against
-   the unchanged **55-second payload / 65-second service limits**, with current
-   shared-host health and all reviewed stop criteria. Historical observations
-   and private timings do not close this gate.
-3. Complete the dependency/notification review and authorized isolated target
-   rehearsal, including guard readiness, drift/peer refusal, contention,
-   cleanup, recovery and disposable restoration. Preserve the existing VPS
-   rollback; do not change production permissions or other workloads.
-4. Install/activate only under a separate explicit authorization after the
-   prerequisites pass. Record the installed revision, real authenticated
-   delivery/denial, audit behavior and post-recreation acceptance privately.
-
-VPS checks are stopped at the operator's request. The next action is source and
-private-evidence reconciliation plus a bounded proposal for the missing gates,
-not a new host measurement, deployment or activation. This documentation update
-made no VPS connection. Do not describe #73 as deployed or production-ready;
-no host changes or provider notifications are authorized by this status page.
+See the [PR #73 production deployment handoff](PR73_PRODUCTION_HANDOFF.md)
+for the scope of the verification and how to locate the restricted recovery record.
 
 ### 2. Automate both operational matrices
 
